@@ -1,3 +1,30 @@
+# [2.0.0](https://github.com/ExaDev/eslint-config/compare/v1.4.1...v2.0.0) (2026-08-07)
+
+
+* feat!: make the type-checked bundle the default export, drop the separate subpath ([aed49bb](https://github.com/ExaDev/eslint-config/commit/aed49bb40b8c1a9b062f3681364b679f80d95ce9))
+
+
+### BREAKING CHANGES
+
+* the default export of '@exadev/eslint-config' is now
+recommendedTypeChecked (an array, spread directly into tseslint.config(...)),
+not the ESLint.Plugin object. The plugin object is now a named export,
+'plugin'. The '@exadev/eslint-config/recommended-type-checked' subpath
+no longer exists. 'typescript-eslint' is now a required peer dependency
+of the whole package rather than an optional one -- importing anything
+from '@exadev/eslint-config', including 'plugin', now resolves it.
+
+Migration: replace
+  import exadev from '@exadev/eslint-config';
+  ... plugins: { exadev }, rules: { 'exadev/no-non-barrel-index': 'error' } ...
+with either
+  import exadev from '@exadev/eslint-config';
+  ... ...exadev ...
+for the full type-checked bundle, or
+  import { plugin } from '@exadev/eslint-config';
+  ... plugins: { exadev: plugin }, rules: { 'exadev/no-non-barrel-index': 'error' } ...
+for the lighter, non-type-checked rules/configs.
+
 ## [1.4.1](https://github.com/ExaDev/eslint-config/compare/v1.4.0...v1.4.1) (2026-08-07)
 
 # [1.4.0](https://github.com/ExaDev/eslint-config/compare/v1.3.0...v1.4.0) (2026-08-07)
