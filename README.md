@@ -18,7 +18,7 @@ Consumers need `eslint >=10.0.0` and `typescript-eslint >=8.0.0` as peer depende
 pnpm add -D @exadev/eslint-config typescript-eslint eslint
 ```
 
-The default export is the full, type-checked ruleset: typescript-eslint's own `recommendedTypeChecked` + `stylisticTypeChecked` presets, this package's own four rules (self-scoped internally to the barrel -- see [Rules](#rules) -- so no `files`/`ignores` wiring is needed for them), `linterOptions.noInlineConfig`, `@typescript-eslint/consistent-type-assertions` banning all type assertions, and `@typescript-eslint/ban-ts-comment` banning `@ts-expect-error` outright alongside the preset's own existing `@ts-ignore`/`@ts-nocheck` bans -- the last two relaxed automatically in `*.test.ts`/`*.spec.ts` files (see below). Spread it directly into `tseslint.config(...)`:
+The default export is the full, type-checked ruleset: typescript-eslint's own `recommendedTypeChecked` + `stylisticTypeChecked` presets, the `exadev/barrel-policy` umbrella rule at its recommended `mode: 'banned'` (no index files at all -- see [Barrel policy](#barrel-policy)), `exadev/no-pointless-reassignment`, `linterOptions.noInlineConfig`, `@typescript-eslint/consistent-type-assertions` banning all type assertions, and `@typescript-eslint/ban-ts-comment` banning `@ts-expect-error` outright alongside the preset's own existing `@ts-ignore`/`@ts-nocheck` bans -- the last two relaxed automatically in `*.test.ts`/`*.spec.ts` files (see below). Spread it directly into `tseslint.config(...)`:
 
 ```ts
 // eslint.config.ts
@@ -36,13 +36,22 @@ export default tseslint.config(
 );
 ```
 
+**A published package whose `src/index.ts` is its package entry point overrides the default `banned` policy to `single` in one line** (flat-config later blocks override earlier rule settings), since deleting its barrel would break every downstream importer:
+
+```ts
+  ...exadev,
+  { rules: { 'exadev/barrel-policy': ['error', { mode: 'single' }] } }, // this package keeps its barrel
+```
+
+
+
 `recommendedTypeChecked` already subsumes typescript-eslint's own plain `recommended` outright -- every one of its 46 rules is a strict subset of `recommendedTypeChecked`'s 73, confirmed by inspecting the actual rule maps. This is a real bundling, not a rule reference that assumes you already have typescript-eslint registered: `recommendedTypeChecked`'s own base config registers the `@typescript-eslint` plugin and sets `languageOptions.parser` itself. That is exactly why **you must remove your own `...tseslint.configs.recommended`/`recommendedTypeChecked`/`stylisticTypeChecked` spreads** rather than keep them alongside this -- ESLint flat config rejects two different plugin object instances registered under the same namespace. What you still supply yourself is `languageOptions.parserOptions.project`/`projectService` pointing at your own tsconfig(s); this bundle's base config never sets that, since it's genuinely project-specific.
 
 **Test files (`**/*.{test,spec}.{ts,tsx,mts,cts,js,jsx,mjs,cjs}`) get two narrow relaxations of this package's own additions above, and only those two.** A compile-time-only `@ts-expect-error` proving a construct genuinely fails to type-check is a well-established, legitimate test pattern -- TypeScript's own "unused `@ts-expect-error` directive" diagnostic already catches one that stops being needed, independent of this rule -- so a test file reverts to the rule's own pre-ban default, `allow-with-description`, rather than the outright ban. `@ts-ignore`/`@ts-nocheck` stay banned even in test files: `@ts-expect-error` is strictly better for both, so there's no legitimate test-specific reason to reach for either. `consistent-type-assertions` relaxes to `assertionStyle: 'as'` in test files -- letting a test construct a partial/stub value with a real `as` assertion where the full type wouldn't otherwise accept it -- while the legacy angle-bracket `<Type>value` form stays banned everywhere, tests included. Nothing inherited from `recommendedTypeChecked`/`stylisticTypeChecked` itself is relaxed in test files; only this package's own two additions are.
 
 ### The lighter option: the `plugin` named export
 
-For a project that wants only this package's own four rules -- without the full type-checked bundle, e.g. one already running its own separate type-aware setup -- import the named `plugin` export instead and wire the rules individually:
+For a project that wants only this package's own rules -- without the full type-checked bundle, e.g. one already running its own separate type-aware setup -- import the named `plugin` export instead and wire the rules individually:
 
 ```ts
 // eslint.config.ts
@@ -104,10 +113,25 @@ The one thing self-scoping can't know on your behalf is a barrel that lives some
 
 | Rule | Fixable | Description |
 | --- | --- | --- |
+| `barrel-policy` | | The umbrella rule over the four barrel rules below: one `{ mode }` option selecting a whole index-file policy. See [Barrel policy](#barrel-policy). |
+| `no-index-files` | | Bans any `index.*` file outright (mode 1). The strictest policy. |
 | `no-non-barrel-index` | | Only `src/index.ts` may be named `index.*` -- any other module named `index.ts`/`.js`/etc would be silently selected by a consumer's bare directory import. |
-| `no-non-barrel-reexport` | ✓ | Re-exports belong only in the public barrel. Catches both the single-statement form (`export { x } from './y'`, already caught by a plain `no-restricted-syntax` rule) and the split form across two statements (`import { x } from './y'; export { x };` or `export default x;`), which no AST selector alone can match. The autofix deletes the offending export, and the now-pointless import alongside it whenever that export was the import's only use anywhere in the file. |
+| `no-non-barrel-reexport` | ✓ | Re-exports belong only in a barrel. Catches the split form across two statements (`import { x } from './y'; export { x };` or `export default x;`) which no AST selector alone can match. The autofix deletes the offending export, and the now-pointless import alongside it whenever that export was the import's only use anywhere in the file. Self-scopes away from any index file (not just `src/index.ts`). |
+| `no-side-effects-in-index` | | A barrel (index) file may contain only re-export statements -- nothing that could execute at import time. Self-scopes to any index file. |
+| `barrel-direct-siblings-only` | | A barrel may re-export only from a direct sibling file or folder (`./module`), never a nested path, a parent, or a bare package specifier (mode 3). |
 | `no-pointless-reassignment` | ✓ | `const foo = bar` where both sides are plain identifiers and the alias adds no transformation. |
-| `no-side-effects-in-index` | | The public barrel may contain only re-export statements -- nothing that could execute at import time. |
+
+## Barrel policy
+
+`exadev/barrel-policy` is the convenience layer over the four granular barrel rules: one rule id, one `{ mode }` option selecting one of three complete index-file policies, so a consumer writes a single config entry instead of wiring several rules together. A consumer uses EITHER this umbrella (one line, opinionated) OR the individual rules above (full control, e.g. `single` plus one extra cross-package re-export exception); not both, since they would double-report.
+
+| `mode` | Which files may be barrels | What a barrel may contain | Where a barrel's re-exports may come from |
+| --- | --- | --- | --- |
+| `'banned'` (the default/recommended) | none | — | — |
+| `'single'` | exactly `src/index.ts` | only re-exports | anywhere |
+| `'siblings'` | any `index.ts` | only re-exports | a direct sibling only (`./module`) |
+
+In every mode, re-exports are banned in any file that is not a permitted barrel, and a permitted barrel may contain only re-export statements (no functional code). `'banned'` is the default the bundled configs ship; a published package whose `src/index.ts` is its package entry point overrides to `'single'` (see [Getting started](#getting-started)). The umbrella composes the identical predicates the standalone rules use (shared in `src/rules/barrel-helpers.ts`), so the convenience rule and the granular ones never drift apart. It is non-fixable -- the autofix lives on `no-non-barrel-reexport` -- so consumers who want the autofix use that granular rule directly.
 
 ## Build, test, and lint
 
@@ -119,7 +143,7 @@ pnpm test
 pnpm build
 ```
 
-Each rule has a co-located `*.test.ts` file (`src/rules/no-non-barrel-index.test.ts` etc.) exercising it with ESLint's own `RuleTester`, run under Vitest. `vitest.setup.ts` wires `RuleTester.describe`/`RuleTester.it`/`RuleTester.itOnly` to Vitest's own `describe`/`it` explicitly, rather than turning on Vitest's `test.globals` project-wide, since `RuleTester.run()` only calls `describe`/`it` if something has supplied them. Each test file constructs its own `RuleTester` with `languageOptions.parser` set to `typescript-eslint`'s parser, since these rules' realistic test fixtures use TypeScript-only syntax (e.g. `export type { X } from './y'`) that the default `espree` parser can't read; none of the four rules need type information, so no `project`/`tsconfigRootDir` is configured.
+Each rule has a co-located `*.test.ts` file (`src/rules/no-non-barrel-index.test.ts` etc.) exercising it with ESLint's own `RuleTester`, run under Vitest. `vitest.setup.ts` wires `RuleTester.describe`/`RuleTester.it`/`RuleTester.itOnly` to Vitest's own `describe`/`it` explicitly, rather than turning on Vitest's `test.globals` project-wide, since `RuleTester.run()` only calls `describe`/`it` if something has supplied them. Each test file constructs its own `RuleTester` with `languageOptions.parser` set to `typescript-eslint`'s parser, since these rules' realistic test fixtures use TypeScript-only syntax (e.g. `export type { X } from './y'`) that the default `espree` parser can't read; none of the rules need type information, so no `project`/`tsconfigRootDir` is configured. The barrel rules share their core predicates and the split-statement re-export detector via `src/rules/barrel-helpers.ts`, exercised both through each granular rule's own tests and through `barrel-policy.test.ts`'s per-mode coverage.
 
 `pnpm test` always measures coverage (`coverage.enabled: true` in `vitest.config.ts`, via `@vitest/coverage-v8`) rather than needing a separate `--coverage` flag -- scoped to `src/**/*.ts` excluding the `*.test.ts` files themselves. The text reporter summarises in the terminal; the `html`/`lcov` reporters land in `coverage/`, already gitignored alongside `.eslintcache` and `dist/`.
 
@@ -129,7 +153,7 @@ The `lint`/`typecheck`/`test`/`build` npm scripts are thin wrappers around turbo
 
 ## Architecture
 
-`src/plugin.ts` builds an `ESLint.Plugin` object (ESLint's own `ESLint.Plugin` type, not a hand-written interface) combining the four rule modules under `src/rules/` into a flat `rules` map. `configs.recommended` and `configs.barrel` are defined as getters directly in the object literal, not attached after construction: each needs to reference the fully-built `plugin` object itself (`plugins: { exadev: plugin }`), which a plain property initializer can't do for its own binding while it's still being constructed. A getter closes over the `plugin` binding rather than its value, so it resolves correctly the moment a consumer actually reads the property, by which point construction has finished -- no `Object.assign`, no post-construction mutation, no null-checked destructure needed.
+`src/plugin.ts` builds an `ESLint.Plugin` object (ESLint's own `ESLint.Plugin` type, not a hand-written interface) combining the rule modules under `src/rules/` into a flat `rules` map. `configs.recommended` and `configs.barrel` are defined as getters directly in the object literal, not attached after construction: each needs to reference the fully-built `plugin` object itself (`plugins: { exadev: plugin }`), which a plain property initializer can't do for its own binding while it's still being constructed. A getter closes over the `plugin` binding rather than its value, so it resolves correctly the moment a consumer actually reads the property, by which point construction has finished -- no `Object.assign`, no post-construction mutation, no null-checked destructure needed. `recommended` ships the `barrel-policy` umbrella at `mode: 'banned'`; `barrel` ships it at `mode: 'single'`.
 
 `src/recommended-type-checked.ts` bundles typescript-eslint's own `recommendedTypeChecked` + `stylisticTypeChecked` presets alongside this plugin's own rules into a flat config array. Its own value must specifically be typed as an array, not the wider `NonNullable<ESLint.Plugin['configs']>[string]` union (`LegacyConfigObject | ConfigObject | ConfigObject[]`) `plugin.ts`'s own `configs.recommended`/`configs.barrel` correctly use: that union isn't guaranteed to be an array, so annotating an always-array value with it broke `...exadev`, the way every real consumer spreads this default export, with `TS2488: Type '...' must have a '[Symbol.iterator]()' method`. `ConfigArrayValue = Extract<ConfigValue, unknown[]>` narrows to the array-only member of the identical union -- still derived from ESLint's own `Plugin` type (never typescript-eslint's own narrower internal element type, `CompatibleConfig`, which has no `plugins` field), per this codebase's "don't hand-type external libraries" convention.
 

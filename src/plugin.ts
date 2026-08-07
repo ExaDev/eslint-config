@@ -1,5 +1,8 @@
 import type { ESLint } from 'eslint';
 import { version } from '../package.json';
+import barrelDirectSiblingsOnly from './rules/barrel-direct-siblings-only';
+import barrelPolicy from './rules/barrel-policy';
+import noIndexFiles from './rules/no-index-files';
 import noNonBarrelIndex from './rules/no-non-barrel-index';
 import noNonBarrelReexport from './rules/no-non-barrel-reexport';
 import noPointlessReassignment from './rules/no-pointless-reassignment';
@@ -22,33 +25,32 @@ const plugin: ESLint.Plugin = {
     namespace: 'exadev',
   },
   rules: {
+    'barrel-direct-siblings-only': barrelDirectSiblingsOnly,
+    'barrel-policy': barrelPolicy,
+    'no-index-files': noIndexFiles,
     'no-non-barrel-index': noNonBarrelIndex,
     'no-non-barrel-reexport': noNonBarrelReexport,
     'no-pointless-reassignment': noPointlessReassignment,
     'no-side-effects-in-index': noSideEffectsInIndex,
   },
   configs: {
-    // Every rule this plugin defines, at 'error', plus one general code-quality setting safe for any project regardless of TypeScript: no eslint-disable comments anywhere (an exception belongs in the config, scoped to where it applies, never hidden inline in the source it's disabling a rule for). This plugin's own rules operate on plain ESTree import/export/declaration nodes, nothing TypeScript-specific -- `recommended` is deliberately the LIGHTER of this package's two bundles, not a heavier baseline plus recommendedTypeChecked/stylisticTypeChecked, for a consumer who wants just these four rules without also taking on the full type-checked ruleset (e.g. one already running its own separate type-aware setup). It no longer avoids a typescript-eslint dependency by doing so: `plugin` (this value) and the default export (recommendedTypeChecked, src/index.ts) live in the same root module, so importing either one from '@exadev/eslint-config' resolves typescript-eslint regardless -- see recommended-type-checked.ts's own top-of-file comment for why that's now an accepted, unconditional peer dependency of the package as a whole rather than something split into a separate subpath.
+    // The recommended barrel policy is 'banned' (no index files at all), expressed through the barrel-policy umbrella rule, plus no-pointless-reassignment and noInlineConfig. This is the LIGHTER of this package's two bundles -- no typescript-eslint type-checked ruleset -- for a consumer who wants just this plugin's own rules without the full typed-linting baseline (the default export, src/index.ts, is the heavier bundle that adds that baseline on top of the same 'banned' policy). A project that legitimately needs a barrel (e.g. a published package whose src/index.ts is its package entry point) overrides to `{ mode: 'single' }` in its own config, or uses `configs.barrel` below.
     get recommended(): ConfigValue {
       return {
         plugins: { exadev: plugin },
         linterOptions: { noInlineConfig: true },
         rules: {
-          'exadev/no-non-barrel-index': 'error',
-          'exadev/no-non-barrel-reexport': 'error',
+          'exadev/barrel-policy': ['error', { mode: 'banned' }],
           'exadev/no-pointless-reassignment': 'error',
-          'exadev/no-side-effects-in-index': 'error',
         },
       };
     },
-    // Only the three rules that police the src/index.ts barrel convention (index-file naming, re-export placement, and the barrel's own purity) -- for a consumer that wants that discipline without also taking no-pointless-reassignment.
+    // The barrel-policy umbrella at 'single' -- exactly src/index.ts may be a barrel -- for a consumer that keeps one barrel (the convention this package itself used to recommend before 'banned' became the default).
     get barrel(): ConfigValue {
       return {
         plugins: { exadev: plugin },
         rules: {
-          'exadev/no-non-barrel-index': 'error',
-          'exadev/no-non-barrel-reexport': 'error',
-          'exadev/no-side-effects-in-index': 'error',
+          'exadev/barrel-policy': ['error', { mode: 'single' }],
         },
       };
     },

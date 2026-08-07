@@ -12,11 +12,13 @@ export default tseslint.config(
     },
   },
   js.configs.recommended,
-  // Dogfooding this package's own default export on itself, imported directly by relative path rather than as a dependency on itself -- the live proof that `...exadevRecommendedTypeChecked` (a spread) typechecks and behaves correctly, including its own four exadev/* rules self-scoping against this repo's own src/index.ts barrel and src/plugin.ts non-barrel module.
+  // Dogfooding this package's own default export on itself, imported directly by relative path rather than as a dependency on itself -- the live proof that `...exadevRecommendedTypeChecked` (a spread) typechecks and behaves correctly. The default ships barrel-policy at mode 'banned', but this repo (like every published package in its consumer family) keeps src/index.ts as its package entry point, so it overrides to 'single' in the next block.
   ...exadevRecommendedTypeChecked,
   {
     rules: {
       '@typescript-eslint/consistent-type-imports': ['error', { fixStyle: 'inline-type-imports' }],
+      // This package's own src/index.ts is its public entry point (package.json exports), so it keeps one barrel: override the default 'banned' policy to 'single'.
+      'exadev/barrel-policy': ['error', { mode: 'single' }],
     },
   },
 );
