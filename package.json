@@ -23,14 +23,6 @@
       },
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
-    },
-    "./*": {
-      "types": {
-        "import": "./dist/*.d.ts",
-        "require": "./dist/*.d.cts"
-      },
-      "import": "./dist/*.js",
-      "require": "./dist/*.cjs"
     }
   },
   "files": [
@@ -48,11 +40,6 @@
   "peerDependencies": {
     "eslint": ">=10.0.0",
     "typescript-eslint": ">=8.0.0"
-  },
-  "peerDependenciesMeta": {
-    "typescript-eslint": {
-      "optional": true
-    }
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",

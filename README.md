@@ -12,75 +12,17 @@ Only the *rules* are centralized here, not a consumer's whole `eslint.config.ts`
 
 ## Getting started
 
-Consumers need `eslint >=10.0.0` as a peer dependency. `typescript-eslint >=8.0.0` is also a peer dependency, but an *optional* one (`peerDependenciesMeta`) -- it's only needed by the `recommended-type-checked` entry point described below, not by the package as a whole. A plain-JS project with no TypeScript at all can install and use this package with nothing else added.
+Consumers need `eslint >=10.0.0` and `typescript-eslint >=8.0.0` as peer dependencies -- both required, not optional. Importing anything from this package, including the lighter `plugin` export described below, resolves `typescript-eslint`: the package's default export (the full type-checked bundle) and the `plugin` named export live in the same root module, and ESM/CJS module evaluation runs a module's entire top-level import graph regardless of which specific export the caller reads. See [Architecture](#architecture) for why that's an accepted trade-off rather than an oversight.
 
 ```sh
-pnpm add -D @exadev/eslint-config
+pnpm add -D @exadev/eslint-config typescript-eslint eslint
 ```
+
+The default export is the full, type-checked ruleset: typescript-eslint's own `recommendedTypeChecked` + `stylisticTypeChecked` presets, this package's own four rules (self-scoped internally to the barrel -- see [Rules](#rules) -- so no `files`/`ignores` wiring is needed for them), `linterOptions.noInlineConfig`, `@typescript-eslint/consistent-type-assertions` banning all type assertions, and `@typescript-eslint/ban-ts-comment` banning `@ts-expect-error` outright alongside the preset's own existing `@ts-ignore`/`@ts-nocheck` bans -- the last two relaxed automatically in `*.test.ts`/`*.spec.ts` files (see below). Spread it directly into `tseslint.config(...)`:
 
 ```ts
 // eslint.config.ts
 import exadev from '@exadev/eslint-config';
-import tseslint from 'typescript-eslint';
-
-export default tseslint.config(
-  // ...your own config...
-  {
-    files: ['src/**/*.ts'],
-    ignores: ['src/index.ts'],
-    plugins: { exadev },
-    rules: {
-      'exadev/no-non-barrel-reexport': 'error',
-    },
-  },
-);
-```
-
-Or use one of the bundled configs to enable a whole set at once:
-
-```ts
-import exadev from '@exadev/eslint-config';
-import { defineConfig } from 'eslint/config';
-
-export default defineConfig([
-  {
-    files: ['**/*.ts'],
-    plugins: { exadev },
-    extends: ['exadev/recommended'], // this plugin's own four rules, plus linterOptions.noInlineConfig -- no TypeScript involvement at all
-    // or: extends: ['exadev/barrel'], // just the barrel-discipline trio (no-non-barrel-index, no-non-barrel-reexport, no-side-effects-in-index)
-  },
-]);
-```
-
-`typescript-eslint`'s own `tseslint.config()` helper (rather than ESLint's `defineConfig()`) does **not** accept the string form of `extends` at all -- it throws `has an 'extends' array that contains a string ... This is a feature of eslint's defineConfig() helper and is not supported by typescript-eslint`. A `tseslint.config()`-based project passes the config value directly instead:
-
-```ts
-import exadev from '@exadev/eslint-config';
-import tseslint from 'typescript-eslint';
-
-export default tseslint.config(
-  // ...your own config...
-  {
-    files: ['**/*.ts'],
-    plugins: { exadev },
-    extends: [exadev.configs.recommended], // or exadev.configs.barrel
-  },
-);
-```
-
-**`recommended`/`barrel` carry no `files`/`ignores` of their own, and are safe to apply unscoped anyway -- the two rules that care which file they're looking at (`no-side-effects-in-index`, `no-non-barrel-reexport`) each check `context.filename` themselves, the same self-scoping pattern `no-non-barrel-index` already used.** `no-side-effects-in-index` no-ops on every file except `src/index.ts`, since it has no legitimate target anywhere else; `no-non-barrel-reexport` no-ops specifically on `src/index.ts`, since a real single-statement re-export there is the intended, normal shape. An earlier version of this package lacked that self-scoping and genuinely misfired when `recommended`/`barrel` were applied without an external `files: ['src/index.ts']`/`ignores: ['src/index.ts']` wrapper -- 88 false-positive errors on a single real source file in a repo that tried it, since `no-side-effects-in-index` flagged every ordinary `export function`/`export const`/`export interface` declaration it saw. That's fixed at the rule level now, not documented around.
-
-The one thing self-scoping can't know on your behalf is a barrel that lives somewhere other than `src/index.ts`, or a project-specific exception beyond the barrel (an extra file you want exempt from the re-export ban). For either of those, layer an additional override on top of `recommended`/`barrel` -- e.g. `{ files: ['lib/other-legacy-reexport.ts'], rules: { 'exadev/no-non-barrel-reexport': 'off' } }` -- rather than falling back to wiring all four rules individually, which is still fine but no longer required for the common case.
-
-Both `recommended` and `barrel` are usable in a plain JavaScript project with no TypeScript and no `typescript-eslint` installed: this plugin's own four rules operate on plain ESTree import/export/declaration nodes, nothing TypeScript-specific, and neither config references `typescript-eslint` at all.
-
-### The typed-linting bundle: `@exadev/eslint-config/recommended-type-checked`
-
-For a TypeScript project that wants the full typed-linting baseline bundled in, import the separate `recommended-type-checked` entry point instead of using `configs.recommended`:
-
-```ts
-// eslint.config.ts
-import exadevRecommendedTypeChecked from '@exadev/eslint-config/recommended-type-checked';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
@@ -89,18 +31,74 @@ export default tseslint.config(
       parserOptions: { project: './tsconfig.json', tsconfigRootDir: import.meta.dirname },
     },
   },
-  ...exadevRecommendedTypeChecked,
+  ...exadev,
   // ...your own config on top...
 );
 ```
 
-This bundles `typescript-eslint`'s own `recommendedTypeChecked` and `stylisticTypeChecked` presets (`recommendedTypeChecked` already subsumes plain `recommended` outright -- every one of its 46 rules is a strict subset of `recommendedTypeChecked`'s 73, confirmed by inspecting the actual rule maps) alongside this plugin's own four rules, `linterOptions.noInlineConfig`, `@typescript-eslint/consistent-type-assertions` set to `never` (no `as`/angle-bracket type assertions -- narrow with a guard or parse with Zod instead), and `@typescript-eslint/ban-ts-comment` raised to ban `@ts-expect-error` outright alongside the preset's own existing `@ts-ignore`/`@ts-nocheck` bans -- with `noInlineConfig` already removing `eslint-disable` as an escape hatch, this leaves no way to suppress a type error inline anywhere in a consuming project.
-
-It's a real bundling, not a rule reference that assumes the consumer already has `typescript-eslint` set up: `recommendedTypeChecked`'s own base config registers the `@typescript-eslint` plugin and sets `languageOptions.parser` itself. **A consumer adopting this bundle must remove its own `...tseslint.configs.recommended`/`recommendedTypeChecked`/`stylisticTypeChecked` spreads** rather than keep them alongside it -- ESLint flat config rejects two different plugin object instances registered under the same namespace. What a consumer still supplies itself is `languageOptions.parserOptions.project`/`projectService` pointing at its own tsconfig(s); `recommendedTypeChecked`'s base config never sets that, since it's genuinely project-specific.
+`recommendedTypeChecked` already subsumes typescript-eslint's own plain `recommended` outright -- every one of its 46 rules is a strict subset of `recommendedTypeChecked`'s 73, confirmed by inspecting the actual rule maps. This is a real bundling, not a rule reference that assumes you already have typescript-eslint registered: `recommendedTypeChecked`'s own base config registers the `@typescript-eslint` plugin and sets `languageOptions.parser` itself. That is exactly why **you must remove your own `...tseslint.configs.recommended`/`recommendedTypeChecked`/`stylisticTypeChecked` spreads** rather than keep them alongside this -- ESLint flat config rejects two different plugin object instances registered under the same namespace. What you still supply yourself is `languageOptions.parserOptions.project`/`projectService` pointing at your own tsconfig(s); this bundle's base config never sets that, since it's genuinely project-specific.
 
 **Test files (`**/*.{test,spec}.{ts,tsx,mts,cts,js,jsx,mjs,cjs}`) get two narrow relaxations of this package's own additions above, and only those two.** A compile-time-only `@ts-expect-error` proving a construct genuinely fails to type-check is a well-established, legitimate test pattern -- TypeScript's own "unused `@ts-expect-error` directive" diagnostic already catches one that stops being needed, independent of this rule -- so a test file reverts to the rule's own pre-ban default, `allow-with-description`, rather than the outright ban. `@ts-ignore`/`@ts-nocheck` stay banned even in test files: `@ts-expect-error` is strictly better for both, so there's no legitimate test-specific reason to reach for either. `consistent-type-assertions` relaxes to `assertionStyle: 'as'` in test files -- letting a test construct a partial/stub value with a real `as` assertion where the full type wouldn't otherwise accept it -- while the legacy angle-bracket `<Type>value` form stays banned everywhere, tests included. Nothing inherited from `recommendedTypeChecked`/`stylisticTypeChecked` itself is relaxed in test files; only this package's own two additions are.
 
-This lives in its own module, separate from the main `@exadev/eslint-config` entry point, specifically so importing the main package never attempts to resolve `typescript-eslint`. A plain object property (or a lazy getter) on the base plugin's own `configs` map can't achieve that: ESLint's `extends` resolution is synchronous, so a dynamic `import()` doesn't help either -- it just hides the same requirement behind an unawaited promise. Splitting into a genuinely separate module sidesteps the problem at the right layer: Node's own module resolution only loads a module when something actually imports it.
+### The lighter option: the `plugin` named export
+
+For a project that wants only this package's own four rules -- without the full type-checked bundle, e.g. one already running its own separate type-aware setup -- import the named `plugin` export instead and wire the rules individually:
+
+```ts
+// eslint.config.ts
+import { plugin } from '@exadev/eslint-config';
+import tseslint from 'typescript-eslint';
+
+export default tseslint.config(
+  // ...your own config...
+  {
+    files: ['src/**/*.ts'],
+    ignores: ['src/index.ts'],
+    plugins: { exadev: plugin },
+    rules: {
+      'exadev/no-non-barrel-reexport': 'error',
+    },
+  },
+);
+```
+
+Or use one of `plugin`'s two bundled configs to enable a whole set at once:
+
+```ts
+import { plugin } from '@exadev/eslint-config';
+import { defineConfig } from 'eslint/config';
+
+export default defineConfig([
+  {
+    files: ['**/*.ts'],
+    plugins: { exadev: plugin },
+    extends: ['exadev/recommended'], // this plugin's own four rules, plus linterOptions.noInlineConfig -- no type-checked rules at all
+    // or: extends: ['exadev/barrel'], // just the barrel-discipline trio (no-non-barrel-index, no-non-barrel-reexport, no-side-effects-in-index)
+  },
+]);
+```
+
+`typescript-eslint`'s own `tseslint.config()` helper (rather than ESLint's `defineConfig()`) does **not** accept the string form of `extends` at all -- it throws `has an 'extends' array that contains a string ... This is a feature of eslint's defineConfig() helper and is not supported by typescript-eslint`. A `tseslint.config()`-based project passes the config value directly instead:
+
+```ts
+import { plugin } from '@exadev/eslint-config';
+import tseslint from 'typescript-eslint';
+
+export default tseslint.config(
+  // ...your own config...
+  {
+    files: ['**/*.ts'],
+    plugins: { exadev: plugin },
+    extends: [plugin.configs.recommended], // or plugin.configs.barrel
+  },
+);
+```
+
+**`plugin.configs.recommended`/`plugin.configs.barrel` carry no `files`/`ignores` of their own, and are safe to apply unscoped anyway -- the two rules that care which file they're looking at (`no-side-effects-in-index`, `no-non-barrel-reexport`) each check `context.filename` themselves, the same self-scoping pattern `no-non-barrel-index` already used.** `no-side-effects-in-index` no-ops on every file except `src/index.ts`, since it has no legitimate target anywhere else; `no-non-barrel-reexport` no-ops specifically on `src/index.ts`, since a real single-statement re-export there is the intended, normal shape. An earlier version of this package lacked that self-scoping and genuinely misfired when `recommended`/`barrel` were applied without an external `files: ['src/index.ts']`/`ignores: ['src/index.ts']` wrapper -- 88 false-positive errors on a single real source file in a repo that tried it, since `no-side-effects-in-index` flagged every ordinary `export function`/`export const`/`export interface` declaration it saw. That's fixed at the rule level now, not documented around.
+
+The one thing self-scoping can't know on your behalf is a barrel that lives somewhere other than `src/index.ts`, or a project-specific exception beyond the barrel (an extra file you want exempt from the re-export ban). For either of those, layer an additional override on top of `recommended`/`barrel` -- e.g. `{ files: ['lib/other-legacy-reexport.ts'], rules: { 'exadev/no-non-barrel-reexport': 'off' } }` -- rather than falling back to wiring all four rules individually, which is still fine but no longer required for the common case.
+
+`plugin.configs.recommended`/`plugin.configs.barrel` are not usable without `typescript-eslint` installed, even though neither config itself references it: `plugin` is a named export sharing its root module with the default export, so `typescript-eslint` resolves the moment anything is imported from `@exadev/eslint-config` at all -- see [Architecture](#architecture) for the trade-off this reflects.
 
 ## Rules
 
@@ -127,19 +125,21 @@ Each rule has a co-located `*.test.ts` file (`src/rules/no-non-barrel-index.test
 
 The `lint`/`typecheck`/`test`/`build` npm scripts are thin wrappers around turbo tasks whose own names carry a leading underscore (`_lint`/`_typecheck`/`_test`/`_build`, declared in `turbo.json`) -- run `pnpm build`, not `turbo run build` directly, since turbo's task names don't match the npm script names.
 
-`pnpm build` runs `tsdown`, emitting ESM and CJS output plus declaration files from `src/**/*.ts` (platform-neutral, `src/**/*.test.ts` excluded). Before any publish -- local or the CI alias job -- `prepublishOnly` re-runs lint, typecheck, `test`, `tsdown`, `publint`, and `attw --pack`, so a broken export shape fails at publish time even outside the main CI pipeline.
+`pnpm build` runs `tsdown` from the single `src/index.ts` entry, bundling the whole module graph (`plugin.ts`, `recommended-type-checked.ts`, and every rule under `src/rules/`) into one ESM output and one CJS output plus declaration files (platform-neutral). Before any publish -- local or the CI alias job -- `prepublishOnly` re-runs lint, typecheck, `test`, `tsdown`, `publint`, and `attw --pack`, so a broken export shape fails at publish time even outside the main CI pipeline.
 
 ## Architecture
 
-`src/plugin.ts` builds an `ESLint.Plugin` object (ESLint's own `ESLint.Plugin` type, not a hand-written interface) combining the four rule modules under `src/rules/` into a flat `rules` map. `configs.recommended` and `configs.barrel` are defined as getters directly in the object literal, not attached after construction: each needs to reference the fully-built `plugin` object itself (`plugins: { exadev: plugin }`), which a plain property initializer can't do for its own binding while it's still being constructed. A getter closes over the `plugin` binding rather than its value, so it resolves correctly the moment a consumer actually reads the property, by which point construction has finished -- no `Object.assign`, no post-construction mutation, no null-checked destructure needed. `src/index.ts` is the public entry point and is nothing but `export { default } from './plugin';` -- a genuine pure re-export barrel.
+`src/plugin.ts` builds an `ESLint.Plugin` object (ESLint's own `ESLint.Plugin` type, not a hand-written interface) combining the four rule modules under `src/rules/` into a flat `rules` map. `configs.recommended` and `configs.barrel` are defined as getters directly in the object literal, not attached after construction: each needs to reference the fully-built `plugin` object itself (`plugins: { exadev: plugin }`), which a plain property initializer can't do for its own binding while it's still being constructed. A getter closes over the `plugin` binding rather than its value, so it resolves correctly the moment a consumer actually reads the property, by which point construction has finished -- no `Object.assign`, no post-construction mutation, no null-checked destructure needed.
 
-`src/recommended-type-checked.ts` is a deliberately separate module, not a third property on the base plugin's own `configs`. It imports `typescript-eslint` to bundle `recommendedTypeChecked` + `stylisticTypeChecked` alongside this plugin's own rules -- see [The typed-linting bundle](#the-typed-linting-bundle-exadeveslint-configrecommended-type-checked) above for why that has to live in its own module rather than on the shared plugin object: importing the main entry point must never attempt to resolve `typescript-eslint`, and Node's own module resolution only loads a module when something actually imports it.
+`src/recommended-type-checked.ts` bundles typescript-eslint's own `recommendedTypeChecked` + `stylisticTypeChecked` presets alongside this plugin's own rules into a flat config array. Its own value must specifically be typed as an array, not the wider `NonNullable<ESLint.Plugin['configs']>[string]` union (`LegacyConfigObject | ConfigObject | ConfigObject[]`) `plugin.ts`'s own `configs.recommended`/`configs.barrel` correctly use: that union isn't guaranteed to be an array, so annotating an always-array value with it broke `...exadev`, the way every real consumer spreads this default export, with `TS2488: Type '...' must have a '[Symbol.iterator]()' method`. `ConfigArrayValue = Extract<ConfigValue, unknown[]>` narrows to the array-only member of the identical union -- still derived from ESLint's own `Plugin` type (never typescript-eslint's own narrower internal element type, `CompatibleConfig`, which has no `plugins` field), per this codebase's "don't hand-type external libraries" convention.
+
+`src/index.ts` is the public entry point: `export { default } from './recommended-type-checked'; export { default as plugin } from './plugin';` -- a genuine pure re-export barrel with a default export and one named export, not just a single re-export. An earlier version of this package kept `recommended-type-checked` as a genuinely separate npm subpath (`@exadev/eslint-config/recommended-type-checked`), specifically so importing the main entry point never resolved `typescript-eslint` at all for a plain-JS consumer. Two module specifiers for one package turned out more awkward in practice than the alternative: `typescript-eslint` is now a required (not optional) peer dependency of the whole package, and both `plugin` and the default export live in the same root module -- ESM/CJS module evaluation runs a module's entire top-level import graph regardless of which specific export the caller reads, so importing `{ plugin }` alone still resolves `typescript-eslint` via the *other* re-export statement in the same file. This is an accepted, deliberate trade-off (see [Getting started](#getting-started)), not something a future fix should try to undo without weighing the same two-entry-point cost that made the earlier split feel worse.
 
 `pnpm-workspace.yaml` deliberately declares an empty `packages: []`. This is not a real multi-package pnpm workspace; its only purpose is giving turbo a workspace root to anchor local task caching against, matching the same single-package-workspace pattern used across this repo family.
 
 ## Conventions
 
-`eslint.config.ts` dogfoods this package's own rules on itself, importing `./src/index` by relative path rather than as an installed dependency. All four rules are wired in one block with no `files`/`ignores` of its own -- `no-side-effects-in-index` and `no-non-barrel-reexport` each self-scope to `src/index.ts` internally, so applying them repo-wide here is both the simplest wiring and the live proof that doing so works. The plugin-construction logic lives in `src/plugin.ts` specifically so `src/index.ts` can stay a pure re-export point both rules assume.
+`eslint.config.ts` dogfoods this package's own default export on itself, importing `./src/index` by relative path rather than as an installed dependency, and spreading it (`...exadevRecommendedTypeChecked`) exactly as a real consumer would -- the live proof that the spread typechecks and behaves correctly against this repo's own `src/index.ts` barrel and `src/plugin.ts` non-barrel module. `no-side-effects-in-index` and `no-non-barrel-reexport` (both bundled in) self-scope to `src/index.ts` internally, so no `files`/`ignores` wiring is needed for them here either. The plugin-construction logic lives in `src/plugin.ts` specifically so `src/index.ts` can stay a pure re-export point both rules assume.
 
 `tsconfig.json` enables `verbatimModuleSyntax` (type-only imports/exports must use `import type`/`export type` explicitly -- enforced too by the `consistent-type-imports` eslint rule) and `noUncheckedIndexedAccess` (indexed access returns `T | undefined`, narrow before use rather than asserting).
 
@@ -148,6 +148,7 @@ Conventional commits are enforced by commitlint, restricted to the type-enum def
 ## Gotchas and quirks
 
 - `.attw.json` ignores the `false-export-default` rule: tsdown/rolldown's CJS output for this plugin's sole default export doesn't emit the `export =` form `arethetypeswrong`'s check wants under legacy `node10` resolution. The resolution modes an ESLint flat config actually uses (`node16`, `bundler`) are unaffected, so the rule is suppressed rather than moving the plugin away from ESLint's own documented default-export shape.
+- `src/index.ts` mixing a default export with a named one (`plugin`) triggers rolldown's own `MIXED_EXPORTS` build warning: Node's *native* `import()` of the built `.cjs` file does not respect the `__esModule` marker TypeScript/bundler interop helpers use, so a raw `require('@exadev/eslint-config').default` differs from what a TS-compiled or bundler-mediated `import exadev from '@exadev/eslint-config'` resolves to. Confirmed empirically (packing the tarball and installing it as a real dependency in a `"type": "module"` project): the actual consumer path -- ESM `import` -- resolves both the default export and `plugin` correctly; only a hypothetical direct-`require()` CommonJS consumer would see the raw exports object instead. No current consumer of this package is CommonJS, and both `attw --pack` and `publint` report no problems, so the warning is accepted (see `tsdown.config.ts`'s own top-of-file comment) rather than restructuring the build for a consumer that doesn't exist.
 - Husky hooks: `pre-commit` runs lint-staged (`eslint --fix` on staged `*.ts`), `commit-msg` runs commitlint against the message, `pre-push` runs `typecheck`, `test`, and `build` -- pushing here re-runs the whole test suite and rebuilds the package first.
 - The CI release job sets `HUSKY=0` (so the commit-msg hook never fires against the automated release commit) and blanks `NPM_TOKEN`/`NODE_AUTH_TOKEN` explicitly rather than omitting them, so an inherited token can't win over npm's OIDC trusted-publishing exchange.
 

@@ -3,10 +3,7 @@ import tseslint from 'typescript-eslint';
 import { describe, expect, it } from 'vitest';
 import recommendedTypeChecked from './recommended-type-checked';
 
-// Exercises this package's own test-file relaxation directly against the real exported array (the last two entries: the outright-strictness rules, then the test-file override), rather than a re-implementation -- proving the shipped config, not a description of intent. Neither rule under test needs type information, so a bare parser registration (no project/projectService) is enough; recommendedTypeChecked's own type-aware rules (await-thenable etc.) are deliberately excluded from this slice, since testing them would need a real tsconfig project this unit test has no reason to depend on.
-if (!Array.isArray(recommendedTypeChecked)) {
-  throw new TypeError('recommended-type-checked is expected to export a config array, not a single object or legacy config.');
-}
+// Exercises this package's own test-file relaxation directly against the real exported array (the last two entries: the outright-strictness rules, then the test-file override), rather than a re-implementation -- proving the shipped config, not a description of intent. Neither rule under test needs type information, so a bare parser registration (no project/projectService) is enough; recommendedTypeChecked's own type-aware rules (await-thenable etc.) are deliberately excluded from this slice, since testing them would need a real tsconfig project this unit test has no reason to depend on. No runtime Array.isArray narrowing needed here -- recommendedTypeChecked's own ConfigArrayValue type (Extract<ConfigValue, unknown[]>) already proves this at compile time.
 const linter = new Linter();
 const strictnessConfigs = recommendedTypeChecked.slice(-2);
 
