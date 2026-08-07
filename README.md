@@ -52,6 +52,25 @@ export default defineConfig([
 ]);
 ```
 
+`typescript-eslint`'s own `tseslint.config()` helper (rather than ESLint's `defineConfig()`) does **not** accept the string form of `extends` at all -- it throws `has an 'extends' array that contains a string ... This is a feature of eslint's defineConfig() helper and is not supported by typescript-eslint`. A `tseslint.config()`-based project passes the config value directly instead:
+
+```ts
+import exadev from '@exadev/eslint-config';
+import tseslint from 'typescript-eslint';
+
+export default tseslint.config(
+  // ...your own config...
+  {
+    files: ['**/*.ts'],
+    plugins: { exadev },
+    extends: [exadev.configs.recommended], // or exadev.configs.barrel
+  },
+);
+```
+
+**`recommended`/`barrel` carry no `files`/`ignores` of their own, and applying either unscoped will misfire.** `no-side-effects-in-index` flags any top-level statement that isn't a bare re-export -- applied to an ordinary file with real `export function`/`export const`/`export interface` declarations, every one of them trips it (confirmed directly: 88 false-positive errors on a single real source file in a repo that tried this). Scope the `extends` block itself to just `src/index.ts` if you want `no-side-effects-in-index`'s coverage from `recommended`/`barrel`, or -- what every current consumer of this plugin actually does -- skip `recommended`/`barrel` and wire the four `exadev/*` rules individually, each with your own project's real `files`/`ignores`, exactly as shown in the first example above. That's not a workaround; it's the intended shape once a project's re-export-ban exceptions and barrel location are genuinely project-specific.
+```
+
 Both `recommended` and `barrel` are usable in a plain JavaScript project with no TypeScript and no `typescript-eslint` installed: this plugin's own four rules operate on plain ESTree import/export/declaration nodes, nothing TypeScript-specific, and neither config references `typescript-eslint` at all.
 
 ### The typed-linting bundle: `@exadev/eslint-config/recommended-type-checked`
