@@ -1,4 +1,5 @@
 import type { ESLint } from 'eslint';
+import tseslint from 'typescript-eslint';
 import { version } from '../package.json';
 import noNonBarrelIndex from './rules/no-non-barrel-index';
 import noNonBarrelReexport from './rules/no-non-barrel-reexport';
@@ -31,18 +32,24 @@ if (configs === undefined) {
   throw new Error('Unreachable: configs was just initialized to {} in the object literal above.');
 }
 Object.assign(configs, {
-  // Every rule this plugin defines, at 'error', plus two general code-quality settings every current consumer already wires independently: no eslint-disable comments anywhere (an exception belongs in the config, scoped to where it applies, never hidden inline in the source it's disabling a rule for), and no type assertions (narrow with a guard or parse with Zod instead). consistent-type-assertions is @typescript-eslint's own rule, not one this plugin defines -- referencing it here assumes the consumer has typescript-eslint registered under the `@typescript-eslint` namespace already, true for every consumer this plugin currently has. A consumer with no typescript-eslint at all should use a narrower extends or wire the four exadev/* rules directly instead of taking configs.recommended wholesale.
-  recommended: {
-    plugins: { exadev: plugin },
-    linterOptions: { noInlineConfig: true },
-    rules: {
-      'exadev/no-non-barrel-index': 'error',
-      'exadev/no-non-barrel-reexport': 'error',
-      'exadev/no-pointless-reassignment': 'error',
-      'exadev/no-side-effects-in-index': 'error',
-      '@typescript-eslint/consistent-type-assertions': ['error', { assertionStyle: 'never' }],
+  // The typed-linting baseline every current consumer already wires itself (recommendedTypeChecked + stylisticTypeChecked -- recommendedTypeChecked already subsumes plain `recommended` outright: every one of its 46 rules is a strict subset of recommendedTypeChecked's 73, confirmed by inspecting the actual rule maps, not assumed from the docs alone), plus this plugin's own four rules and two general code-quality settings on top: no eslint-disable comments anywhere (an exception belongs in the config, scoped to where it applies, never hidden inline in the source it's disabling a rule for), and no type assertions (narrow with a guard or parse with Zod instead).
+  //
+  // This is a real bundling, not a reference that assumes the consumer already has typescript-eslint registered: recommendedTypeChecked's own base config registers the `@typescript-eslint` plugin and sets languageOptions.parser itself. That is exactly why a consumer adopting this config must remove its own `...tseslint.configs.recommended/recommendedTypeChecked/stylisticTypeChecked` spreads rather than keep them alongside this -- ESLint flat config rejects two different plugin object instances registered under the same namespace. What a consumer still supplies itself is languageOptions.parserOptions.project/projectService pointing at its own tsconfig(s) -- recommendedTypeChecked's base config never sets that, since it's genuinely project-specific.
+  recommended: [
+    ...tseslint.configs.recommendedTypeChecked,
+    ...tseslint.configs.stylisticTypeChecked,
+    {
+      plugins: { exadev: plugin },
+      linterOptions: { noInlineConfig: true },
+      rules: {
+        'exadev/no-non-barrel-index': 'error',
+        'exadev/no-non-barrel-reexport': 'error',
+        'exadev/no-pointless-reassignment': 'error',
+        'exadev/no-side-effects-in-index': 'error',
+        '@typescript-eslint/consistent-type-assertions': ['error', { assertionStyle: 'never' }],
+      },
     },
-  },
+  ],
   // Only the three rules that police the src/index.ts barrel convention (index-file naming, re-export placement, and the barrel's own purity) -- for a consumer that wants that discipline without also taking no-pointless-reassignment.
   barrel: {
     plugins: { exadev: plugin },

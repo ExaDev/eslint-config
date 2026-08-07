@@ -12,7 +12,7 @@ Only the *rules* are centralized here, not a consumer's whole `eslint.config.ts`
 
 ## Getting started
 
-Consumers need `eslint >=10.0.0` as a peer dependency.
+Consumers need `eslint >=10.0.0` and `typescript-eslint >=8.0.0` as peer dependencies.
 
 ```sh
 pnpm add -D @exadev/eslint-config
@@ -46,13 +46,15 @@ export default defineConfig([
   {
     files: ['**/*.ts'],
     plugins: { exadev },
-    extends: ['exadev/recommended'], // every rule this plugin defines, plus no-inline-config and no-type-assertions
+    extends: ['exadev/recommended'], // the full typed-linting baseline, plus this plugin's own four rules
     // or: extends: ['exadev/barrel'], // just the barrel-discipline trio (no-non-barrel-index, no-non-barrel-reexport, no-side-effects-in-index)
   },
 ]);
 ```
 
-`recommended` also turns on two general code-quality settings every current consumer already wires independently: `linterOptions.noInlineConfig` (no `eslint-disable` comments anywhere -- an exception belongs in the config, scoped to where it applies, not hidden inline in the source it's disabling a rule for) and `@typescript-eslint/consistent-type-assertions` set to `never` (no `as`/angle-bracket type assertions -- narrow with a guard or parse with Zod instead). The type-assertions rule is `@typescript-eslint`'s own, not one this plugin defines, so `recommended` assumes the consumer already has `typescript-eslint` registered under the `@typescript-eslint` namespace -- true for every consumer this plugin currently has. A consumer with no typescript-eslint at all should use `barrel`, or wire the four `exadev/*` rules directly, instead of taking `recommended` wholesale.
+`recommended` bundles `typescript-eslint`'s own `recommendedTypeChecked` and `stylisticTypeChecked` presets (`recommendedTypeChecked` already subsumes plain `recommended` outright -- every one of its 46 rules is a strict subset of `recommendedTypeChecked`'s 73, confirmed by inspecting the actual rule maps) alongside this plugin's own four rules, `linterOptions.noInlineConfig` (no `eslint-disable` comments anywhere -- an exception belongs in the config, scoped to where it applies, not hidden inline in the source it's disabling a rule for), and `@typescript-eslint/consistent-type-assertions` set to `never` (no `as`/angle-bracket type assertions -- narrow with a guard or parse with Zod instead).
+
+This is a real bundling, not a rule reference that assumes the consumer already has `typescript-eslint` set up: `recommendedTypeChecked`'s own base config registers the `@typescript-eslint` plugin and sets `languageOptions.parser` itself. **A consumer adopting `exadev/recommended` must remove its own `...tseslint.configs.recommended`/`recommendedTypeChecked`/`stylisticTypeChecked` spreads** rather than keep them alongside this -- ESLint flat config rejects two different plugin object instances registered under the same namespace. What a consumer still supplies itself is `languageOptions.parserOptions.project`/`projectService` pointing at its own tsconfig(s); `recommendedTypeChecked`'s base config never sets that, since it's genuinely project-specific. A consumer that doesn't want the bundled typed-linting baseline at all should use `barrel`, or wire the four `exadev/*` rules directly, instead of taking `recommended`.
 
 ## Rules
 

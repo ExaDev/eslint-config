@@ -46,7 +46,8 @@
     "url": "git+https://github.com/ExaDev/eslint-config.git"
   },
   "peerDependencies": {
-    "eslint": ">=10.0.0"
+    "eslint": ">=10.0.0",
+    "typescript-eslint": ">=8.0.0"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
