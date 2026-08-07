@@ -25,8 +25,19 @@ export default tseslint.config(
     },
   },
   {
-    // Dogfooding this package's own rules on itself, imported directly by relative path rather than as a dependency on itself. Only no-non-barrel-index and no-pointless-reassignment apply here: no-side-effects-in-index and no-non-barrel-reexport are both built around the documents.js family's convention that src/index.ts is a PURE re-export barrel -- this package's own src/index.ts is not one, since it genuinely constructs and mutates the plugin object (Object.assign for the self-referencing configs), so those two rules would misfire against this repo's own real architecture.
+    // Dogfooding this package's own rules on itself, imported directly by relative path rather than as a dependency on itself. All four now apply: src/plugin.ts holds the actual plugin construction (rules registry, configs assembly), leaving src/index.ts as a genuine one-line re-export barrel -- the split that makes no-side-effects-in-index and no-non-barrel-reexport (both built around src/index.ts being a PURE re-export point) fit this repo's own architecture rather than misfire against it.
     plugins: { exadev },
     rules: { 'exadev/no-non-barrel-index': 'error', 'exadev/no-pointless-reassignment': 'error' },
+  },
+  {
+    files: ['src/index.ts'],
+    plugins: { exadev },
+    rules: { 'exadev/no-side-effects-in-index': 'error' },
+  },
+  {
+    files: ['src/**/*.ts'],
+    ignores: ['src/index.ts'],
+    plugins: { exadev },
+    rules: { 'exadev/no-non-barrel-reexport': 'error' },
   },
 );
