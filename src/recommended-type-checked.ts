@@ -22,6 +22,8 @@ const recommendedTypeChecked: ConfigValue = [
       'exadev/no-pointless-reassignment': 'error',
       'exadev/no-side-effects-in-index': 'error',
       '@typescript-eslint/consistent-type-assertions': ['error', { assertionStyle: 'never' }],
+      // recommendedTypeChecked's own default already bans @ts-ignore/@ts-nocheck outright and allows @ts-expect-error with a description; this raises @ts-expect-error to the same outright ban, since noInlineConfig above already removes eslint-disable as an escape hatch -- a partial options object here, so the untouched keys (ts-ignore/ts-nocheck/ts-check) keep the rule's own built-in defaults rather than needing to be restated (confirmed empirically: passing only `{ 'ts-expect-error': true }` still reports the existing @ts-ignore violation unchanged).
+      '@typescript-eslint/ban-ts-comment': ['error', { 'ts-expect-error': true }],
     },
   },
 ];
