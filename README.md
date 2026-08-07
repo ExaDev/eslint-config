@@ -12,7 +12,7 @@ Only the *rules* are centralized here, not a consumer's whole `eslint.config.ts`
 
 ## Getting started
 
-Consumers need `eslint >=10.0.0` and `typescript-eslint >=8.0.0` as peer dependencies.
+Consumers need `eslint >=10.0.0` as a peer dependency. `typescript-eslint >=8.0.0` is also a peer dependency, but an *optional* one (`peerDependenciesMeta`) -- it's only needed by the `recommended-type-checked` entry point described below, not by the package as a whole. A plain-JS project with no TypeScript at all can install and use this package with nothing else added.
 
 ```sh
 pnpm add -D @exadev/eslint-config
@@ -46,15 +46,39 @@ export default defineConfig([
   {
     files: ['**/*.ts'],
     plugins: { exadev },
-    extends: ['exadev/recommended'], // the full typed-linting baseline, plus this plugin's own four rules
+    extends: ['exadev/recommended'], // this plugin's own four rules, plus linterOptions.noInlineConfig -- no TypeScript involvement at all
     // or: extends: ['exadev/barrel'], // just the barrel-discipline trio (no-non-barrel-index, no-non-barrel-reexport, no-side-effects-in-index)
   },
 ]);
 ```
 
-`recommended` bundles `typescript-eslint`'s own `recommendedTypeChecked` and `stylisticTypeChecked` presets (`recommendedTypeChecked` already subsumes plain `recommended` outright -- every one of its 46 rules is a strict subset of `recommendedTypeChecked`'s 73, confirmed by inspecting the actual rule maps) alongside this plugin's own four rules, `linterOptions.noInlineConfig` (no `eslint-disable` comments anywhere -- an exception belongs in the config, scoped to where it applies, not hidden inline in the source it's disabling a rule for), and `@typescript-eslint/consistent-type-assertions` set to `never` (no `as`/angle-bracket type assertions -- narrow with a guard or parse with Zod instead).
+Both `recommended` and `barrel` are usable in a plain JavaScript project with no TypeScript and no `typescript-eslint` installed: this plugin's own four rules operate on plain ESTree import/export/declaration nodes, nothing TypeScript-specific, and neither config references `typescript-eslint` at all.
 
-This is a real bundling, not a rule reference that assumes the consumer already has `typescript-eslint` set up: `recommendedTypeChecked`'s own base config registers the `@typescript-eslint` plugin and sets `languageOptions.parser` itself. **A consumer adopting `exadev/recommended` must remove its own `...tseslint.configs.recommended`/`recommendedTypeChecked`/`stylisticTypeChecked` spreads** rather than keep them alongside this -- ESLint flat config rejects two different plugin object instances registered under the same namespace. What a consumer still supplies itself is `languageOptions.parserOptions.project`/`projectService` pointing at its own tsconfig(s); `recommendedTypeChecked`'s base config never sets that, since it's genuinely project-specific. A consumer that doesn't want the bundled typed-linting baseline at all should use `barrel`, or wire the four `exadev/*` rules directly, instead of taking `recommended`.
+### The typed-linting bundle: `@exadev/eslint-config/recommended-type-checked`
+
+For a TypeScript project that wants the full typed-linting baseline bundled in, import the separate `recommended-type-checked` entry point instead of using `configs.recommended`:
+
+```ts
+// eslint.config.ts
+import exadevRecommendedTypeChecked from '@exadev/eslint-config/recommended-type-checked';
+import tseslint from 'typescript-eslint';
+
+export default tseslint.config(
+  {
+    languageOptions: {
+      parserOptions: { project: './tsconfig.json', tsconfigRootDir: import.meta.dirname },
+    },
+  },
+  ...exadevRecommendedTypeChecked,
+  // ...your own config on top...
+);
+```
+
+This bundles `typescript-eslint`'s own `recommendedTypeChecked` and `stylisticTypeChecked` presets (`recommendedTypeChecked` already subsumes plain `recommended` outright -- every one of its 46 rules is a strict subset of `recommendedTypeChecked`'s 73, confirmed by inspecting the actual rule maps) alongside this plugin's own four rules, `linterOptions.noInlineConfig`, and `@typescript-eslint/consistent-type-assertions` set to `never` (no `as`/angle-bracket type assertions -- narrow with a guard or parse with Zod instead).
+
+It's a real bundling, not a rule reference that assumes the consumer already has `typescript-eslint` set up: `recommendedTypeChecked`'s own base config registers the `@typescript-eslint` plugin and sets `languageOptions.parser` itself. **A consumer adopting this bundle must remove its own `...tseslint.configs.recommended`/`recommendedTypeChecked`/`stylisticTypeChecked` spreads** rather than keep them alongside it -- ESLint flat config rejects two different plugin object instances registered under the same namespace. What a consumer still supplies itself is `languageOptions.parserOptions.project`/`projectService` pointing at its own tsconfig(s); `recommendedTypeChecked`'s base config never sets that, since it's genuinely project-specific.
+
+This lives in its own module, separate from the main `@exadev/eslint-config` entry point, specifically so importing the main package never attempts to resolve `typescript-eslint`. A plain object property (or a lazy getter) on the base plugin's own `configs` map can't achieve that: ESLint's `extends` resolution is synchronous, so a dynamic `import()` doesn't help either -- it just hides the same requirement behind an unawaited promise. Splitting into a genuinely separate module sidesteps the problem at the right layer: Node's own module resolution only loads a module when something actually imports it.
 
 ## Rules
 
@@ -82,7 +106,9 @@ The `lint`/`typecheck`/`build` npm scripts are thin wrappers around turbo tasks 
 
 ## Architecture
 
-`src/plugin.ts` builds an `ESLint.Plugin` object (ESLint's own `ESLint.Plugin` type, not a hand-written interface) combining the four rule modules under `src/rules/` into a flat `rules` map. The two bundled configs (`recommended`, `barrel`) are attached via `Object.assign` after the plugin object is constructed, rather than inline in the object literal, so each config's own `plugins: { exadev }` can reference the already-built plugin object -- the same self-reference pattern ESLint's plugin-authoring guide uses. `src/index.ts` is the public entry point and is nothing but `export { default } from './plugin';` -- a genuine pure re-export barrel.
+`src/plugin.ts` builds an `ESLint.Plugin` object (ESLint's own `ESLint.Plugin` type, not a hand-written interface) combining the four rule modules under `src/rules/` into a flat `rules` map. `configs.recommended` and `configs.barrel` are defined as getters directly in the object literal, not attached after construction: each needs to reference the fully-built `plugin` object itself (`plugins: { exadev: plugin }`), which a plain property initializer can't do for its own binding while it's still being constructed. A getter closes over the `plugin` binding rather than its value, so it resolves correctly the moment a consumer actually reads the property, by which point construction has finished -- no `Object.assign`, no post-construction mutation, no null-checked destructure needed. `src/index.ts` is the public entry point and is nothing but `export { default } from './plugin';` -- a genuine pure re-export barrel.
+
+`src/recommended-type-checked.ts` is a deliberately separate module, not a third property on the base plugin's own `configs`. It imports `typescript-eslint` to bundle `recommendedTypeChecked` + `stylisticTypeChecked` alongside this plugin's own rules -- see [The typed-linting bundle](#the-typed-linting-bundle-exadeveslint-configrecommended-type-checked) above for why that has to live in its own module rather than on the shared plugin object: importing the main entry point must never attempt to resolve `typescript-eslint`, and Node's own module resolution only loads a module when something actually imports it.
 
 `pnpm-workspace.yaml` deliberately declares an empty `packages: []`. This is not a real multi-package pnpm workspace; its only purpose is giving turbo a workspace root to anchor local task caching against, matching the same single-package-workspace pattern used across this repo family.
 
