@@ -70,7 +70,8 @@
     "tsdown": "^0.22.13",
     "turbo": "^2.10.8",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.65.0"
+    "typescript-eslint": "^8.65.0",
+    "vitest": "^4.1.10"
   },
   "scripts": {
     "build": "turbo run _build",
@@ -79,7 +80,9 @@
     "_lint": "eslint . --fix --cache --max-warnings 0",
     "typecheck": "turbo run _typecheck",
     "_typecheck": "tsc -p tsconfig.json",
-    "prepublishOnly": "pnpm run lint && pnpm run typecheck && tsdown && publint && attw --pack",
+    "test": "turbo run _test",
+    "_test": "vitest run",
+    "prepublishOnly": "pnpm run lint && pnpm run typecheck && pnpm run test && tsdown && publint && attw --pack",
     "prepare": "husky",
     "release": "semantic-release"
   }

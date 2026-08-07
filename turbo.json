@@ -10,6 +10,10 @@
       "inputs": ["$TURBO_DEFAULT$", "eslint.config.ts"],
       "outputs": [".eslintcache"]
     },
+    "_test": {
+      "inputs": ["$TURBO_DEFAULT$", "vitest.config.ts", "vitest.setup.ts"],
+      "outputs": []
+    },
     "_build": {
       "inputs": ["src/**", "tsdown.config.ts"],
       "outputs": ["dist/**"]
