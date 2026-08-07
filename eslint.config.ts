@@ -25,19 +25,13 @@ export default tseslint.config(
     },
   },
   {
-    // Dogfooding this package's own rules on itself, imported directly by relative path rather than as a dependency on itself. All four now apply: src/plugin.ts holds the actual plugin construction (rules registry, configs assembly), leaving src/index.ts as a genuine one-line re-export barrel -- the split that makes no-side-effects-in-index and no-non-barrel-reexport (both built around src/index.ts being a PURE re-export point) fit this repo's own architecture rather than misfire against it.
+    // Dogfooding this package's own rules on itself, imported directly by relative path rather than as a dependency on itself, applied repo-wide with no files/ignores of its own -- no-side-effects-in-index and no-non-barrel-reexport each self-scope to src/index.ts internally (context.filename), so this block is the live proof that doing so is safe. src/plugin.ts holds the actual plugin construction (rules registry, configs assembly), leaving src/index.ts as a genuine one-line re-export barrel for those two rules to apply against.
     plugins: { exadev },
-    rules: { 'exadev/no-non-barrel-index': 'error', 'exadev/no-pointless-reassignment': 'error' },
-  },
-  {
-    files: ['src/index.ts'],
-    plugins: { exadev },
-    rules: { 'exadev/no-side-effects-in-index': 'error' },
-  },
-  {
-    files: ['src/**/*.ts'],
-    ignores: ['src/index.ts'],
-    plugins: { exadev },
-    rules: { 'exadev/no-non-barrel-reexport': 'error' },
+    rules: {
+      'exadev/no-non-barrel-index': 'error',
+      'exadev/no-pointless-reassignment': 'error',
+      'exadev/no-side-effects-in-index': 'error',
+      'exadev/no-non-barrel-reexport': 'error',
+    },
   },
 );

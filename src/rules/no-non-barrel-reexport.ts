@@ -68,6 +68,8 @@ const noNonBarrelReexport: Rule.RuleModule = {
     },
   },
   create(context) {
+    // Self-scoped away from src/index.ts via context.filename, mirroring no-non-barrel-index's own pattern -- this rule's entire point is banning the split-statement re-export shape OUTSIDE the barrel, so the barrel itself (where a real, single-statement `export { x } from '...'` re-export is the normal, intended shape) is exempt rather than relying on a consumer's own `ignores: ['src/index.ts']` config to avoid a spurious flag there.
+    if (context.filename.endsWith('/src/index.ts')) return {};
     const importsByName = new Map<string, TrackedImport>();
     const bareExportSpecifiers: { declaration: ExportNamedDeclarationNode; specifier: ExportSpecifierNode }[] = [];
     const defaultExportDeclarations: ExportDefaultDeclarationNode[] = [];
