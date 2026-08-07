@@ -42,11 +42,13 @@ export default defineConfig([
   {
     files: ['**/*.ts'],
     plugins: { exadev },
-    extends: ['exadev/recommended'], // every rule this plugin defines
+    extends: ['exadev/recommended'], // every rule this plugin defines, plus no-inline-config and no-type-assertions
     // or: extends: ['exadev/barrel'], // just the barrel-discipline trio (no-non-barrel-index, no-non-barrel-reexport, no-side-effects-in-index)
   },
 ]);
 ```
+
+`recommended` also turns on two general code-quality settings every current consumer already wires independently: `linterOptions.noInlineConfig` (no `eslint-disable` comments anywhere -- an exception belongs in the config, scoped to where it applies, not hidden inline in the source it's disabling a rule for) and `@typescript-eslint/consistent-type-assertions` set to `never` (no `as`/angle-bracket type assertions -- narrow with a guard or parse with Zod instead). The type-assertions rule is `@typescript-eslint`'s own, not one this plugin defines, so `recommended` assumes the consumer already has `typescript-eslint` registered under the `@typescript-eslint` namespace -- true for every consumer this plugin currently has. A consumer with no typescript-eslint at all should use `barrel`, or wire the four `exadev/*` rules directly, instead of taking `recommended` wholesale.
 
 ## Rules
 

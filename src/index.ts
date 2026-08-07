@@ -29,14 +29,16 @@ if (configs === undefined) {
   throw new Error('Unreachable: configs was just initialized to {} in the object literal above.');
 }
 Object.assign(configs, {
-  // Every rule this plugin defines, at 'error'. What every one of this family's own consuming repos wires today.
+  // Every rule this plugin defines, at 'error', plus two general code-quality settings every current consumer already wires independently: no eslint-disable comments anywhere (an exception belongs in the config, scoped to where it applies, never hidden inline in the source it's disabling a rule for), and no type assertions (narrow with a guard or parse with Zod instead). consistent-type-assertions is @typescript-eslint's own rule, not one this plugin defines -- referencing it here assumes the consumer has typescript-eslint registered under the `@typescript-eslint` namespace already, true for every consumer this plugin currently has. A consumer with no typescript-eslint at all should use a narrower extends or wire the four exadev/* rules directly instead of taking configs.recommended wholesale.
   recommended: {
     plugins: { exadev: plugin },
+    linterOptions: { noInlineConfig: true },
     rules: {
       'exadev/no-non-barrel-index': 'error',
       'exadev/no-non-barrel-reexport': 'error',
       'exadev/no-pointless-reassignment': 'error',
       'exadev/no-side-effects-in-index': 'error',
+      '@typescript-eslint/consistent-type-assertions': ['error', { assertionStyle: 'never' }],
     },
   },
   // Only the three rules that police the src/index.ts barrel convention (index-file naming, re-export placement, and the barrel's own purity) -- for a consumer that wants that discipline without also taking no-pointless-reassignment.
