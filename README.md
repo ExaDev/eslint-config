@@ -95,14 +95,17 @@ This lives in its own module, separate from the main `@exadev/eslint-config` ent
 pnpm install    # requires Node >=20 and pnpm 11.6.0 (pinned via packageManager)
 pnpm lint
 pnpm typecheck
+pnpm test
 pnpm build
 ```
 
-No test suite exists for these rules currently -- each is verified by real-world usage against the repos it was extracted from, the same way it was verified before being centralized here.
+Each rule has a co-located `*.test.ts` file (`src/rules/no-non-barrel-index.test.ts` etc.) exercising it with ESLint's own `RuleTester`, run under Vitest. `vitest.setup.ts` wires `RuleTester.describe`/`RuleTester.it`/`RuleTester.itOnly` to Vitest's own `describe`/`it` explicitly, rather than turning on Vitest's `test.globals` project-wide, since `RuleTester.run()` only calls `describe`/`it` if something has supplied them. Each test file constructs its own `RuleTester` with `languageOptions.parser` set to `typescript-eslint`'s parser, since these rules' realistic test fixtures use TypeScript-only syntax (e.g. `export type { X } from './y'`) that the default `espree` parser can't read; none of the four rules need type information, so no `project`/`tsconfigRootDir` is configured.
 
-The `lint`/`typecheck`/`build` npm scripts are thin wrappers around turbo tasks whose own names carry a leading underscore (`_lint`/`_typecheck`/`_build`, declared in `turbo.json`) -- run `pnpm build`, not `turbo run build` directly, since turbo's task names don't match the npm script names.
+`pnpm test` always measures coverage (`coverage.enabled: true` in `vitest.config.ts`, via `@vitest/coverage-v8`) rather than needing a separate `--coverage` flag -- scoped to `src/**/*.ts` excluding the `*.test.ts` files themselves. The text reporter summarises in the terminal; the `html`/`lcov` reporters land in `coverage/`, already gitignored alongside `.eslintcache` and `dist/`.
 
-`pnpm build` runs `tsdown`, emitting ESM and CJS output plus declaration files from `src/**/*.ts` (platform-neutral, `src/**/*.test.ts` excluded). Before any publish -- local or the CI alias job -- `prepublishOnly` re-runs lint, typecheck, `tsdown`, `publint`, and `attw --pack`, so a broken export shape fails at publish time even outside the main CI pipeline.
+The `lint`/`typecheck`/`test`/`build` npm scripts are thin wrappers around turbo tasks whose own names carry a leading underscore (`_lint`/`_typecheck`/`_test`/`_build`, declared in `turbo.json`) -- run `pnpm build`, not `turbo run build` directly, since turbo's task names don't match the npm script names.
+
+`pnpm build` runs `tsdown`, emitting ESM and CJS output plus declaration files from `src/**/*.ts` (platform-neutral, `src/**/*.test.ts` excluded). Before any publish -- local or the CI alias job -- `prepublishOnly` re-runs lint, typecheck, `test`, `tsdown`, `publint`, and `attw --pack`, so a broken export shape fails at publish time even outside the main CI pipeline.
 
 ## Architecture
 
@@ -123,12 +126,12 @@ Conventional commits are enforced by commitlint, restricted to the type-enum def
 ## Gotchas and quirks
 
 - `.attw.json` ignores the `false-export-default` rule: tsdown/rolldown's CJS output for this plugin's sole default export doesn't emit the `export =` form `arethetypeswrong`'s check wants under legacy `node10` resolution. The resolution modes an ESLint flat config actually uses (`node16`, `bundler`) are unaffected, so the rule is suppressed rather than moving the plugin away from ESLint's own documented default-export shape.
-- Husky hooks: `pre-commit` runs lint-staged (`eslint --fix` on staged `*.ts`), `commit-msg` runs commitlint against the message, `pre-push` runs `typecheck` and `build` -- pushing here rebuilds the whole package first.
+- Husky hooks: `pre-commit` runs lint-staged (`eslint --fix` on staged `*.ts`), `commit-msg` runs commitlint against the message, `pre-push` runs `typecheck`, `test`, and `build` -- pushing here re-runs the whole test suite and rebuilds the package first.
 - The CI release job sets `HUSKY=0` (so the commit-msg hook never fires against the automated release commit) and blanks `NPM_TOKEN`/`NODE_AUTH_TOKEN` explicitly rather than omitting them, so an inherited token can't win over npm's OIDC trusted-publishing exchange.
 
 ## Contributing
 
-Conventional commits are enforced by commitlint via a husky `commit-msg` hook, and re-checked in CI. CI runs commitlint, lint, and typecheck+build+attw on every push and pull request; the release job only runs on a push to `main`, after all three pass.
+Conventional commits are enforced by commitlint via a husky `commit-msg` hook, and re-checked in CI. CI runs commitlint, lint, and typecheck+test+build+attw on every push and pull request; the release job only runs on a push to `main`, after all three pass.
 
 ## Release
 
