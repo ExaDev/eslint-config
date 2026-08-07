@@ -8,7 +8,9 @@ Multiple ExaDev repos independently carried identical copies of a handful of cus
 
 Only the *rules* are centralized here, not a consumer's whole `eslint.config.ts`. A repo's own file-scoping (`files`/`ignores`), tsconfig wiring, and any runtime-isomorphism import bans are genuinely project-specific -- forcing those into one shared config would mean either losing real per-project distinctions or building a heavily-parameterised config just to route around them. Each consumer keeps its own `eslint.config.ts`, importing rule implementations from here instead of a local copy.
 
-## Usage
+## Getting started
+
+Consumers need `eslint >=10.0.0` as a peer dependency.
 
 ```sh
 pnpm add -D @exadev/eslint-config
@@ -59,10 +61,10 @@ export default defineConfig([
 | `no-pointless-reassignment` | ✓ | `const foo = bar` where both sides are plain identifiers and the alias adds no transformation. |
 | `no-side-effects-in-index` | | The public barrel may contain only re-export statements -- nothing that could execute at import time. |
 
-## Development
+## Build, test, and lint
 
 ```sh
-pnpm install
+pnpm install    # requires Node >=20 and pnpm 11.6.0 (pinned via packageManager)
 pnpm lint
 pnpm typecheck
 pnpm build
@@ -70,9 +72,37 @@ pnpm build
 
 No test suite exists for these rules currently -- each is verified by real-world usage against the repos it was extracted from, the same way it was verified before being centralized here.
 
+The `lint`/`typecheck`/`build` npm scripts are thin wrappers around turbo tasks whose own names carry a leading underscore (`_lint`/`_typecheck`/`_build`, declared in `turbo.json`) -- run `pnpm build`, not `turbo run build` directly, since turbo's task names don't match the npm script names.
+
+`pnpm build` runs `tsdown`, emitting ESM and CJS output plus declaration files from `src/**/*.ts` (platform-neutral, `src/**/*.test.ts` excluded). Before any publish -- local or the CI alias job -- `prepublishOnly` re-runs lint, typecheck, `tsdown`, `publint`, and `attw --pack`, so a broken export shape fails at publish time even outside the main CI pipeline.
+
+## Architecture
+
+`src/plugin.ts` builds an `ESLint.Plugin` object (ESLint's own `ESLint.Plugin` type, not a hand-written interface) combining the four rule modules under `src/rules/` into a flat `rules` map. The two bundled configs (`recommended`, `barrel`) are attached via `Object.assign` after the plugin object is constructed, rather than inline in the object literal, so each config's own `plugins: { exadev }` can reference the already-built plugin object -- the same self-reference pattern ESLint's plugin-authoring guide uses. `src/index.ts` is the public entry point and is nothing but `export { default } from './plugin';` -- a genuine pure re-export barrel.
+
+`pnpm-workspace.yaml` deliberately declares an empty `packages: []`. This is not a real multi-package pnpm workspace; its only purpose is giving turbo a workspace root to anchor local task caching against, matching the same single-package-workspace pattern used across this repo family.
+
+## Conventions
+
+`eslint.config.ts` dogfoods this package's own rules on itself, importing `./src/index` by relative path rather than as an installed dependency. All four rules apply to this repo's own source: `no-non-barrel-reexport` is scoped to `src/**/*.ts` excluding `src/index.ts` (the barrel is where re-exports are meant to live), and `no-side-effects-in-index` is scoped to `src/index.ts` alone -- the plugin-construction logic lives in `src/plugin.ts` specifically so `src/index.ts` can stay a pure re-export point both rules assume.
+
+`tsconfig.json` enables `verbatimModuleSyntax` (type-only imports/exports must use `import type`/`export type` explicitly -- enforced too by the `consistent-type-imports` eslint rule) and `noUncheckedIndexedAccess` (indexed access returns `T | undefined`, narrow before use rather than asserting).
+
+Conventional commits are enforced by commitlint, restricted to the type-enum defined once in `release.config.ts`'s `commitTypes` -- both commitlint's allowed types and semantic-release's commit-analyzer release rules derive from that single list, so a commit type can't trigger a release without also being accepted by commit-msg validation, or the reverse.
+
+## Gotchas and quirks
+
+- `.attw.json` ignores the `false-export-default` rule: tsdown/rolldown's CJS output for this plugin's sole default export doesn't emit the `export =` form `arethetypeswrong`'s check wants under legacy `node10` resolution. The resolution modes an ESLint flat config actually uses (`node16`, `bundler`) are unaffected, so the rule is suppressed rather than moving the plugin away from ESLint's own documented default-export shape.
+- Husky hooks: `pre-commit` runs lint-staged (`eslint --fix` on staged `*.ts`), `commit-msg` runs commitlint against the message, `pre-push` runs `typecheck` and `build` -- pushing here rebuilds the whole package first.
+- The CI release job sets `HUSKY=0` (so the commit-msg hook never fires against the automated release commit) and blanks `NPM_TOKEN`/`NODE_AUTH_TOKEN` explicitly rather than omitting them, so an inherited token can't win over npm's OIDC trusted-publishing exchange.
+
+## Contributing
+
+Conventional commits are enforced by commitlint via a husky `commit-msg` hook, and re-checked in CI. CI runs commitlint, lint, and typecheck+build+attw on every push and pull request; the release job only runs on a push to `main`, after all three pass.
+
 ## Release
 
-Conventional commits (enforced by commitlint) drive [semantic-release](https://semantic-release.gitbook.io/semantic-release) on every push to `main`: version bump, `CHANGELOG.md`, GitHub Release, and an npm publish via OIDC trusted publishing (no stored token). A second CI job republishes the identical build under the unscoped alias `exadev-eslint-config`.
+Conventional commits drive [semantic-release](https://semantic-release.gitbook.io/semantic-release) on every push to `main`: version bump, `CHANGELOG.md`, GitHub Release, and an npm publish via OIDC trusted publishing (no stored token). A second CI job then republishes the identical build under the unscoped alias `exadev-eslint-config`.
 
 ## License
 
