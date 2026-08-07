@@ -1,0 +1,2 @@
+# This is a single-package repo, not a real pnpm workspace -- packages is deliberately empty. Its only purpose is to give turbo a workspace root to anchor local task caching against (see the turbo-task-caching-without-a-real-workspace pattern), matching every other repo in this family.
+packages: []
