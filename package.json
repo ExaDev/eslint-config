@@ -1,6 +1,6 @@
 {
   "name": "@exadev/eslint-config",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Shared custom ESLint rules and plugin for ExaDev projects",
   "type": "module",
   "sideEffects": false,
