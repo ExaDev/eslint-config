@@ -1,12 +1,12 @@
 # @exadev/eslint-config
 
-> A real ESLint plugin (not a shareable config) exposing custom rules shared across ExaDev projects, starting with the [documents.js](https://github.com/ExaDev/documents.js) family (`documents.js`, `ooxml.js`, `odf.js`, `document-schema.js`, `pdf-codec`, `markdown-codec`). Also published under the unscoped alias `exadev-eslint-config`.
+> A real ESLint plugin (not a shareable config) exposing custom rules shared across ExaDev projects. Also published under the unscoped alias `exadev-eslint-config`.
 
 ## Why
 
-Every one of those repos independently carried identical copies of a handful of custom ESLint rules (barrel/index discipline, re-export placement, pointless-alias detection). Keeping them as per-repo copies meant a bug fix in one rule had to be found, fixed, and re-verified separately in every repo it was copied into. This package is the single source of truth for those rules instead.
+Multiple ExaDev repos independently carried identical copies of a handful of custom ESLint rules (barrel/index discipline, re-export placement, pointless-alias detection). Keeping them as per-repo copies meant a bug fix in one rule had to be found, fixed, and re-verified separately in every repo it was copied into. This package is the single source of truth for those rules instead.
 
-Only the *rules* are centralized here, not each consumer's whole `eslint.config.ts`. Every repo's own file-scoping (`files`/`ignores`), tsconfig wiring, and Worker-isomorphism import bans genuinely differ from repo to repo -- forcing those into one shared config would mean either losing real per-repo distinctions or building a heavily-parameterised config just to route around them. Each consumer keeps its own `eslint.config.ts`, importing rule implementations from here instead of a local copy.
+Only the *rules* are centralized here, not a consumer's whole `eslint.config.ts`. A repo's own file-scoping (`files`/`ignores`), tsconfig wiring, and any runtime-isomorphism import bans are genuinely project-specific -- forcing those into one shared config would mean either losing real per-project distinctions or building a heavily-parameterised config just to route around them. Each consumer keeps its own `eslint.config.ts`, importing rule implementations from here instead of a local copy.
 
 ## Usage
 

@@ -1,7 +1,7 @@
 {
   "name": "@exadev/eslint-config",
   "version": "1.0.0",
-  "description": "Shared custom ESLint rules for ExaDev projects, starting with the documents.js family",
+  "description": "Shared custom ESLint rules and plugin for ExaDev projects",
   "type": "module",
   "sideEffects": false,
   "license": "MIT",
