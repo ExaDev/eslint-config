@@ -111,7 +111,7 @@ export default tseslint.config(
 | `no-non-barrel-reexport` | ✓ | Re-exports belong only in a barrel. Catches the split form across two statements (`import { x } from './y'; export { x };` or `export default x;`) which no AST selector alone can match. Autofix deletes the export and the now-pointless import when it was the import's only use. Self-scopes away from any index file. |
 | `no-side-effects-in-index` | | A barrel file may contain only re-export statements -- nothing that could execute at import time. Self-scopes to any index file. |
 | `barrel-direct-siblings-only` | | A barrel may re-export only from a direct sibling (`./module`), never a nested path, parent, or bare package specifier (mode 3). |
-| `no-pointless-reassignment` | ✓ | `const foo = bar` where both sides are plain identifiers and the alias adds no transformation. |
+| `no-pointless-reassignment` | ✓ | `const foo = bar` where both sides are plain identifiers and the alias adds no transformation. Autofix rewrites every read to the original name and deletes the declaration (including its `export` keyword, when exported). Still reported but deliberately not auto-fixable where collapsing the alias would change meaning: an explicit type annotation (`const exhaustive: never = item` -- the annotation is the point), a read where the original name is shadowed, a read as a shorthand object property, more than one declarator in the statement, or a source that is written to anywhere. |
 
 ## Barrel policy
 
