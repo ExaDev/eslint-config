@@ -45,7 +45,7 @@ const noPointlessReassignment: Rule.RuleModule = {
         // Bail out before reporting at all (not just before fixing) when the source is ever mutated anywhere in its own scope: `const start = cursor;` immediately before a loop advances `cursor` is a deliberate snapshot of a mutable value at a point in time, not a pointless alias -- collapsing it would silently change which value every later read of `start` observes to whatever `cursor` holds by then. A source that can't be resolved at all (an unrecognised global) is treated the same way, conservatively. `!reference.init` excludes the source variable's own declaring initializer, which is itself a write.
         const sourceReference = scope.references.find((reference) => reference.identifier === node.init);
         const sourceVariable = sourceReference?.resolved;
-        if (!sourceVariable || sourceVariable.references.some((reference) => reference.isWrite() && !reference.init)) return;
+        if (!sourceVariable || sourceVariable.references.some((reference) => reference.isWrite() && reference.init !== true)) return;
 
         const aliasName = node.id.name;
         const originalName = node.init.name;

@@ -4,16 +4,33 @@ import tseslint from 'typescript-eslint';
 import { describe, expect, it } from 'vitest';
 import recommendedTypeChecked from './recommended-type-checked';
 
-// Exercises this package's own test-file relaxation directly against the real exported array (the last two entries: the outright-strictness rules, then the test-file override), rather than a re-implementation -- proving the shipped config, not a description of intent. This test's own parser registration carries no project/projectService, so a genuinely type-aware rule (no-enum-number-widening) throws the moment it fires under this setup -- it has its own dedicated test with a real project service, and is explicitly turned off below since it plays no part in what THIS test verifies (the test-file relaxation of ban-ts-comment/consistent-type-assertions, neither of which needs type information). No runtime Array.isArray narrowing needed here -- recommendedTypeChecked's own ConfigArrayValue type (Extract<ConfigValue, unknown[]>) already proves this at compile time.
+// Exercises this package's own test-file relaxation directly against the real exported array (the last two entries: the outright-strictness rules, then the test-file override), rather than a re-implementation -- proving the shipped config, not a description of intent. This test's own parser registration carries no project/projectService, so any genuinely type-aware rule throws the moment it fires under this setup -- each one either has its own dedicated test with a real project service, or plays no part in what THIS test verifies (the test-file relaxation of ban-ts-comment/consistent-type-assertions, neither of which needs type information), so every type-aware rule in the shared block is explicitly turned off below. No runtime Array.isArray narrowing needed here -- recommendedTypeChecked's own ConfigArrayValue type (Extract<ConfigValue, unknown[]>) already proves this at compile time.
 const linter = new LinterClass();
-const strictnessConfigs = recommendedTypeChecked.slice(-2);
+// The exported array's final two entries: the outright-strictness rules block, then the test-file relaxation block (see the comment above) -- named here since a bare '-2' would itself trip @typescript-eslint/no-magic-numbers with nothing explaining what it denotes.
+const FINAL_CONFIG_ENTRY_COUNT = 2;
+const strictnessConfigs = recommendedTypeChecked.slice(-FINAL_CONFIG_ENTRY_COUNT);
 
 // strictnessConfigs is typed via @typescript-eslint/utils's own FlatConfig.Config (see recommended-type-checked.ts's own comment on why), which eslint's own Linter.verify() does not accept directly: the two packages each declare their own independent `languageOptions` type for the exact same JSON-serializable runtime shape, differing only in a missing index signature -- a declaration-file gap between the two type sources, not a real difference in the values passed. Widening through Linter.Config[] here documents that boundary at the one place this package's own test needs to cross it directly; production consumers never hit this, since a flat config file is never itself type-checked against Linter.verify's signature.
 function lint(code: string, filename: string) {
   const config: Linter.Config[] = [
     { files: ['**'], languageOptions: { sourceType: 'module', parser: tseslint.parser }, plugins: { '@typescript-eslint': tseslint.plugin } },
     ...strictnessConfigs,
-    { rules: { 'exadev/no-enum-number-widening': 'off' } },
+    {
+      rules: {
+        'exadev/no-array-isarray-mutation': 'off',
+        'exadev/no-enum-number-widening': 'off',
+        'exadev/no-enum-reverse-lookup-widening': 'off',
+        '@typescript-eslint/no-deprecated': 'off',
+        '@typescript-eslint/no-misused-spread': 'off',
+        '@typescript-eslint/no-mixed-enums': 'off',
+        '@typescript-eslint/no-unnecessary-condition': 'off',
+        '@typescript-eslint/prefer-readonly': 'off',
+        '@typescript-eslint/require-array-sort-compare': 'off',
+        '@typescript-eslint/strict-boolean-expressions': 'off',
+        '@typescript-eslint/switch-exhaustiveness-check': 'off',
+        '@typescript-eslint/use-unknown-in-catch-callback-variable': 'off',
+      },
+    },
   ] as Linter.Config[];
   return linter.verify(code, config, filename).map((message) => message.ruleId);
 }

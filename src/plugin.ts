@@ -2,7 +2,9 @@ import type { TSESLint } from '@typescript-eslint/utils';
 import { version } from '../package.json';
 import barrelDirectSiblingsOnly from './rules/barrel-direct-siblings-only';
 import barrelPolicy from './rules/barrel-policy';
+import noArrayIsarrayMutation from './rules/no-array-isarray-mutation';
 import noEnumNumberWidening from './rules/no-enum-number-widening';
+import noEnumReverseLookupWidening from './rules/no-enum-reverse-lookup-widening';
 import noIndexFiles from './rules/no-index-files';
 import noMutableUnionArrayParam from './rules/no-mutable-union-array-param';
 import noNonBarrelIndex from './rules/no-non-barrel-index';
@@ -30,7 +32,9 @@ const plugin: TSESLint.FlatConfig.Plugin = {
   rules: {
     'barrel-direct-siblings-only': barrelDirectSiblingsOnly,
     'barrel-policy': barrelPolicy,
+    'no-array-isarray-mutation': noArrayIsarrayMutation,
     'no-enum-number-widening': noEnumNumberWidening,
+    'no-enum-reverse-lookup-widening': noEnumReverseLookupWidening,
     'no-index-files': noIndexFiles,
     'no-mutable-union-array-param': noMutableUnionArrayParam,
     'no-non-barrel-index': noNonBarrelIndex,
@@ -40,7 +44,7 @@ const plugin: TSESLint.FlatConfig.Plugin = {
     'no-side-effects-in-index': noSideEffectsInIndex,
   },
   configs: {
-    // The recommended barrel policy is 'banned' (no index files at all), expressed through the barrel-policy umbrella rule, plus no-pointless-reassignment and noInlineConfig. This is the LIGHTER of this package's two bundles -- no typescript-eslint type-checked ruleset -- for a consumer who wants just this plugin's own rules without the full typed-linting baseline (the default export, src/index.ts, is the heavier bundle that adds that baseline on top of the same 'banned' policy). A project that legitimately needs a barrel (e.g. a published package whose src/index.ts is its package entry point) overrides to `{ mode: 'single' }` in its own config, or uses `configs.barrel` below. no-enum-number-widening is deliberately excluded here -- it reads real type information, which this lighter bundle has no typescript-eslint parser wired up to provide; it is only ever registered in the type-checked bundle (src/recommended-type-checked.ts). no-mutable-union-array-param needs no type information (it matches on TSESTree node shapes alone, a no-op under a plain JS parser), so it is included in both bundles like no-object-assign.
+    // The recommended barrel policy is 'banned' (no index files at all), expressed through the barrel-policy umbrella rule, plus no-pointless-reassignment and noInlineConfig. This is the LIGHTER of this package's two bundles -- no typescript-eslint type-checked ruleset -- for a consumer who wants just this plugin's own rules without the full typed-linting baseline (the default export, src/index.ts, is the heavier bundle that adds that baseline on top of the same 'banned' policy). A project that legitimately needs a barrel (e.g. a published package whose src/index.ts is its package entry point) overrides to `{ mode: 'single' }` in its own config, or uses `configs.barrel` below. no-enum-number-widening, no-enum-reverse-lookup-widening, and no-array-isarray-mutation are all deliberately excluded here -- each reads real type information (the third needs it specifically to see through a type alias and to catch a bare, non-union readonly array parameter, both invisible from TSESTree syntax alone), which this lighter bundle has no typescript-eslint parser wired up to provide; they are only ever registered in the type-checked bundle (src/recommended-type-checked.ts). no-mutable-union-array-param needs no type information (it matches on TSESTree node shapes alone, a no-op under a plain JS parser), so it is included in both bundles like no-object-assign.
     get recommended(): ConfigValue {
       return {
         plugins: { exadev: plugin },

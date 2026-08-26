@@ -1,8 +1,8 @@
 import js from '@eslint/js';
-import tseslint from 'typescript-eslint';
 import exadevRecommendedTypeChecked from './src/index';
 
-export default tseslint.config(
+// A plain flat-config array, not wrapped in `tseslint.config(...)` (now `@deprecated` in favour of ESLint core's own `defineConfig()`, per typescript-eslint's own doc comment) nor in `defineConfig(...)` (whose parameter type is `@eslint/core`'s `ConfigObject`, which declares an explicit string index signature that `@typescript-eslint/utils`'s `TSESLint.FlatConfig.Config` -- the type `exadevRecommendedTypeChecked`'s own elements carry -- does not; TypeScript refuses that assignment outright, and this codebase bans the `as` cast that would paper over it). ESLint's flat-config loader only ever required a plain array (or object, or array-of-arrays) as the default export -- both helpers exist purely for `extends`-flattening and stricter typing neither of which this already-flat array needs -- so this sidesteps the deprecated call and the cross-package type gap at once, rather than working around either.
+export default [
   {
     ignores: ['dist', 'coverage', 'node_modules', '.turbo'],
   },
@@ -21,4 +21,4 @@ export default tseslint.config(
       'exadev/barrel-policy': ['error', { mode: 'single' }],
     },
   },
-);
+];
