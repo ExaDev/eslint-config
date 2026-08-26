@@ -1,3 +1,5 @@
+## [2.9.1](https://github.com/ExaDev/eslint-config/compare/v2.9.0...v2.9.1) (2026-08-26)
+
 # [2.9.0](https://github.com/ExaDev/eslint-config/compare/v2.8.0...v2.9.0) (2026-08-26)
 
 
