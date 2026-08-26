@@ -27,12 +27,20 @@ const recommendedTypeChecked: ConfigArrayValue = [
       'exadev/no-array-isarray-mutation': 'error',
       'exadev/no-enum-number-widening': 'error',
       'exadev/no-enum-reverse-lookup-widening': 'error',
+      'exadev/no-map-instanceof-mutation': 'error',
       'exadev/no-mutable-union-array-param': 'error',
       'exadev/no-object-assign': 'error',
       'exadev/no-pointless-reassignment': 'error',
+      'exadev/no-set-instanceof-mutation': 'error',
+      'exadev/prefer-numeric-sort-compare': 'error',
+      'exadev/prefer-readonly-array-param': 'error',
       // recommendedTypeChecked's own default already bans @ts-ignore/@ts-nocheck outright and allows @ts-expect-error with a description; this raises @ts-expect-error to the same outright ban, since noInlineConfig above already removes eslint-disable as an escape hatch -- a partial options object here, so the untouched keys (ts-ignore/ts-nocheck/ts-check) keep the rule's own built-in defaults rather than needing to be restated (confirmed empirically: passing only `{ 'ts-expect-error': true }` still reports the existing @ts-ignore violation unchanged).
       '@typescript-eslint/ban-ts-comment': ['error', { 'ts-expect-error': true }],
       '@typescript-eslint/consistent-type-assertions': ['error', { assertionStyle: 'never' }],
+      // The export-side mirror of consistent-type-imports below -- a type-only export written as a plain value export. Has a real autofix (meta.fixable: 'code').
+      '@typescript-eslint/consistent-type-exports': 'error',
+      // A type-only import written as a plain value import. This repo's own source already follows this convention by hand everywhere (e.g. `import type { TSESTree }`) -- this makes the existing habit mechanical. Has a real autofix (meta.fixable: 'code').
+      '@typescript-eslint/consistent-type-imports': 'error',
       // Method-shorthand signatures (`foo(x: string): void`) are checked BIVARIANTLY under strictFunctionTypes -- unsound: an implementation accepting only a narrower parameter type is still accepted where the interface promises to accept the wider type. Property-style function types (`foo: (x: string) => void`) are checked contravariantly (sound). 'property' is this rule's own default; stated explicitly so a future default change can't silently loosen this. Autofix is typescript-eslint's own (this rule ships fixable: 'code').
       '@typescript-eslint/method-signature-style': ['error', 'property'],
       // Catches any reference to a `@deprecated`-tagged export, so drift is caught the moment something -- ours or a dependency's -- is marked deprecated, not silently at removal time.
@@ -56,8 +64,10 @@ const recommendedTypeChecked: ConfigArrayValue = [
       '@typescript-eslint/no-non-null-assertion': 'error',
       // A condition the type system already proves is always true or always false is almost always a sign the code's actual assumption about a type has drifted from what the type now says.
       '@typescript-eslint/no-unnecessary-condition': 'error',
-      // A class field only ever assigned in the constructor that isn't marked readonly -- has a real automatic fixer (`meta.fixable: 'code'`), unlike every other rule in this batch.
+      // A class field only ever assigned in the constructor that isn't marked readonly -- has a real automatic fixer (`meta.fixable: 'code'`), one of only a handful of rules in this batch that do (alongside method-signature-style above and the type-import/export/promise-async rules below).
       '@typescript-eslint/prefer-readonly': 'error',
+      // A function that returns a Promise without being declared async hurts async stack traces and error-handling consistency. Has a real autofix (meta.fixable: 'code').
+      '@typescript-eslint/promise-function-async': 'error',
       // `.sort()` with no compare function sorts lexicographically even on numbers -- `[10, 2, 1].sort()` silently becomes `[1, 10, 2]` -- a classic, easy-to-miss runtime bug.
       '@typescript-eslint/require-array-sort-compare': 'error',
       // Left at the rule's own bare defaults -- no options object -- deliberately, not left unconfigured: allowNullableObject/allowNumber/allowString stay true, so an unambiguous non-nullable truthy check (`if (someNonNullableString)`) stays allowed, while allowNullableString/Number/Boolean/Enum and allowAny stay false, so an ambiguous nullable check (`if (someNullableCount)` -- ambiguous between 0 and absent) gets banned. That nullable-vs-unambiguous distinction is exactly this config's existing "no implicit fallback, model absence explicitly" stance (see `no-non-null-assertion` above: narrow explicitly instead of assuming).

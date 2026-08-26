@@ -133,7 +133,7 @@ const noArrayIsArrayMutation = createRule({
       return argument?.type === AST_NODE_TYPES.Identifier && resolvesToVariable(argument, target, testNode, ruleContext);
     }
 
-    // Recognises every guard idiom this rule can prove is a real Array.isArray narrowing of the mutated parameter: the direct `if (Array.isArray(x)) { x.push(1) }` (braced or not), `if (Array.isArray(x)) x.push(1); else ...`'s consequent, `if (!Array.isArray(x)) { ... } else { x.push(1) }`'s alternate, `Array.isArray(x) && x.push(1)`, the ternary `Array.isArray(x) ? x.push(1) : ...`, and the early-return idiom `if (!Array.isArray(x)) return; x.push(1);` (a preceding sibling statement in the same block, per definitelyExits above).
+    // Recognises every guard idiom this rule can prove is a real Array.isArray narrowing of the mutated parameter: the direct `if (Array.isArray(x)) { x.push(1) }` (braced or not), `if (Array.isArray(x)) x.push(1); else ...`'s consequent, `if (!Array.isArray(x)) { ... } else { x.push(1) }`'s alternate, `Array.isArray(x) && x.push(1)`, the ternary `Array.isArray(x) ? x.push(1) : ...`, and the early-return/early-throw idiom `if (!Array.isArray(x)) return; x.push(1);` (a preceding sibling statement in the same block, per definitelyExits above).
     function isGuardedByArrayIsArray(
       startNode: TSESTree.Node,
       parameterVariable: TSESLint.Scope.Variable,
@@ -166,7 +166,7 @@ const noArrayIsArrayMutation = createRule({
       return isGuardedByPrecedingEarlyReturn(startNode, parameterVariable, ruleContext);
     }
 
-    // Walks the statement enclosing startNode back through its preceding siblings in the same block, looking for `if (!Array.isArray(x)) <exits>;` -- the early-return idiom, where the mutating call is not nested inside any conditional at all.
+    // Walks the statement enclosing startNode back through its preceding siblings in the same block, looking for `if (!Array.isArray(x)) <exits>;` -- the early-return/early-throw idiom, where the mutating call is not nested inside any conditional at all.
     function isGuardedByPrecedingEarlyReturn(
       startNode: TSESTree.Node,
       parameterVariable: TSESLint.Scope.Variable,
