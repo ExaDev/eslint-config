@@ -39,6 +39,8 @@ const recommendedTypeChecked: ConfigArrayValue = [
       'exadev/prefer-readonly-object-param': 'error',
       // strictTypeChecked's own default already bans @ts-ignore/@ts-nocheck outright and allows @ts-expect-error with a description; this raises @ts-expect-error to the same outright ban, since noInlineConfig above already removes eslint-disable as an escape hatch -- a partial options object here, so the untouched keys (ts-ignore/ts-nocheck/ts-check) keep the rule's own built-in defaults rather than needing to be restated (confirmed empirically: passing only `{ 'ts-expect-error': true }` still reports the existing @ts-ignore violation unchanged).
       '@typescript-eslint/ban-ts-comment': ['error', { 'ts-expect-error': true }],
+      // A function that implicitly returns undefined on one path (falling off the end, or a bare `return;`) and a real value on another is a common real bug -- a forgotten `return`, not a deliberate "sometimes there's nothing to give back" design. Requires type information, since it has to compare the inferred return type across every path, not just look at the return statements' own syntax.
+      '@typescript-eslint/consistent-return': 'error',
       '@typescript-eslint/consistent-type-assertions': ['error', { assertionStyle: 'never' }],
       // The export-side mirror of consistent-type-imports below -- a type-only export written as a plain value export. Has a real autofix (meta.fixable: 'code').
       '@typescript-eslint/consistent-type-exports': 'error',
@@ -59,6 +61,12 @@ const recommendedTypeChecked: ConfigArrayValue = [
       ],
       // The `!` postfix operator is the exact same escape hatch consistent-type-assertions above already bans for `as` -- a manual override of the checker's own null/undefined analysis, with no way for a reader or a later refactor to tell "verified safe" from "assumed safe." Narrow explicitly instead (an `if`/early-return guard, a nullish-coalescing default, or a real assertion function).
       '@typescript-eslint/no-non-null-assertion': 'error',
+      // Redeclaring a `var` or function silently overrides the earlier declaration -- confirmed against this codebase (zero existing hits), so this is pure insurance against a future mistake, not a fix for anything currently present.
+      '@typescript-eslint/no-redeclare': 'error',
+      // A shadowed variable is a real bug risk, not just a naming clash -- a reader (or a later refactor) can genuinely mistake the inner binding for the outer one, or vice versa, especially once the two are separated by more than a few lines.
+      '@typescript-eslint/no-shadow': 'error',
+      // Using a `let`/`const`/`class`/enum binding before its own declaration throws at runtime (the temporal dead zone) -- a genuine crash risk, not a style preference. `functions: false` deliberately exempts function declarations: they're fully hoisted (body included), so calling one before its point of textual declaration is runtime-safe, and this codebase's own rule files consistently declare their helper functions after the logic that calls them -- confirmed directly: at the rule's own default (functions: true, which despite its name still flags hoisted function declarations, since the option controls a top-to-bottom readability preference rather than a real hazard), this fired 9 times on exactly that safe, existing pattern; with functions: false, zero.
+      '@typescript-eslint/no-use-before-define': ['error', { functions: false }],
       // A class field only ever assigned in the constructor that isn't marked readonly -- has a real automatic fixer (`meta.fixable: 'code'`), one of only a handful of rules in this batch that do (alongside method-signature-style above and the type-import/export/promise-async rules below).
       '@typescript-eslint/prefer-readonly': 'error',
       // A function that returns a Promise without being declared async hurts async stack traces and error-handling consistency. Has a real autofix (meta.fixable: 'code').

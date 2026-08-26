@@ -24,6 +24,7 @@ function lint(code: string, filename: string) {
         'exadev/no-set-instanceof-mutation': 'off',
         'exadev/prefer-numeric-sort-compare': 'off',
         'exadev/prefer-readonly-object-param': 'off',
+        '@typescript-eslint/consistent-return': 'off',
         '@typescript-eslint/consistent-type-exports': 'off',
         '@typescript-eslint/prefer-readonly': 'off',
         '@typescript-eslint/promise-function-async': 'off',
