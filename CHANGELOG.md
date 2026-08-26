@@ -1,3 +1,10 @@
+# [2.9.0](https://github.com/ExaDev/eslint-config/compare/v2.8.0...v2.9.0) (2026-08-26)
+
+
+### Features
+
+* enable no-shadow, no-redeclare, no-use-before-define, consistent-return ([f569f7c](https://github.com/ExaDev/eslint-config/commit/f569f7cf475a00e5ea4526ae46e0787a9edd1300))
+
 # [2.8.0](https://github.com/ExaDev/eslint-config/compare/v2.7.0...v2.8.0) (2026-08-26)
 
 
