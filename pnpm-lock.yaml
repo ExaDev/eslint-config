@@ -11,6 +11,9 @@ importers:
       '@typescript-eslint/utils':
         specifier: ^8.67.0
         version: 8.67.0(eslint@10.8.0(jiti@2.6.1))(typescript@6.0.3)
+      ts-api-utils:
+        specifier: ^2.5.0
+        version: 2.5.0(typescript@6.0.3)
     devDependencies:
       '@arethetypeswrong/cli':
         specifier: ^0.18.5
