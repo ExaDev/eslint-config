@@ -41,6 +41,8 @@ ruleTester.run('no-array-isarray-mutation', rule, {
     'function f(input: readonly number[] | number, other: readonly number[] | number): void { if (!Array.isArray(other)) return; input.push(1); }',
     // An early-return if-statement that has an `else` branch is not the early-return idiom (the function does not unconditionally stop there), so it is deliberately not treated as a guard for a later sibling statement.
     'function f(input: readonly number[] | number): void { if (!Array.isArray(input)) { doSomething(); } else { doSomethingElse(); } input.push(1); }',
+    // A `let` local reassigned to a definitely-mutable value before the guard does NOT produce a false positive here, but not for the reason it might look like: this rule deliberately checks the type at the declaration's own name node, and `let value;` with no type annotation and no initializer has no static type to read there at all -- confirmed via the TS compiler API that `checker.getTypeAtLocation` on this bare declaration returns `any` (TypeScript's "evolving" type for an uninitialized `let`, which only accumulates a real type from the assignments that follow it, not before). With no readonly-array constituent visible at the declaration itself, the check correctly finds nothing to report, regardless of what value flows through the variable afterwards.
+    'function f(x: readonly number[] | number): void { let value; value = x; value = [1, 2, 3]; if (Array.isArray(value)) { value.push(1); } }',
   ],
   invalid: [
     {
@@ -121,6 +123,16 @@ ruleTester.run('no-array-isarray-mutation', rule, {
     // The else-of-negated-test guard idiom.
     {
       code: 'function f(input: readonly number[] | number): void { if (!Array.isArray(input)) { doSomething(); } else { input.push(1); } }',
+      errors: [{ messageId: 'unsound', data: { method: 'push' } }],
+    },
+    // A plain local `const` (not a parameter) whose own declared type includes a readonly array constituent -- the type is read at the VariableDeclarator's own `id` node, the same declaration-site check already used for parameters, so this is caught the same way.
+    {
+      code: 'declare function getShared(): readonly number[] | number; function f(): void { const frozen: readonly number[] | number = getShared(); if (Array.isArray(frozen)) { frozen.push(1); } }',
+      errors: [{ messageId: 'unsound', data: { method: 'push' } }],
+    },
+    // A destructured local binding falls out of the same check for free: destructuring only changes how the initializer is computed, not the DefinitionType.Variable eslint-scope records for the bound identifier `frozen`.
+    {
+      code: 'declare function getShared(): { frozen: readonly number[] | number }; function f(): void { const { frozen } = getShared(); if (Array.isArray(frozen)) { frozen.push(1); } }',
       errors: [{ messageId: 'unsound', data: { method: 'push' } }],
     },
   ],

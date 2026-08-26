@@ -1,10 +1,12 @@
 import { AST_NODE_TYPES, ESLintUtils, TSESLint, type TSESTree } from '@typescript-eslint/utils';
 
-// `instanceof Set` narrows any constituent of a union down to the global `Set<T>` interface itself, with no way to preserve a `ReadonlySet` modifier through the narrowing -- narrowing a parameter whose real type includes a `ReadonlySet` through `instanceof Set` silently produces a fully mutable `Set<T>` inside the guarded branch. Confirmed directly: `function mutate(input: ReadonlySet<number> | number): void { if (input instanceof Set) { input.add(1); } }` compiles cleanly under `tsc --strict` with zero errors, even though `ReadonlySet<number>` has no `.add` method at all -- a caller's genuinely read-only set (`const frozen: ReadonlySet<number> = new Set([1, 2, 3]); mutate(frozen);`) gets mutated despite its own declaration.
+// `instanceof Set` narrows any constituent of a union down to the global `Set<T>` interface itself, with no way to preserve a `ReadonlySet` modifier through the narrowing -- narrowing a parameter or local variable whose real type includes a `ReadonlySet` through `instanceof Set` silently produces a fully mutable `Set<T>` inside the guarded branch. Confirmed directly: `function mutate(input: ReadonlySet<number> | number): void { if (input instanceof Set) { input.add(1); } }` compiles cleanly under `tsc --strict` with zero errors, even though `ReadonlySet<number>` has no `.add` method at all -- a caller's genuinely read-only set (`const frozen: ReadonlySet<number> = new Set([1, 2, 3]); mutate(frozen);`) gets mutated despite its own declaration. The identical hole reproduces for a plain local: `const frozen: ReadonlySet<number> = getShared(); if (frozen instanceof Set) { frozen.add(1); }` also compiles clean under `tsc --strict`, since `instanceof Set`'s own narrowing behaviour is a property of the guard, not of whether the narrowed binding happens to be a parameter or a `const`/`let` declared in the function body.
 //
 // This is the same class of hole as no-array-isarray-mutation.ts's own (Array.isArray narrowing a readonly array to a mutable one), just for Set, and the equivalent narrowing gap exists for instanceof Map against ReadonlyMap too. `instanceof Array` does not have this problem (TypeScript's control-flow narrowing for `instanceof` against a class/interface pair genuinely preserves a `readonly`-shaped constituent when the checked class's own instance type isn't the wider mutable supertype -- confirmed separately that `if (input instanceof Array) { input.push(1); }` on a `readonly number[] | number` parameter still errors under strict mode), but `Set`'s own global type declaration and `ReadonlySet`'s are two separate interfaces with no subtype relationship enforced by `instanceof`'s narrowing, so the checker widens straight to the mutable `Set<T>`.
 //
-// This rule reads real type information rather than matching the parameter's TSESTree type-annotation shape syntactically, specifically so it sees through a type alias (`type RO = ReadonlySet<number>; function f(input: RO | number)`) and catches a bare `ReadonlySet<T>` parameter with no union at all -- `instanceof Set` discards the read-only guarantee there too, with no union involved. `t.getSymbol()?.name === 'ReadonlySet'` is confirmed empirically (via the TS compiler API directly, and via the tsc --strict reproduction above) to distinguish a read-only set (`ReadonlySet`) from a mutable one (`Set`) even through a resolved type alias, since the checker's own type for an aliased type is the alias's real underlying type, not a separate "alias type." Unlike arrays, the checker has no `isArrayType`-equivalent helper for sets, so the symbol-name check alone is what identifies the shape -- confirmed sufficient because `ReadonlySet<T>` and `Set<T>` resolve to distinct symbols with no shared name.
+// This rule reads real type information rather than matching the declaration's TSESTree type-annotation shape syntactically, specifically so it sees through a type alias (`type RO = ReadonlySet<number>; function f(input: RO | number)`) and catches a bare `ReadonlySet<T>` declaration with no union at all -- `instanceof Set` discards the read-only guarantee there too, with no union involved. `t.getSymbol()?.name === 'ReadonlySet'` is confirmed empirically (via the TS compiler API directly, and via the tsc --strict reproduction above) to distinguish a read-only set (`ReadonlySet`) from a mutable one (`Set`) even through a resolved type alias, since the checker's own type for an aliased type is the alias's real underlying type, not a separate "alias type." Unlike arrays, the checker has no `isArrayType`-equivalent helper for sets, so the symbol-name check alone is what identifies the shape -- confirmed sufficient because `ReadonlySet<T>` and `Set<T>` resolve to distinct symbols with no shared name.
+//
+// The type is read at the declaration's own name node -- the parameter's own identifier, or a `VariableDeclarator`'s own `id` -- never at the reference inside the guard, for the same reason as the array sibling: by the time execution reaches `x instanceof Set`, control-flow narrowing has already discarded the readonly-ness at that location. Checking the declaration's own name node also makes a destructured local binding (`const { frozen } = getShared();`) fall out for free: destructuring only changes how the initializer is computed, not the definition kind eslint-scope records for the bound identifier, so it is picked up as an ordinary `DefinitionType.Variable` the same as a plain `const`.
 //
 // No autofix is shipped, for the same reason as no-array-isarray-mutation.ts: rewriting `input.add(x)` into a copy-first pattern (a fresh `Set` assigned to `input`) is not safely mechanical -- an alias taken before the mutating call (`const other = input; input.add(1); return other;`) observes the in-place mutation through `other` today, but would silently stop observing it if the call were rewritten to assign a fresh `Set` to `input` instead of mutating the shared object. Report-only, matching no-array-isarray-mutation.ts's own precedent of shipping zero fix when nothing is provably safe.
 
@@ -47,11 +49,11 @@ const noSetInstanceofMutation = createRule({
     schema: [],
     docs: {
       description:
-        'Disallow mutating calls on a parameter whose real type includes a ReadonlySet, narrowed via instanceof Set, which silently discards the declared read-only guarantee.',
+        'Disallow mutating calls on a parameter or local variable whose real type includes a ReadonlySet, narrowed via instanceof Set, which silently discards the declared read-only guarantee.',
     },
     messages: {
       unsound:
-        "'{{ method }}' mutates a parameter narrowed by instanceof Set -- instanceof Set's own narrowing widens straight to the mutable Set interface, so a caller's genuinely read-only set can be mutated here even though the parameter's real type includes a ReadonlySet. Copy the set before mutating (e.g. new Set(input)), or narrow with a check that preserves read-only instead of instanceof Set.",
+        "'{{ method }}' mutates a parameter or local variable narrowed by instanceof Set -- instanceof Set's own narrowing widens straight to the mutable Set interface, so a value whose real type includes a ReadonlySet (a caller's set, for a parameter; the value's own declared type, for a local variable) can be mutated here despite that readonly guarantee. Copy the set before mutating (e.g. new Set(input)), or narrow with a check that preserves read-only instead of instanceof Set.",
     },
   },
   defaultOptions: [],
@@ -59,10 +61,10 @@ const noSetInstanceofMutation = createRule({
     const services = ESLintUtils.getParserServices(context);
     const checker = services.program.getTypeChecker();
 
-    function parameterHasReadonlySetConstituent(parameterNode: TSESTree.Identifier): boolean {
-      const tsNode = services.esTreeNodeToTSNodeMap.get(parameterNode);
-      const parameterType = checker.getTypeAtLocation(tsNode);
-      const constituents = parameterType.isUnion() ? parameterType.types : [parameterType];
+    function declarationHasReadonlySetConstituent(declarationNode: TSESTree.Identifier): boolean {
+      const tsNode = services.esTreeNodeToTSNodeMap.get(declarationNode);
+      const declaredType = checker.getTypeAtLocation(tsNode);
+      const constituents = declaredType.isUnion() ? declaredType.types : [declaredType];
       return constituents.some((constituent) => constituent.getSymbol()?.name === 'ReadonlySet');
     }
 
@@ -82,12 +84,17 @@ const noSetInstanceofMutation = createRule({
         const scope = context.sourceCode.getScope(node);
         const variable = scope.references.find((reference) => reference.identifier === callee.object)?.resolved;
         if (!variable) return;
-        const parameterDefinition = variable.defs.find((definition) => definition.type === TSESLint.Scope.DefinitionType.Parameter);
-        if (!parameterDefinition) return;
+        // A parameter or a plain local variable declaration (including a destructured binding, which eslint-scope still records as an ordinary DefinitionType.Variable) -- deliberately not FunctionName, ClassName, ImportBinding, or CatchClause, none of which can meaningfully hold a ReadonlySet-typed value the way a parameter or a variable declarator can.
+        const declarationDefinition = variable.defs.find(
+          (definition) =>
+            definition.type === TSESLint.Scope.DefinitionType.Parameter ||
+            definition.type === TSESLint.Scope.DefinitionType.Variable,
+        );
+        if (!declarationDefinition) return;
 
-        const parameterNode = parameterDefinition.name;
-        if (parameterNode.type !== AST_NODE_TYPES.Identifier) return;
-        if (!parameterHasReadonlySetConstituent(parameterNode)) return;
+        const declarationNode = declarationDefinition.name;
+        if (declarationNode.type !== AST_NODE_TYPES.Identifier) return;
+        if (!declarationHasReadonlySetConstituent(declarationNode)) return;
 
         if (!isGuardedBySetInstanceof(node, variable, context)) return;
 

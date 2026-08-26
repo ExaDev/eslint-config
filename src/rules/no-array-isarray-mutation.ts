@@ -1,12 +1,14 @@
 import { AST_NODE_TYPES, ESLintUtils, TSESLint, type TSESTree } from '@typescript-eslint/utils';
 
-// Array.isArray's own lib.es5.d.ts signature is `(arg: any) => arg is any[]` -- it has no way to preserve a `readonly` modifier through the type guard, so narrowing a parameter whose real type includes a readonly array through `Array.isArray` silently produces a plain mutable `T[]` inside the guarded branch. Confirmed directly: `function mutate(input: readonly number[] | number): void { if (Array.isArray(input)) { input.push(1); } }` compiles cleanly under `tsc --strict` with zero errors, even though `input`'s outer declared type is already `readonly` -- a caller's genuinely readonly array (`const frozen: readonly number[] = [1, 2, 3]; mutate(frozen);`) gets mutated despite its own declaration.
+// Array.isArray's own lib.es5.d.ts signature is `(arg: any) => arg is any[]` -- it has no way to preserve a `readonly` modifier through the type guard, so narrowing a parameter or local variable whose real type includes a readonly array through `Array.isArray` silently produces a plain mutable `T[]` inside the guarded branch. Confirmed directly: `function mutate(input: readonly number[] | number): void { if (Array.isArray(input)) { input.push(1); } }` compiles cleanly under `tsc --strict` with zero errors, even though `input`'s outer declared type is already `readonly` -- a caller's genuinely readonly array (`const frozen: readonly number[] = [1, 2, 3]; mutate(frozen);`) gets mutated despite its own declaration. The identical hole reproduces for a plain local: `const frozen: readonly number[] = getShared(); if (Array.isArray(frozen)) { frozen.push(1); }` also compiles clean under `tsc --strict`, since `Array.isArray`'s own narrowing behaviour is a property of the guard, not of whether the narrowed binding happens to be a parameter or a `const`/`let` declared in the function body.
 //
-// This is distinct from no-mutable-union-array-param.ts's own hole: that rule catches a parameter whose DECLARED array type is already a mutable union of element types (`(string | number)[]`); this rule catches a parameter correctly declared readonly that loses the guarantee purely through `Array.isArray`'s own narrowing, not through the declaration itself. Re-adding `readonly` to the outer parameter type -- the fix that closes the sibling rule's hole -- does not help here: the type guard already discards it inside the branch regardless of the outer annotation, confirmed by the reproduction above already using a `readonly` parameter.
+// This is distinct from no-mutable-union-array-param.ts's own hole: that rule catches a parameter whose DECLARED array type is already a mutable union of element types (`(string | number)[]`); this rule catches a parameter or local variable correctly declared readonly that loses the guarantee purely through `Array.isArray`'s own narrowing, not through the declaration itself. Re-adding `readonly` to the outer parameter type -- the fix that closes the sibling rule's hole -- does not help here: the type guard already discards it inside the branch regardless of the outer annotation, confirmed by the reproduction above already using a `readonly` parameter.
 //
-// This rule reads real type information rather than matching the parameter's TSESTree type-annotation shape syntactically, specifically so it sees through a type alias (`type RO = readonly number[]; function f(input: RO | number)`) and catches a BARE `readonly T[]` parameter with no union at all (`function f(input: readonly number[])` -- Array.isArray discards the readonly modifier here too, with no union involved) -- a first version of this rule matched the syntax directly and silently missed both, confirmed via the same tsc --strict reproduction pattern used throughout this rule's own history. `checker.isArrayType(t) && t.getSymbol()?.name === 'ReadonlyArray'` is confirmed empirically to distinguish a readonly array (`ReadonlyArray`) from a mutable one (`Array`) even through a resolved type alias, since the checker's own type for an aliased type is the alias's real underlying type, not a separate "alias type."
+// This rule reads real type information rather than matching the declaration's TSESTree type-annotation shape syntactically, specifically so it sees through a type alias (`type RO = readonly number[]; function f(input: RO | number)`) and catches a BARE `readonly T[]` declaration with no union at all (`function f(input: readonly number[])` -- Array.isArray discards the readonly modifier here too, with no union involved) -- a first version of this rule matched the syntax directly and silently missed both, confirmed via the same tsc --strict reproduction pattern used throughout this rule's own history. `checker.isArrayType(t) && t.getSymbol()?.name === 'ReadonlyArray'` is confirmed empirically to distinguish a readonly array (`ReadonlyArray`) from a mutable one (`Array`) even through a resolved type alias, since the checker's own type for an aliased type is the alias's real underlying type, not a separate "alias type."
 //
-// No autofix is shipped. Marking the parameter readonly again is a no-op (see above). Rewriting the mutating call itself into a copy-first pattern (`input.push(x)` -> a fresh-array assignment) is not safely mechanical even for push/unshift alone: an alias taken before the mutating call -- `const other = input; input.push(1); return other;` -- observes the in-place mutation through `other` today, but would silently stop observing it if the call were rewritten to assign a fresh array to `input` instead of mutating the shared object. Report-only, matching no-enum-number-widening.ts's own precedent of shipping zero fix when nothing is provably safe.
+// The type is read at the declaration's own name node -- the parameter's own identifier, or a `VariableDeclarator`'s own `id` -- never at the reference inside the guard. By the time execution reaches `Array.isArray(x)`, TypeScript's control-flow narrowing has already discarded the readonly-ness at that location (that is the entire bug this rule exists to catch), so checking the type there would always observe a plain, already-narrowed type and the rule would never fire. Checking the declaration's own name node is also what makes a destructured local binding (`const { frozen } = getShared();`) fall out for free: destructuring only changes how the initializer is computed, not the definition kind eslint-scope records for the bound identifier, so it is picked up as an ordinary `DefinitionType.Variable` the same as a plain `const`.
+//
+// No autofix is shipped. Marking the declaration readonly again is a no-op (see above). Rewriting the mutating call itself into a copy-first pattern (`input.push(x)` -> a fresh-array assignment) is not safely mechanical even for push/unshift alone: an alias taken before the mutating call -- `const other = input; input.push(1); return other;` -- observes the in-place mutation through `other` today, but would silently stop observing it if the call were rewritten to assign a fresh array to `input` instead of mutating the shared object. Report-only, matching no-enum-number-widening.ts's own precedent of shipping zero fix when nothing is provably safe.
 
 const MUTATING_INSERT_METHODS = new Set(['push', 'unshift', 'splice', 'fill', 'copyWithin']);
 
@@ -50,11 +52,11 @@ const noArrayIsArrayMutation = createRule({
     schema: [],
     docs: {
       description:
-        "Disallow mutating-insertion calls on a parameter whose real type includes a readonly array, narrowed via Array.isArray, which silently discards the declared readonly guarantee.",
+        "Disallow mutating-insertion calls on a parameter or local variable whose real type includes a readonly array, narrowed via Array.isArray, which silently discards the declared readonly guarantee.",
     },
     messages: {
       unsound:
-        "'{{ method }}' mutates a parameter narrowed by Array.isArray -- Array.isArray's own type declaration cannot preserve a readonly modifier through the guard, so a caller's genuinely readonly array can be mutated here even though the parameter's real type includes a readonly array. Copy the array before inserting (e.g. a spread into a new array), or narrow with a check that preserves readonly instead of Array.isArray.",
+        "'{{ method }}' mutates a parameter or local variable narrowed by Array.isArray -- Array.isArray's own type declaration cannot preserve a readonly modifier through the guard, so a value whose real type includes a readonly array (a caller's array, for a parameter; the value's own declared type, for a local variable) can be mutated here despite that readonly guarantee. Copy the array before inserting (e.g. a spread into a new array), or narrow with a check that preserves readonly instead of Array.isArray.",
     },
   },
   defaultOptions: [],
@@ -62,10 +64,10 @@ const noArrayIsArrayMutation = createRule({
     const services = ESLintUtils.getParserServices(context);
     const checker = services.program.getTypeChecker();
 
-    function parameterHasReadonlyArrayConstituent(parameterNode: TSESTree.Identifier): boolean {
-      const tsNode = services.esTreeNodeToTSNodeMap.get(parameterNode);
-      const parameterType = checker.getTypeAtLocation(tsNode);
-      const constituents = parameterType.isUnion() ? parameterType.types : [parameterType];
+    function declarationHasReadonlyArrayConstituent(declarationNode: TSESTree.Identifier): boolean {
+      const tsNode = services.esTreeNodeToTSNodeMap.get(declarationNode);
+      const declaredType = checker.getTypeAtLocation(tsNode);
+      const constituents = declaredType.isUnion() ? declaredType.types : [declaredType];
       return constituents.some((constituent) => checker.isArrayType(constituent) && constituent.getSymbol()?.name === 'ReadonlyArray');
     }
 
@@ -85,12 +87,17 @@ const noArrayIsArrayMutation = createRule({
         const scope = context.sourceCode.getScope(node);
         const variable = scope.references.find((reference) => reference.identifier === callee.object)?.resolved;
         if (!variable) return;
-        const parameterDefinition = variable.defs.find((definition) => definition.type === TSESLint.Scope.DefinitionType.Parameter);
-        if (!parameterDefinition) return;
+        // A parameter or a plain local variable declaration (including a destructured binding, which eslint-scope still records as an ordinary DefinitionType.Variable) -- deliberately not FunctionName, ClassName, ImportBinding, or CatchClause, none of which can meaningfully hold a readonly-array-typed value the way a parameter or a variable declarator can.
+        const declarationDefinition = variable.defs.find(
+          (definition) =>
+            definition.type === TSESLint.Scope.DefinitionType.Parameter ||
+            definition.type === TSESLint.Scope.DefinitionType.Variable,
+        );
+        if (!declarationDefinition) return;
 
-        const parameterNode = parameterDefinition.name;
-        if (parameterNode.type !== AST_NODE_TYPES.Identifier) return;
-        if (!parameterHasReadonlyArrayConstituent(parameterNode)) return;
+        const declarationNode = declarationDefinition.name;
+        if (declarationNode.type !== AST_NODE_TYPES.Identifier) return;
+        if (!declarationHasReadonlyArrayConstituent(declarationNode)) return;
 
         if (!isGuardedByArrayIsArray(node, variable, context)) return;
 

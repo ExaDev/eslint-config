@@ -1,10 +1,12 @@
 import { AST_NODE_TYPES, ESLintUtils, TSESLint, type TSESTree } from '@typescript-eslint/utils';
 
-// TypeScript's lib.es2015.collection.d.ts declares `Map<K, V> extends ReadonlyMap<K, V>` and `instanceof` narrowing has no way to express "this branch is still ReadonlyMap, just confirmed to actually be backed by a Map at runtime" -- narrowing a parameter whose real type includes a ReadonlyMap through `instanceof Map` silently produces the full mutable `Map<K, V>` inside the guarded branch. Confirmed directly: `function mutate(input: ReadonlyMap<string, number> | number): void { if (input instanceof Map) { input.set('x', 1); } }` compiles cleanly under `tsc --strict` with zero errors, even though `input`'s ReadonlyMap constituent has no `.set` method at all -- a caller's genuinely read-only view onto a shared Map gets mutated despite the declared type saying it cannot be.
+// TypeScript's lib.es2015.collection.d.ts declares `Map<K, V> extends ReadonlyMap<K, V>` and `instanceof` narrowing has no way to express "this branch is still ReadonlyMap, just confirmed to actually be backed by a Map at runtime" -- narrowing a parameter or local variable whose real type includes a ReadonlyMap through `instanceof Map` silently produces the full mutable `Map<K, V>` inside the guarded branch. Confirmed directly: `function mutate(input: ReadonlyMap<string, number> | number): void { if (input instanceof Map) { input.set('x', 1); } }` compiles cleanly under `tsc --strict` with zero errors, even though `input`'s ReadonlyMap constituent has no `.set` method at all -- a caller's genuinely read-only view onto a shared Map gets mutated despite the declared type saying it cannot be. The identical hole reproduces for a plain local: `const frozen: ReadonlyMap<string, number> = getShared(); if (frozen instanceof Map) { frozen.set('x', 1); }` also compiles clean under `tsc --strict`, since `instanceof Map`'s own narrowing behaviour is a property of the guard, not of whether the narrowed binding happens to be a parameter or a `const`/`let` declared in the function body.
 //
 // This is Array.isArray's own hole (see no-array-isarray-mutation.ts) recurring for Map: confirmed directly that `instanceof Array` does NOT share this problem -- `function mutateArr(input: readonly number[] | number): void { if (input instanceof Array) { input.push(1); } }` correctly fails to compile (`Property 'push' does not exist on type 'readonly number[]'`), because `ReadonlyArray<T>` is not a supertype `Array<T>` extends in the same declared-inheritance sense; the checker narrows an `instanceof Array` test to the array's own already-known element type rather than to a separately-declared wider `Array` interface. `ReadonlyMap`/`Map` are different: `Map` is declared as extending `ReadonlyMap` and adding the mutating members, so `instanceof Map` narrows to that wider, unrelated-by-structure interface instead. This makes the Map case an `instanceof`-specific gap for classes/interfaces declared exactly this way (a readonly base interface + a subtype adding mutators), not a general `instanceof` gap -- `instanceof Array` is unaffected precisely because arrays are not modelled with that inheritance shape.
 //
-// This rule reads real type information rather than matching the parameter's TSESTree type-annotation shape syntactically, specifically so it sees through a type alias (`type RO = ReadonlyMap<string, number>; function f(input: RO | number)`) and catches a BARE `ReadonlyMap<K, V>` parameter with no union at all (`function f(input: ReadonlyMap<string, number>)` -- `instanceof Map` discards the readonly guarantee here too, with no union involved) -- confirmed empirically via the TS compiler API that `getSymbol()?.name === 'ReadonlyMap'` distinguishes a `ReadonlyMap` constituent (bare, unioned, or reached through a resolved alias) from a plain mutable `Map` constituent (`getSymbol()?.name === 'Map'`), the same way `no-array-isarray-mutation.ts`'s own `t.getSymbol()?.name === 'ReadonlyArray'` check does for arrays. There is no `checker.isArrayType` equivalent for maps, so the symbol-name check alone is the detection: `checker.isArrayType` itself only ever answers questions about array/tuple types.
+// This rule reads real type information rather than matching the declaration's TSESTree type-annotation shape syntactically, specifically so it sees through a type alias (`type RO = ReadonlyMap<string, number>; function f(input: RO | number)`) and catches a BARE `ReadonlyMap<K, V>` declaration with no union at all (`function f(input: ReadonlyMap<string, number>)` -- `instanceof Map` discards the readonly guarantee here too, with no union involved) -- confirmed empirically via the TS compiler API that `getSymbol()?.name === 'ReadonlyMap'` distinguishes a `ReadonlyMap` constituent (bare, unioned, or reached through a resolved alias) from a plain mutable `Map` constituent (`getSymbol()?.name === 'Map'`), the same way `no-array-isarray-mutation.ts`'s own `t.getSymbol()?.name === 'ReadonlyArray'` check does for arrays. There is no `checker.isArrayType` equivalent for maps, so the symbol-name check alone is the detection: `checker.isArrayType` itself only ever answers questions about array/tuple types.
+//
+// The type is read at the declaration's own name node -- the parameter's own identifier, or a `VariableDeclarator`'s own `id` -- never at the reference inside the guard, for the same reason as the array sibling: by the time execution reaches `x instanceof Map`, control-flow narrowing has already discarded the readonly-ness at that location. Checking the declaration's own name node also makes a destructured local binding (`const { frozen } = getShared();`) fall out for free: destructuring only changes how the initializer is computed, not the definition kind eslint-scope records for the bound identifier, so it is picked up as an ordinary `DefinitionType.Variable` the same as a plain `const`.
 //
 // No autofix is shipped, for the same reason as the array sibling: rewriting the mutating call into a copy-first pattern (`input.set(k, v)` -> constructing a fresh Map and reassigning) is not safely mechanical, because an alias taken before the mutating call -- `const other = input; input.set('x', 1); return other;` -- observes the in-place mutation through `other` today, and would silently stop observing it if the call were rewritten to assign a fresh Map to `input` instead of mutating the shared object. Report-only, matching no-array-isarray-mutation.ts's own precedent of shipping zero fix when nothing is provably safe.
 
@@ -48,11 +50,11 @@ const noMapInstanceofMutation = createRule({
     schema: [],
     docs: {
       description:
-        "Disallow mutating calls on a parameter whose real type includes a ReadonlyMap, narrowed via `instanceof Map`, which silently discards the declared readonly guarantee.",
+        "Disallow mutating calls on a parameter or local variable whose real type includes a ReadonlyMap, narrowed via `instanceof Map`, which silently discards the declared readonly guarantee.",
     },
     messages: {
       unsound:
-        "'{{ method }}' mutates a parameter narrowed by 'instanceof Map' -- Map is declared as extending ReadonlyMap, so 'instanceof Map' narrows straight past the readonly guarantee to the full mutable interface, and a caller's genuinely read-only ReadonlyMap can be mutated here even though the parameter's real type includes ReadonlyMap. Copy the map before mutating (e.g. `new Map(input)`), or narrow with a check that preserves readonly instead of 'instanceof Map'.",
+        "'{{ method }}' mutates a parameter or local variable narrowed by 'instanceof Map' -- Map is declared as extending ReadonlyMap, so 'instanceof Map' narrows straight past the readonly guarantee to the full mutable interface, and a value whose real type includes ReadonlyMap (a caller's map, for a parameter; the value's own declared type, for a local variable) can be mutated here despite that readonly guarantee. Copy the map before mutating (e.g. `new Map(input)`), or narrow with a check that preserves readonly instead of 'instanceof Map'.",
     },
   },
   defaultOptions: [],
@@ -60,10 +62,10 @@ const noMapInstanceofMutation = createRule({
     const services = ESLintUtils.getParserServices(context);
     const checker = services.program.getTypeChecker();
 
-    function parameterHasReadonlyMapConstituent(parameterNode: TSESTree.Identifier): boolean {
-      const tsNode = services.esTreeNodeToTSNodeMap.get(parameterNode);
-      const parameterType = checker.getTypeAtLocation(tsNode);
-      const constituents = parameterType.isUnion() ? parameterType.types : [parameterType];
+    function declarationHasReadonlyMapConstituent(declarationNode: TSESTree.Identifier): boolean {
+      const tsNode = services.esTreeNodeToTSNodeMap.get(declarationNode);
+      const declaredType = checker.getTypeAtLocation(tsNode);
+      const constituents = declaredType.isUnion() ? declaredType.types : [declaredType];
       return constituents.some((constituent) => constituent.getSymbol()?.name === 'ReadonlyMap');
     }
 
@@ -83,12 +85,17 @@ const noMapInstanceofMutation = createRule({
         const scope = context.sourceCode.getScope(node);
         const variable = scope.references.find((reference) => reference.identifier === callee.object)?.resolved;
         if (!variable) return;
-        const parameterDefinition = variable.defs.find((definition) => definition.type === TSESLint.Scope.DefinitionType.Parameter);
-        if (!parameterDefinition) return;
+        // A parameter or a plain local variable declaration (including a destructured binding, which eslint-scope still records as an ordinary DefinitionType.Variable) -- deliberately not FunctionName, ClassName, ImportBinding, or CatchClause, none of which can meaningfully hold a ReadonlyMap-typed value the way a parameter or a variable declarator can.
+        const declarationDefinition = variable.defs.find(
+          (definition) =>
+            definition.type === TSESLint.Scope.DefinitionType.Parameter ||
+            definition.type === TSESLint.Scope.DefinitionType.Variable,
+        );
+        if (!declarationDefinition) return;
 
-        const parameterNode = parameterDefinition.name;
-        if (parameterNode.type !== AST_NODE_TYPES.Identifier) return;
-        if (!parameterHasReadonlyMapConstituent(parameterNode)) return;
+        const declarationNode = declarationDefinition.name;
+        if (declarationNode.type !== AST_NODE_TYPES.Identifier) return;
+        if (!declarationHasReadonlyMapConstituent(declarationNode)) return;
 
         if (!isGuardedByInstanceofMap(node, variable, context)) return;
 

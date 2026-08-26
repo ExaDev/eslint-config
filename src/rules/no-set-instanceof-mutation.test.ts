@@ -35,6 +35,8 @@ ruleTester.run('no-set-instanceof-mutation', rule, {
     'function f(input: ReadonlySet<number> | number, other: ReadonlySet<number> | number): void { if (!(other instanceof Set)) return; input.add(1); }',
     // An early-return if-statement that has an `else` branch is not the early-return idiom (the function does not unconditionally stop there), so it is deliberately not treated as a guard for a later sibling statement.
     'function f(input: ReadonlySet<number> | number): void { if (!(input instanceof Set)) { doSomething(); } else { doSomethingElse(); } input.add(1); }',
+    // A `let` local reassigned to a definitely-mutable value before the guard does NOT produce a false positive here, but not for the reason it might look like: this rule deliberately checks the type at the declaration's own name node, and `let value;` with no type annotation and no initializer has no static type to read there at all -- confirmed via the TS compiler API that `checker.getTypeAtLocation` on this bare declaration returns `any` (TypeScript's "evolving" type for an uninitialized `let`, which only accumulates a real type from the assignments that follow it, not before). With no ReadonlySet constituent visible at the declaration itself, the check correctly finds nothing to report, regardless of what value flows through the variable afterwards.
+    'function f(x: ReadonlySet<number> | number): void { let value; value = x; value = new Set<number>(); if (value instanceof Set) { value.add(1); } }',
   ],
   invalid: [
     {
@@ -102,6 +104,16 @@ ruleTester.run('no-set-instanceof-mutation', rule, {
     // The else-of-negated-test guard idiom.
     {
       code: 'function f(input: ReadonlySet<number> | number): void { if (!(input instanceof Set)) { doSomething(); } else { input.add(1); } }',
+      errors: [{ messageId: 'unsound', data: { method: 'add' } }],
+    },
+    // A plain local `const` (not a parameter) whose own declared type includes a ReadonlySet constituent -- the type is read at the VariableDeclarator's own `id` node, the same declaration-site check already used for parameters, so this is caught the same way.
+    {
+      code: 'declare function getShared(): ReadonlySet<number> | number; function f(): void { const frozen: ReadonlySet<number> | number = getShared(); if (frozen instanceof Set) { frozen.add(1); } }',
+      errors: [{ messageId: 'unsound', data: { method: 'add' } }],
+    },
+    // A destructured local binding falls out of the same check for free: destructuring only changes how the initializer is computed, not the DefinitionType.Variable eslint-scope records for the bound identifier `frozen`.
+    {
+      code: 'declare function getShared(): { frozen: ReadonlySet<number> | number }; function f(): void { const { frozen } = getShared(); if (frozen instanceof Set) { frozen.add(1); } }',
       errors: [{ messageId: 'unsound', data: { method: 'add' } }],
     },
   ],
