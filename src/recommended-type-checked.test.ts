@@ -1,20 +1,21 @@
-import { Linter } from 'eslint';
+import type { Linter } from 'eslint';
+import { Linter as LinterClass } from 'eslint';
 import tseslint from 'typescript-eslint';
 import { describe, expect, it } from 'vitest';
 import recommendedTypeChecked from './recommended-type-checked';
 
-// Exercises this package's own test-file relaxation directly against the real exported array (the last two entries: the outright-strictness rules, then the test-file override), rather than a re-implementation -- proving the shipped config, not a description of intent. Neither rule under test needs type information, so a bare parser registration (no project/projectService) is enough; recommendedTypeChecked's own type-aware rules (await-thenable etc.) are deliberately excluded from this slice, since testing them would need a real tsconfig project this unit test has no reason to depend on. No runtime Array.isArray narrowing needed here -- recommendedTypeChecked's own ConfigArrayValue type (Extract<ConfigValue, unknown[]>) already proves this at compile time.
-const linter = new Linter();
+// Exercises this package's own test-file relaxation directly against the real exported array (the last two entries: the outright-strictness rules, then the test-file override), rather than a re-implementation -- proving the shipped config, not a description of intent. This test's own parser registration carries no project/projectService, so a genuinely type-aware rule (no-enum-number-widening) throws the moment it fires under this setup -- it has its own dedicated test with a real project service, and is explicitly turned off below since it plays no part in what THIS test verifies (the test-file relaxation of ban-ts-comment/consistent-type-assertions, neither of which needs type information). No runtime Array.isArray narrowing needed here -- recommendedTypeChecked's own ConfigArrayValue type (Extract<ConfigValue, unknown[]>) already proves this at compile time.
+const linter = new LinterClass();
 const strictnessConfigs = recommendedTypeChecked.slice(-2);
 
+// strictnessConfigs is typed via @typescript-eslint/utils's own FlatConfig.Config (see recommended-type-checked.ts's own comment on why), which eslint's own Linter.verify() does not accept directly: the two packages each declare their own independent `languageOptions` type for the exact same JSON-serializable runtime shape, differing only in a missing index signature -- a declaration-file gap between the two type sources, not a real difference in the values passed. Widening through Linter.Config[] here documents that boundary at the one place this package's own test needs to cross it directly; production consumers never hit this, since a flat config file is never itself type-checked against Linter.verify's signature.
 function lint(code: string, filename: string) {
-  return linter
-    .verify(
-      code,
-      [{ files: ['**'], languageOptions: { sourceType: 'module', parser: tseslint.parser }, plugins: { '@typescript-eslint': tseslint.plugin } }, ...strictnessConfigs],
-      filename,
-    )
-    .map((message) => message.ruleId);
+  const config: Linter.Config[] = [
+    { files: ['**'], languageOptions: { sourceType: 'module', parser: tseslint.parser }, plugins: { '@typescript-eslint': tseslint.plugin } },
+    ...strictnessConfigs,
+    { rules: { 'exadev/no-enum-number-widening': 'off' } },
+  ] as Linter.Config[];
+  return linter.verify(code, config, filename).map((message) => message.ruleId);
 }
 
 describe('recommended-type-checked test-file relaxation', () => {

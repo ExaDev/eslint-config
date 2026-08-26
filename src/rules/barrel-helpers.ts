@@ -71,10 +71,10 @@ export type SplitReexportViolation =
   | { readonly kind: 'default'; readonly declaration: ExportDefaultDeclarationNode; readonly name: string; readonly trackedImport: TrackedImport };
 
 export function createSplitReexportDetector(): {
-  visitImport(node: ImportDeclarationNode): void;
-  visitExportNamed(node: ExportNamedDeclarationNode): void;
-  visitExportDefault(node: ExportDefaultDeclarationNode): void;
-  violations(): readonly SplitReexportViolation[];
+  visitImport: (node: ImportDeclarationNode) => void;
+  visitExportNamed: (node: ExportNamedDeclarationNode) => void;
+  visitExportDefault: (node: ExportDefaultDeclarationNode) => void;
+  violations: () => readonly SplitReexportViolation[];
 } {
   const importsByName = new Map<string, TrackedImport>();
   const bareExportSpecifiers: { declaration: ExportNamedDeclarationNode; specifier: ExportSpecifierNode }[] = [];
