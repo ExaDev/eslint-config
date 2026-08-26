@@ -29,6 +29,7 @@ function lint(code: string, filename: string) {
         '@typescript-eslint/promise-function-async': 'off',
         '@typescript-eslint/require-array-sort-compare': 'off',
         '@typescript-eslint/strict-boolean-expressions': 'off',
+        '@typescript-eslint/strict-void-return': 'off',
         '@typescript-eslint/switch-exhaustiveness-check': 'off',
       },
     },
