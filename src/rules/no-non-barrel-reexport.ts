@@ -59,9 +59,9 @@ const noNonBarrelReexport: Rule.RuleModule = {
     const detector = createSplitReexportDetector();
 
     return {
-      ImportDeclaration: (node) => detector.visitImport(node),
-      ExportNamedDeclaration: (node) => detector.visitExportNamed(node),
-      ExportDefaultDeclaration: (node) => detector.visitExportDefault(node),
+      ImportDeclaration: (node) => { detector.visitImport(node); },
+      ExportNamedDeclaration: (node) => { detector.visitExportNamed(node); },
+      ExportDefaultDeclaration: (node) => { detector.visitExportDefault(node); },
       'Program:exit'() {
         const { sourceCode } = context;
         for (const violation of detector.violations()) {

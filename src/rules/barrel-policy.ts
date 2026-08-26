@@ -84,7 +84,7 @@ const barrelPolicy: Rule.RuleModule = {
           }
         }
       },
-      ImportDeclaration: (node) => detector.visitImport(node),
+      ImportDeclaration: (node) => { detector.visitImport(node); },
       ExportNamedDeclaration(node) {
         detector.visitExportNamed(node);
         if (hasSource(node)) {
@@ -104,7 +104,7 @@ const barrelPolicy: Rule.RuleModule = {
           context.report({ node, messageId: 'notADirectSibling', data: { source } });
         }
       },
-      ExportDefaultDeclaration: (node) => detector.visitExportDefault(node),
+      ExportDefaultDeclaration: (node) => { detector.visitExportDefault(node); },
       'Program:exit'() {
         for (const violation of detector.violations()) {
           if (isPermittedBarrel(filename, mode)) {
