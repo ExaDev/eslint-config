@@ -33,6 +33,8 @@ const recommendedTypeChecked: ConfigArrayValue = [
       '@typescript-eslint/ban-ts-comment': ['error', { 'ts-expect-error': true }],
       // Method-shorthand signatures (`foo(x: string): void`) are checked BIVARIANTLY under strictFunctionTypes -- unsound: an implementation accepting only a narrower parameter type is still accepted where the interface promises to accept the wider type. Property-style function types (`foo: (x: string) => void`) are checked contravariantly (sound). 'property' is this rule's own default; stated explicitly so a future default change can't silently loosen this. Autofix is typescript-eslint's own (this rule ships fixable: 'code').
       '@typescript-eslint/method-signature-style': ['error', 'property'],
+      // The `!` postfix operator is the exact same escape hatch consistent-type-assertions above already bans for `as` -- a manual override of the checker's own null/undefined analysis, with no way for a reader or a later refactor to tell "verified safe" from "assumed safe." Narrow explicitly instead (an `if`/early-return guard, a nullish-coalescing default, or a real assertion function).
+      '@typescript-eslint/no-non-null-assertion': 'error',
     },
   },
   {
