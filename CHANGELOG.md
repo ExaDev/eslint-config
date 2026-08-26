@@ -1,3 +1,14 @@
+# [2.5.0](https://github.com/ExaDev/eslint-config/compare/v2.4.0...v2.5.0) (2026-08-26)
+
+
+### Features
+
+* add no-map-instanceof-mutation rule for Map's readonly gap ([16582a8](https://github.com/ExaDev/eslint-config/commit/16582a80e4e0f0ce6a31a79ad5e19b49a262541a))
+* add no-set-instanceof-mutation rule for Set's readonly gap ([e5b4c33](https://github.com/ExaDev/eslint-config/commit/e5b4c33dd0673a3b68c60641cc538599c8279852))
+* add prefer-numeric-sort-compare rule with a suggestion fix ([1c13d4d](https://github.com/ExaDev/eslint-config/commit/1c13d4d6ad068e836480896cac3a4f1b2a3de802))
+* add prefer-readonly-array-param rule with real autofix ([c8429d3](https://github.com/ExaDev/eslint-config/commit/c8429d3e9eb71d90af4f6e74422dd7c2cad144a9))
+* enable 3 native rules, register the four new rules ([aafb702](https://github.com/ExaDev/eslint-config/commit/aafb70290f4d612999736a095bc97a3695da4ed3))
+
 # [2.4.0](https://github.com/ExaDev/eslint-config/compare/v2.3.0...v2.4.0) (2026-08-26)
 
 
