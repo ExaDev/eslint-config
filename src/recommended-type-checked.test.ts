@@ -23,6 +23,7 @@ function lint(code: string, filename: string) {
         'exadev/no-map-instanceof-mutation': 'off',
         'exadev/no-set-instanceof-mutation': 'off',
         'exadev/prefer-numeric-sort-compare': 'off',
+        'exadev/prefer-readonly-object-param': 'off',
         '@typescript-eslint/consistent-type-exports': 'off',
         '@typescript-eslint/no-deprecated': 'off',
         '@typescript-eslint/no-misused-spread': 'off',
