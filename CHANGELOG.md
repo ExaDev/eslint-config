@@ -1,3 +1,16 @@
+# [2.6.0](https://github.com/ExaDev/eslint-config/compare/v2.5.0...v2.6.0) (2026-08-26)
+
+
+### Bug Fixes
+
+* catch a local variable, not just a parameter, in three rules ([b3ecfd8](https://github.com/ExaDev/eslint-config/commit/b3ecfd81a799e2eb24f067499601258e741d6e5f))
+
+
+### Features
+
+* add prefer-readonly-object-param rule with real autofix ([6b768bd](https://github.com/ExaDev/eslint-config/commit/6b768bdf9b4b7babe257434b44dbf45cf9263819))
+* register prefer-readonly-object-param in the type-checked bundle ([458d2bc](https://github.com/ExaDev/eslint-config/commit/458d2bcf1eef343a20ba4504ab858023ef199ec6))
+
 # [2.5.0](https://github.com/ExaDev/eslint-config/compare/v2.4.0...v2.5.0) (2026-08-26)
 
 
