@@ -16,7 +16,7 @@ Consumers need `eslint >=10.0.0` and `typescript-eslint >=8.0.0` as required pee
 pnpm add -D @exadev/eslint-config typescript-eslint eslint
 ```
 
-The default export is the full, type-checked ruleset: typescript-eslint's `recommendedTypeChecked` + `stylisticTypeChecked` presets, `exadev/barrel-policy` at `mode: 'banned'` (see [Barrel policy](#barrel-policy)), `exadev/no-pointless-reassignment`, `linterOptions.noInlineConfig`, `@typescript-eslint/consistent-type-assertions` banning all type assertions, and `@typescript-eslint/ban-ts-comment` banning `@ts-expect-error` outright -- the last two relaxed in test files (see below). Spread it directly into `tseslint.config(...)`:
+The default export is the full, type-checked ruleset: typescript-eslint's `recommendedTypeChecked` + `stylisticTypeChecked` presets, `exadev/barrel-policy` at `mode: 'banned'` (see [Barrel policy](#barrel-policy)), `exadev/no-object-assign`, `exadev/no-mutable-union-array-param`, `exadev/no-enum-number-widening`, `exadev/no-pointless-reassignment`, `linterOptions.noInlineConfig`, `@typescript-eslint/consistent-type-assertions` banning all type assertions, `@typescript-eslint/ban-ts-comment` banning `@ts-expect-error` outright, and `@typescript-eslint/method-signature-style` set to `'property'` (method-shorthand signatures are checked bivariantly under `strictFunctionTypes`, which is unsound) -- the type-assertion and ts-comment rules are relaxed in test files (see below). Spread it directly into `tseslint.config(...)`:
 
 ```ts
 // eslint.config.ts
@@ -41,7 +41,7 @@ export default tseslint.config(
   { rules: { 'exadev/barrel-policy': ['error', { mode: 'single' }] } }, // this package keeps its barrel
 ```
 
-`recommendedTypeChecked` subsumes typescript-eslint's plain `recommended` outright (all 46 of its rules are a subset of `recommendedTypeChecked`'s 73), and its base config registers the `@typescript-eslint` plugin and sets `languageOptions.parser` itself. That is why **you must remove your own `...tseslint.configs.recommended`/`recommendedTypeChecked`/`stylisticTypeChecked` spreads** -- flat config rejects two different plugin object instances registered under the same namespace. You still supply `languageOptions.parserOptions.project`/`projectService` pointing at your own tsconfig(s).
+`recommendedTypeChecked` subsumes typescript-eslint's plain `recommended` outright (every rule in `recommended` is also present in `recommendedTypeChecked`), and its base config registers the `@typescript-eslint` plugin and sets `languageOptions.parser` itself. That is why **you must remove your own `...tseslint.configs.recommended`/`recommendedTypeChecked`/`stylisticTypeChecked` spreads** -- flat config rejects two different plugin object instances registered under the same namespace. You still supply `languageOptions.parserOptions.project`/`projectService` pointing at your own tsconfig(s).
 
 **Test files (`**/*.{test,spec}.{ts,tsx,mts,cts,js,jsx,mjs,cjs}`) get two narrow relaxations of this package's own additions, and only those two.** `@ts-expect-error` reverts to `allow-with-description` (a compile-time-only assertion of a type failure is a legitimate test pattern; `@ts-ignore`/`@ts-nocheck` stay banned since `@ts-expect-error` is strictly better). `consistent-type-assertions` relaxes to `assertionStyle: 'as'` (the legacy `<Type>value` form stays banned everywhere). Nothing inherited from the presets is relaxed.
 
@@ -77,7 +77,7 @@ export default defineConfig([
   {
     files: ['**/*.ts'],
     plugins: { exadev: plugin },
-    extends: ['exadev/recommended'], // this plugin's own four rules, plus linterOptions.noInlineConfig -- no type-checked rules at all
+    extends: ['exadev/recommended'], // this plugin's own non-type-aware rules, plus linterOptions.noInlineConfig -- no type-checked rules at all
     // or: extends: ['exadev/barrel'], // just the barrel-discipline trio (no-non-barrel-index, no-non-barrel-reexport, no-side-effects-in-index)
   },
 ]);
@@ -112,6 +112,9 @@ export default tseslint.config(
 | `no-side-effects-in-index` | | A barrel file may contain only re-export statements -- nothing that could execute at import time. Self-scopes to any index file. |
 | `barrel-direct-siblings-only` | | A barrel may re-export only from a direct sibling (`./module`), never a nested path, parent, or bare package specifier (mode 3). |
 | `no-pointless-reassignment` | ✓ | `const foo = bar` where both sides are plain identifiers and the alias adds no transformation. Autofix rewrites every read to the original name and deletes the declaration (including its `export` keyword, when exported). Still reported but deliberately not auto-fixable where collapsing the alias would change meaning: an explicit type annotation (`const exhaustive: never = item` -- the annotation is the point), a read where the original name is shadowed, a read as a shorthand object property, more than one declarator in the statement, or a source that is written to anywhere. |
+| `no-object-assign` | ✓/suggestion | `Object.assign` does not check a source object's properties against the target's declared types, unlike object spread. A fresh object-literal target autofixes to `{ ...target, ...source }`; mutating an existing reassignable binding offers a suggestion only (changes the object's identity); a `const` binding or a non-statement call site gets a plain report with no fix. |
+| `no-mutable-union-array-param` | ✓ | A function parameter typed as an array of a union (`(string \| number)[]`) accepts a narrower caller array (`number[]`) by covariance; calling `push`/`unshift`/`splice`/`fill`/`copyWithin` on it can then insert a value the caller's own array was never declared to hold. Autofix marks the parameter `readonly`, turning the mutating call into a real compile error to resolve deliberately. Requires no type information. |
+| `no-enum-number-widening` | | A bare (non-literal) `number` is accepted anywhere a numeric enum is expected, without checking it is actually one of the enum's members -- only a numeric *literal* gets range-checked by `tsc`. No autofix: the only provably safe fix is a genuine runtime membership check against the enum's own values, which is a behavioural choice a mechanical fix cannot responsibly make. Requires type information -- only in the default (type-checked) export, not `plugin.configs.recommended`. |
 
 ## Barrel policy
 
