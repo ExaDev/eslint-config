@@ -4,7 +4,7 @@ import tseslint from 'typescript-eslint';
 import { describe, expect, it } from 'vitest';
 import recommendedTypeChecked from './recommended-type-checked';
 
-// Exercises this package's own test-file relaxation directly against the real exported array (the last two entries: the outright-strictness rules, then the test-file override), rather than a re-implementation -- proving the shipped config, not a description of intent. This test's own parser registration carries no project/projectService, so any genuinely type-aware rule throws the moment it fires under this setup -- each one either has its own dedicated test with a real project service, or plays no part in what THIS test verifies (the test-file relaxation of ban-ts-comment/consistent-type-assertions, neither of which needs type information), so every type-aware rule in the shared block is explicitly turned off below. No runtime Array.isArray narrowing needed here -- recommendedTypeChecked's own ConfigArrayValue type (Extract<ConfigValue, unknown[]>) already proves this at compile time.
+// Exercises this package's own test-file relaxation directly against the real exported array (the last two entries: the outright-strictness rules, then the test-file override), rather than a re-implementation -- proving the shipped config, not a description of intent. `projectService.allowDefaultProject` below gives every inline snippet a genuine ad hoc single-file TS project (the same pattern this repo's own type-aware rule tests use), so every rule in the shared block -- type-aware or not -- runs exactly as it would in production, with no rules turned off to work around a missing project service. No runtime Array.isArray narrowing needed here -- recommendedTypeChecked's own ConfigArrayValue type (Extract<ConfigValue, unknown[]>) already proves this at compile time.
 const linter = new LinterClass();
 // The exported array's final two entries: the outright-strictness rules block, then the test-file relaxation block (see the comment above) -- named here since a bare '-2' would itself trip @typescript-eslint/no-magic-numbers with nothing explaining what it denotes.
 const FINAL_CONFIG_ENTRY_COUNT = 2;
@@ -13,27 +13,20 @@ const strictnessConfigs = recommendedTypeChecked.slice(-FINAL_CONFIG_ENTRY_COUNT
 // strictnessConfigs is typed via @typescript-eslint/utils's own FlatConfig.Config (see recommended-type-checked.ts's own comment on why), which eslint's own Linter.verify() does not accept directly: the two packages each declare their own independent `languageOptions` type for the exact same JSON-serializable runtime shape, differing only in a missing index signature -- a declaration-file gap between the two type sources, not a real difference in the values passed. Widening through Linter.Config[] here documents that boundary at the one place this package's own test needs to cross it directly; production consumers never hit this, since a flat config file is never itself type-checked against Linter.verify's signature.
 function lint(code: string, filename: string) {
   const config: Linter.Config[] = [
-    { files: ['**'], languageOptions: { sourceType: 'module', parser: tseslint.parser }, plugins: { '@typescript-eslint': tseslint.plugin } },
-    ...strictnessConfigs,
     {
-      rules: {
-        'exadev/no-array-isarray-mutation': 'off',
-        'exadev/no-enum-number-widening': 'off',
-        'exadev/no-enum-reverse-lookup-widening': 'off',
-        'exadev/no-map-instanceof-mutation': 'off',
-        'exadev/no-set-instanceof-mutation': 'off',
-        'exadev/prefer-numeric-sort-compare': 'off',
-        'exadev/prefer-readonly-object-param': 'off',
-        '@typescript-eslint/consistent-return': 'off',
-        '@typescript-eslint/consistent-type-exports': 'off',
-        '@typescript-eslint/prefer-readonly': 'off',
-        '@typescript-eslint/promise-function-async': 'off',
-        '@typescript-eslint/require-array-sort-compare': 'off',
-        '@typescript-eslint/strict-boolean-expressions': 'off',
-        '@typescript-eslint/strict-void-return': 'off',
-        '@typescript-eslint/switch-exhaustiveness-check': 'off',
+      files: ['**'],
+      languageOptions: {
+        sourceType: 'module',
+        parser: tseslint.parser,
+        parserOptions: {
+          // A literal filename list rather than a glob: allowDefaultProject rejects a directory-spanning glob like '**/*.ts*' outright ("known to cause performance issues"), and a bare '*.ts*' (the pattern this repo's own single-file rule tests use, which pass bare filenames with no directory prefix) doesn't match these paths' own 'src/' prefix -- confirmed directly, both produce a parsing error rather than linting the snippet. These three are the exact, fixed set of filenames every test case below actually passes.
+          projectService: { allowDefaultProject: ['src/foo.ts', 'src/foo.test.ts', 'src/foo.spec.ts'] },
+          tsconfigRootDir: import.meta.dirname,
+        },
       },
+      plugins: { '@typescript-eslint': tseslint.plugin },
     },
+    ...strictnessConfigs,
   ] as Linter.Config[];
   return linter.verify(code, config, filename).map((message) => message.ruleId);
 }
