@@ -1,3 +1,10 @@
+# [2.7.0](https://github.com/ExaDev/eslint-config/compare/v2.6.2...v2.7.0) (2026-08-26)
+
+
+### Features
+
+* switch default config from recommendedTypeChecked to strictTypeChecked ([a92f1b5](https://github.com/ExaDev/eslint-config/commit/a92f1b5f0859aa2ccc0ac28d3b20340c237c18ab))
+
 ## [2.6.2](https://github.com/ExaDev/eslint-config/compare/v2.6.1...v2.6.2) (2026-08-26)
 
 ## [2.6.1](https://github.com/ExaDev/eslint-config/compare/v2.6.0...v2.6.1) (2026-08-26)
