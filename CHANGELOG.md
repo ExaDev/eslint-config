@@ -1,3 +1,10 @@
+# [2.10.0](https://github.com/ExaDev/eslint-config/compare/v2.9.1...v2.10.0) (2026-08-27)
+
+
+### Features
+
+* add optional, auto-detected React and Next.js support ([2611ece](https://github.com/ExaDev/eslint-config/commit/2611ece1c6f6d3f3d15633d16b158fe986cb7ca3))
+
 ## [2.9.1](https://github.com/ExaDev/eslint-config/compare/v2.9.0...v2.9.1) (2026-08-26)
 
 # [2.9.0](https://github.com/ExaDev/eslint-config/compare/v2.8.0...v2.9.0) (2026-08-26)
