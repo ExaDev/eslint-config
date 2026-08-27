@@ -1,5 +1,5 @@
-import type { TSESLint } from '@typescript-eslint/utils';
 import tseslint from 'typescript-eslint';
+import type { ConfigArrayValue } from './config-types';
 import plugin from './plugin';
 
 // This package's own default export (re-exported by src/index.ts): typescript-eslint is a required peer dependency of @exadev/eslint-config as a whole, not an optional one behind a separate subpath -- a plain-JS consumer wanting only the base four rules imports the named `plugin` export instead (see src/index.ts), which never itself imports typescript-eslint, but importing ANYTHING from this package's root module now unconditionally resolves typescript-eslint, since ESM/CJS module evaluation runs a module's entire top-level import graph regardless of which specific export the caller reads. An earlier version of this package tried to avoid that cost for every consumer via a genuinely separate npm subpath (@exadev/eslint-config/recommended-type-checked) -- correct in isolation, but it meant two module specifiers for one package, which this package's own consumers found more awkward than the (small, TypeScript-only-consumer) cost of requiring typescript-eslint unconditionally.
@@ -10,10 +10,6 @@ import plugin from './plugin';
 //
 // Exported as a plain array value, consumed via `...exadev` inside `tseslint.config(...)` (a spread, not a single extends-array reference) -- this is the whole reason its type must specifically be an array type rather than the wider union below.
 //
-// Typed explicitly rather than left inferred: tsdown's declaration-file generation cannot otherwise name the inferred type without an explicit annotation, since it transitively references a type with no portable name at this call site. `NonNullable<TSESLint.FlatConfig.Plugin['configs']>[string]` (a single named config's value type) is `Config | ConfigArray` -- a union that is NOT guaranteed to be an array, because a plugin's own `configs` map can also hand back a single flat config object. This package's actual value is unconditionally an array, so annotating it with the full union directly was a real, confirmed bug: `...recommendedTypeChecked` failed to typecheck with TS2488 ("must have a Symbol.iterator method") wherever a consumer spread it, since TypeScript can't prove a value typed as that union is iterable. `Extract<ConfigValue, unknown[]>` narrows to the array-only member of the same union. Derived from @typescript-eslint/utils's own FlatConfig.Plugin type, matching src/plugin.ts's own `plugin` value type -- this file's own trailing config object embeds that same `plugin` under `plugins: { exadev: plugin }`, so the two types must agree; eslint's own ESLint.Plugin type cannot hold `plugin`'s ESLintUtils.RuleCreator-built rules (see src/plugin.ts's own comment on why), so it is not an option here either.
-type ConfigValue = NonNullable<TSESLint.FlatConfig.Plugin['configs']>[string];
-type ConfigArrayValue = Extract<ConfigValue, unknown[]>;
-
 // A single brace-expansion glob rather than a flat array of near-duplicate strings -- confirmed against ESLint's own flat-config file matcher (minimatch) that brace expansion resolves correctly (src/recommended-type-checked.test.ts exercises this directly), so `{test,spec}` and the extension list each expand independently rather than needing every combination spelled out.
 const TEST_FILE_PATTERNS = '**/*.{test,spec}.{ts,tsx,mts,cts,js,jsx,mjs,cjs}';
 

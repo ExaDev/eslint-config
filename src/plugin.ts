@@ -1,5 +1,8 @@
 import type { TSESLint } from '@typescript-eslint/utils';
+import type { ConfigValue } from './config-types';
 import { version } from '../package.json';
+import { buildNextjsConfig } from './nextjs';
+import { buildReactConfig } from './react';
 import barrelDirectSiblingsOnly from './rules/barrel-direct-siblings-only';
 import barrelPolicy from './rules/barrel-policy';
 import noArrayIsarrayMutation from './rules/no-array-isarray-mutation';
@@ -17,9 +20,6 @@ import noSideEffectsInIndex from './rules/no-side-effects-in-index';
 import preferNumericSortCompare from './rules/prefer-numeric-sort-compare';
 import preferReadonlyArrayParam from './rules/prefer-readonly-array-param';
 import preferReadonlyObjectParam from './rules/prefer-readonly-object-param';
-
-// Derived from a real library type rather than hand-written: a getter's return expression is only contextually typed against its own explicit return-type annotation, not against the outer object literal's type the way a plain property initializer would be -- without this, each rule's 'error' literal below would widen to plain `string`, which the real Config['rules'] shape rejects.
-type ConfigValue = NonNullable<TSESLint.FlatConfig.Plugin['configs']>[string];
 
 // @typescript-eslint/utils's own FlatConfig.Plugin type is used here rather than eslint's own ESLint.Plugin (which an earlier version of this file used) or a hand-written interface -- see the "don't hand-type external libraries" convention this plugin's own rules were built under. eslint's Rule.RuleModule declares a concrete, non-generic `create(context: RuleContext): RuleListener` that only structurally matches rules built directly against the plain `eslint` package's own types; a rule built with ESLintUtils.RuleCreator (needed for typed TSESTree node access and, for type-aware rules, type-checker access) is not assignable to it, even though both shapes are the exact same runtime `{ meta, create }` contract ESLint actually calls. FlatConfig.Plugin's `rules` field is typed as `Record<string, LooseRuleDefinition>` specifically to hold both authoring styles in one plugin, which this package now does. meta.namespace is what a consumer's `plugins: { exadev }` registration turns into the rule-reference prefix ('exadev/no-non-barrel-reexport'); it is not inferred from the package name automatically, so it is stated explicitly here to match. meta.version is imported from package.json rather than hardcoded, since semantic-release rewrites that file's own version on every release and a duplicated literal here would silently drift out of sync with it.
 //
@@ -76,6 +76,14 @@ const plugin: TSESLint.FlatConfig.Plugin = {
           'exadev/barrel-policy': ['error', { mode: 'single' }],
         },
       };
+    },
+    // Explicitly selecting this config is itself an explicit request for React support -- unlike recommended/barrel above, which only ever reference this package's own always-present rules and can never fail, `enabled: true` here means a missing eslint-plugin-react throws a clear, actionable error rather than silently returning nothing (see src/react.ts). A consumer who wants silent auto-detection instead uses the exadevConfig() factory (src/create-config.ts), which threads the same tri-state through without ever forcing the choice.
+    get react(): ConfigValue {
+      return buildReactConfig({ enabled: true });
+    },
+    // Mirrors `react` above -- explicit selection, throws if @next/eslint-plugin-next isn't installed (see src/nextjs.ts).
+    get nextjs(): ConfigValue {
+      return buildNextjsConfig({ enabled: true });
     },
   },
 };

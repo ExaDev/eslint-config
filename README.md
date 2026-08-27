@@ -101,6 +101,63 @@ export default tseslint.config(
 
 **`plugin.configs.recommended`/`plugin.configs.barrel` carry no `files`/`ignores` and are safe unscoped** -- `no-side-effects-in-index` and `no-non-barrel-reexport` each check `context.filename` themselves (self-scoping). For a barrel not at `src/index.ts`, or a project-specific exception, layer an override on top (e.g. `{ files: ['lib/other.ts'], rules: { 'exadev/no-non-barrel-reexport': 'off' } }`) rather than wiring all four rules individually.
 
+## Optional React and Next.js support
+
+`import exadev from '@exadev/eslint-config'` keeps working unchanged -- it's now literally `exadevConfig()` called with no arguments, no migration required. React/hooks/a11y and Next.js rule blocks are folded in automatically, with no separate import or config needed, gated on two independent, always-both-required conditions:
+
+1. **The corresponding package must actually be resolvable.** `eslint-plugin-react`, `eslint-plugin-react-hooks`, `eslint-plugin-jsx-a11y`, and `@next/eslint-plugin-next` are all *optional* peer dependencies (`peerDependenciesMeta.<pkg>.optional: true`) -- install only whichever your project actually needs:
+   ```sh
+   pnpm add -D eslint-plugin-react eslint-plugin-react-hooks eslint-plugin-jsx-a11y   # React support
+   pnpm add -D @next/eslint-plugin-next                                               # Next.js support
+   ```
+   If none of these resolve, `@exadev/eslint-config`'s default export is byte-for-byte identical to the plain TypeScript ruleset -- nothing about the base package changes.
+2. **For React specifically, the file must actually be `.jsx`/`.tsx`.** The React/hooks/a11y rule block is scoped to `files: ['**/*.jsx', '**/*.tsx']`, so even if `eslint-plugin-react` is resolvable only incidentally (e.g. hoisted as a transitive dependency of something unrelated in a monorepo, with zero real JSX anywhere in the linted project), its rules are never matched against a file that isn't JSX -- ESLint's flat-config `files` matching happens per linted file, at lint time, not at config-build time. `@next/eslint-plugin-next`'s block carries no such glob: its own presence is already an unambiguous signal on its own (nothing installs it except a real Next.js project).
+
+### Explicit control
+
+Two ways to override the automatic behaviour, for anyone who doesn't want to rely on it:
+
+**`plugin.configs.react`/`plugin.configs.nextjs`** -- explicit tier selection, mirroring `plugin.configs.recommended`/`.barrel`. Unlike those two, which only ever reference this package's own always-present rules, selecting `configs.react`/`.nextjs` is itself an explicit request: it **throws** a clear, actionable error if the underlying peer isn't installed, rather than silently returning nothing.
+```ts
+import { plugin } from '@exadev/eslint-config';
+import tseslint from 'typescript-eslint';
+
+export default tseslint.config(
+  // ...your own config...
+  {
+    files: ['**/*.tsx'],
+    plugins: { exadev: plugin },
+    extends: [plugin.configs.react], // throws if eslint-plugin-react isn't installed
+  },
+);
+```
+
+**`exadevConfig(options, ...userConfigs)`** -- the named factory export, for fine-grained tri-state control per feature:
+
+```ts
+// eslint.config.ts
+import { exadevConfig } from '@exadev/eslint-config';
+import tseslint from 'typescript-eslint';
+
+export default tseslint.config(
+  {
+    languageOptions: {
+      parserOptions: { project: './tsconfig.json', tsconfigRootDir: import.meta.dirname },
+    },
+  },
+  ...exadevConfig({ react: true, nextjs: false }),
+  // ...your own config...
+);
+```
+
+| Value | React (`options.react`) | Next.js (`options.nextjs`) |
+| --- | --- | --- |
+| `true` | Force on -- throws if `eslint-plugin-react` isn't resolvable | Force on -- throws if `@next/eslint-plugin-next` isn't resolvable |
+| `false` | Force off -- always `[]`, no resolution attempted | Force off -- always `[]`, no resolution attempted |
+| `undefined` / omitted | Auto-detect (the default) | Auto-detect (the default) |
+
+Trailing arguments are arbitrary flat-config objects, appended in order after everything else -- `exadevConfig({}, { rules: { 'no-console': 'warn' } })` is equivalent to spreading the default export plus one more config object.
+
 ## Rules
 
 | Rule | Fixable | Description |
@@ -155,17 +212,23 @@ The `lint`/`typecheck`/`test`/`build` npm scripts wrap turbo tasks named `_lint`
 
 ## Architecture
 
-`src/plugin.ts` builds an `ESLint.Plugin` (ESLint's own type) combining `src/rules/` into a flat `rules` map. `configs.recommended` and `configs.barrel` are getters in the object literal -- each references the fully-built `plugin` (`plugins: { exadev: plugin }`), which a plain property initializer can't do mid-construction. `recommended` ships `barrel-policy` at `mode: 'banned'`; `barrel` at `mode: 'single'`.
+`src/plugin.ts` builds a `TSESLint.FlatConfig.Plugin` (`@typescript-eslint/utils`'s own type -- not ESLint's own `ESLint.Plugin`, which can't hold a rule built with `ESLintUtils.RuleCreator`) combining `src/rules/` into a flat `rules` map. `configs.recommended`, `.barrel`, `.react`, and `.nextjs` are getters in the object literal -- each references the fully-built `plugin` (`plugins: { exadev: plugin }`), which a plain property initializer can't do mid-construction. `recommended` ships `barrel-policy` at `mode: 'banned'`; `barrel` at `mode: 'single'`; `.react`/`.nextjs` call `buildReactConfig`/`buildNextjsConfig` with `enabled: true` (see below).
 
-`src/recommended-type-checked.ts` bundles typescript-eslint's `strictTypeChecked` + `stylisticTypeChecked` alongside this plugin's rules into a flat config array. Its value is typed as `ConfigArrayValue = Extract<ConfigValue, unknown[]>` (the array-only member of ESLint's own config-value union), because annotating with the wider union broke `...exadev` with `TS2488`.
+`src/config-types.ts` holds `ConfigValue`/`ConfigArrayValue` (`ConfigArrayValue = Extract<ConfigValue, unknown[]>`, the array-only member of ESLint's own config-value union), shared by every file below rather than redefined per file -- annotating a config array with the wider `ConfigValue` union directly broke `...exadev` with `TS2488` ("must have a Symbol.iterator method").
 
-`src/index.ts` is the entry point: `export { default } from './recommended-type-checked'; export { default as plugin } from './plugin';`. Both exports share one root module, so importing `{ plugin }` alone still resolves `typescript-eslint` via the sibling re-export -- an accepted trade-off (an earlier separate-subpath split proved more awkward in practice).
+`src/optional-plugin.ts` is the lazy-resolution helper behind React/Next.js support: `tryRequire` wraps `createRequire(import.meta.url)` in try/catch, returning `unknown` (never a cast) so every call site narrows explicitly before use; `readFlatConfig` walks a property path through that `unknown` value via a real type guard, normalizing a stray legacy top-level `parserOptions` key into `languageOptions.parserOptions` along the way (confirmed necessary: `eslint-plugin-jsx-a11y`'s own `configs.recommended` export carries exactly this legacy shape, which flat config's schema rejects outright rather than ignores).
+
+`src/react.ts`/`src/nextjs.ts` each export a `build*Config(options)` function: resolve the relevant optional peer(s) via `tryRequire`, extract their real flat config via `readFlatConfig`, and return an array of 0-or-more config blocks -- `[]` if unresolvable and not explicitly forced on, a thrown `Error` if explicitly forced on (`enabled: true`) and still unresolvable. `react.ts`'s blocks are scoped to `files: ['**/*.jsx', '**/*.tsx']`; `nextjs.ts`'s is not (see [Optional React and Next.js support](#optional-react-and-nextjs-support) for why).
+
+`src/create-config.ts` is config assembly's single source of truth: `exadevConfig(options, ...userConfigs)` concatenates `recommendedTypeChecked` with both builders' output (each fed the matching tri-state option) and any trailing user configs; `defaultConfig` is `exadevConfig()` evaluated once, eagerly, at module load.
+
+`src/index.ts` is the entry point, still a pure re-export barrel (required by `no-side-effects-in-index`/`no-non-barrel-reexport`, both of which assume this file contains nothing but `export ... from ...`): `export { defaultConfig as default, exadevConfig } from './create-config'; export { default as plugin } from './plugin';`. All exports share one root module, so importing `{ plugin }` alone still resolves `typescript-eslint` via the sibling re-export -- an accepted trade-off (an earlier separate-subpath split proved more awkward in practice). React/Next.js support never adds to this cost: none of the four optional packages are ever statically imported, only passed as a runtime string to `createRequire`'s resolver, so their absence never affects module evaluation for a consumer who doesn't use them.
 
 `pnpm-workspace.yaml` declares an empty `packages: []` -- not a real workspace, just giving turbo a root for local task caching.
 
 ## Conventions
 
-`eslint.config.ts` dogfoods the default export on itself (`import exadev from './src/index'`), spreading it exactly as a real consumer would. `no-side-effects-in-index` and `no-non-barrel-reexport` self-scope to `src/index.ts` internally, so no `files`/`ignores` wiring is needed here. Plugin construction lives in `src/plugin.ts` specifically so `src/index.ts` stays a pure re-export point.
+`eslint.config.ts` dogfoods this package's own factory export on itself (`import { exadevConfig } from './src/index'`), spreading `exadevConfig({ react: false, nextjs: false })` -- forced off explicitly, not the plain auto-detecting default, since `eslint-plugin-react`/`@next/eslint-plugin-next` are real devDependencies of *this* repo (needed to test `src/react.ts`/`src/nextjs.ts`'s own "package is resolvable" branch) even though this repo is neither a React nor a Next.js project. `no-side-effects-in-index` and `no-non-barrel-reexport` self-scope to `src/index.ts` internally, so no `files`/`ignores` wiring is needed here. Plugin construction lives in `src/plugin.ts` specifically so `src/index.ts` stays a pure re-export point.
 
 `tsconfig.json` enables `verbatimModuleSyntax` (`import type`/`export type` required for type-only imports -- also enforced by `consistent-type-imports`) and `noUncheckedIndexedAccess` (narrow indexed access before use rather than asserting).
 
@@ -177,6 +240,7 @@ Conventional commits are enforced by commitlint, restricted to the type-enum def
 - `src/index.ts` mixing a default export with a named one triggers rolldown's `MIXED_EXPORTS` warning: a raw CommonJS `require()` would see the raw exports object instead of the default. ESM `import` (the actual consumer path) resolves both correctly; `attw --pack` and `publint` report no problems, so the warning is accepted (see `tsdown.config.ts`).
 - Husky hooks: `pre-commit` runs lint-staged (`eslint --fix` on staged `*.ts`), `commit-msg` runs commitlint, `pre-push` runs typecheck + test + build.
 - The CI release job sets `HUSKY=0` (commit-msg hook skips the automated release commit) and blanks `NPM_TOKEN`/`NODE_AUTH_TOKEN` explicitly so an inherited token can't win over OIDC trusted publishing.
+- A consumer who already has `eslint-plugin-react`/`@next/eslint-plugin-next` resolvable for unrelated reasons (e.g. hoisted in a monorepo) and writes `.jsx`/`.tsx` files may see new rule activity the moment they upgrade to a version of this package that ships React/Next.js support -- with zero action on their part. This is the normal, widely-accepted ESLint-ecosystem convention that adding rules to a shared/recommended config is a minor bump even though it can newly trip an existing `--max-warnings 0` gate, not a breaking change; see [Optional React and Next.js support](#optional-react-and-nextjs-support) for the `react`/`nextjs` options to force it off explicitly if needed.
 
 ## Contributing
 
