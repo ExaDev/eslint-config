@@ -1,3 +1,10 @@
+## [2.10.1](https://github.com/ExaDev/eslint-config/compare/v2.10.0...v2.10.1) (2026-08-31)
+
+
+### Bug Fixes
+
+* compose js.configs.recommended inside recommendedTypeChecked ([ca23de1](https://github.com/ExaDev/eslint-config/commit/ca23de1816efcc083f4642661329fe52df9eaa89))
+
 # [2.10.0](https://github.com/ExaDev/eslint-config/compare/v2.9.1...v2.10.0) (2026-08-27)
 
 
