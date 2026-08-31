@@ -51,6 +51,12 @@ ruleTester.run('prefer-readonly-object-param', rule, {
     'type Foo = never; function f(x: Foo): void {}',
     // Regression: a named alias to a bare primitive keyword type (`string`) -- the SAME vacuous-empty-property-loop root cause as unknown/any/never above, not a special case of it: `checker.getPropertiesOfType`/`getIndexInfosOfType` report zero entries for the raw `string` type just as they do for `unknown`, since primitive-keyword types carry no `ts.TypeFlags.Object` either. Confirmed this exact case previously failed here too, proving the fix is a general "must be a genuinely concrete object type" gate rather than an `unknown`/`any`-only exclusion list.
     'type Foo = string; function f(x: Foo): void {}',
+    // Regression: a named alias to the `object` keyword type -- a THIRD flag family beyond the any/unknown/never and primitive-keyword cases above, since `object` carries `ts.TypeFlags.NonPrimitive` and appears in neither. It therefore pins the gate as the general "must carry `ts.TypeFlags.Object`" question rather than an exclusion list assembled from whichever families the cases above happen to name: a narrower gate spelled `Any | Unknown | Never | PRIMITIVE_LIKE_FLAGS` (reusing this rule's own existing constant, the obvious way to write that mistake) passes every case above yet still wrongly reports this one. Confirmed it did fire here before the gate existed -- though as a pure false positive rather than an unsound wrap: unlike `Readonly<unknown>`, `Readonly<object>` resolves straight back to `object` and accepts exactly what `object` accepted.
+    'type Foo = object; function f(x: Foo): void {}',
+    // Regression: a named alias to `void` -- `ts.TypeFlags.Void` sits outside PRIMITIVE_LIKE_FLAGS too (that constant covers only StringLike/NumberLike/BooleanLike/BigIntLike/ESSymbolLike/Null/Undefined), so like `object` above it is caught by the general Object gate and by no narrower flag list derived from the primitive cases. `Readonly<void>` also resolves back to `void`, so this was likewise a false positive rather than an unsound wrap.
+    'type Foo = void; function f(x: Foo): void {}',
+    // An unconstrained generic type parameter is out of scope: its real property set is not knowable at the declaration site, so flatness cannot be proven -- excluded by the `ts.TypeFlags.TypeParameter` check (and by the Object gate, which a type parameter never carries either).
+    'function f<T>(x: T): void {}',
   ],
   invalid: [
     // A flat inline object literal -- fixed by wrapping the whole literal in Readonly<...>.
@@ -105,6 +111,18 @@ ruleTester.run('prefer-readonly-object-param', rule, {
     {
       code: 'function f(x: { [key: string]: number }): void {}',
       output: 'function f(x: Readonly<{ [key: string]: number }>): void {}',
+      errors: [{ messageId: 'preferReadonlyObject' }],
+    },
+    // A mapped-type instantiation is a genuine object type and must still be reported -- the counterpart to the valid cases above, proving the `ts.TypeFlags.Object` gate excludes only non-object types rather than quietly narrowing the rule down to interfaces and inline literals. `Record<string, number>` resolves to a type carrying ObjectFlags.Mapped (not Interface or Anonymous, the two shapes every other invalid case here happens to produce), and its string index signature of primitives is flat exactly as the inline form above is. Confirmed the wrap is sound: `Readonly<Record<string, number>>` keeps the index signature, so a caller can still pass `{ k: 1 }`.
+    {
+      code: 'type Dict = Record<string, number>; function f(x: Dict): void {}',
+      output: 'type Dict = Record<string, number>; function f(x: Readonly<Dict>): void {}',
+      errors: [{ messageId: 'preferReadonlyObject' }],
+    },
+    // An OPTIONAL property resolves to `string | undefined`, which isFlatPropertyType's union recursion still counts as flat, so this is reported and wrapped like any other flat shape. Pinned because a `| undefined` member is exactly where an over-broad "reject anything that could be undefined" gate would wrongly go quiet: `Readonly<T>` is homomorphic, so it preserves the `?` modifier and leaves the `| undefined` intact (confirmed directly that `Readonly<{ a?: string }>` still accepts `{}`), and none of that resembles the way `Readonly<unknown>` collapses the top type.
+    {
+      code: 'type Opt = { a?: string }; function f(x: Opt): void {}',
+      output: 'type Opt = { a?: string }; function f(x: Readonly<Opt>): void {}',
       errors: [{ messageId: 'preferReadonlyObject' }],
     },
   ],
