@@ -43,6 +43,14 @@ ruleTester.run('prefer-readonly-object-param', rule, {
     'interface Foo { a: string; b: number } type ROFoo = Readonly<Foo>; function f(x: ROFoo): void {}',
     // A construct-signature-only type has zero named properties, so it is NOT flat despite vacuously passing the property loop -- confirmed directly that Readonly<{ new (): Date }> is a real compile error at the call site (`new x()`), since Readonly<T>'s mapped type drops construct signatures the same way it drops call signatures.
     'function f(x: { new (): Date }): Date { return new x(); }',
+    // Regression: a named alias to `unknown` -- confirmed as a real downstream defect (a consumer package's `EvaluationContext` parameter, typed `type EvaluationContext = unknown`, was wrapped in `Readonly<EvaluationContext>`; TypeScript's mapped-type machinery collapses `Readonly<unknown>` to `{}`, and `{}` rejects `undefined`, so the "fix" narrowed a type explicitly allowed to be `undefined` into one that isn't -- unsound, not merely redundant). `unknown` carries none of the object/array/tuple/callable/class/Map/Set flags this rule already excludes, and `checker.getPropertiesOfType`/`getIndexInfosOfType` both report zero entries for it -- not because it has no mutable state, but because it isn't an object type at all, so the old property/index-signature loop vacuously "passed" it. Confirmed this exact case previously failed here (flagged and autofixed to `Readonly<EvaluationContext>`) before the `ts.TypeFlags.Object` gate was added.
+    'type EvaluationContext = unknown; function f(x: EvaluationContext): void {}',
+    // Regression: a named alias to `any` -- the same vacuous-empty-property-loop mechanism as `unknown` above, and `Readonly<any>` is equally nonsensical (there is no genuine object shape to shallow-protect). Confirmed this exact case previously failed here too.
+    'type Foo = any; function f(x: Foo): void {}',
+    // Regression: a named alias to `never` -- the bottom type carries none of this rule's object-family flags either, and a parameter that can never actually be called with a value has no genuine object shape to wrap. Confirmed this exact case previously failed here too.
+    'type Foo = never; function f(x: Foo): void {}',
+    // Regression: a named alias to a bare primitive keyword type (`string`) -- the SAME vacuous-empty-property-loop root cause as unknown/any/never above, not a special case of it: `checker.getPropertiesOfType`/`getIndexInfosOfType` report zero entries for the raw `string` type just as they do for `unknown`, since primitive-keyword types carry no `ts.TypeFlags.Object` either. Confirmed this exact case previously failed here too, proving the fix is a general "must be a genuinely concrete object type" gate rather than an `unknown`/`any`-only exclusion list.
+    'type Foo = string; function f(x: Foo): void {}',
   ],
   invalid: [
     // A flat inline object literal -- fixed by wrapping the whole literal in Readonly<...>.
