@@ -1,3 +1,10 @@
+## [2.10.2](https://github.com/ExaDev/eslint-config/compare/v2.10.1...v2.10.2) (2026-08-31)
+
+
+### Bug Fixes
+
+* reject unknown/any/never/primitive aliases in prefer-readonly-object-param ([48862cc](https://github.com/ExaDev/eslint-config/commit/48862cc94d79aa17c40818e1eeedffe9a5f99edf))
+
 ## [2.10.1](https://github.com/ExaDev/eslint-config/compare/v2.10.0...v2.10.1) (2026-08-31)
 
 
