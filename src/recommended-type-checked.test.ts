@@ -31,6 +31,43 @@ function lint(code: string, filename: string) {
   return linter.verify(code, config, filename).map((message) => message.ruleId);
 }
 
+// Exercises the FULL exported array (unlike strictnessConfigs above, which deliberately slices to just the last two entries) -- this is what actually proves js.configs.recommended is both present and composed in the correct position ahead of strictTypeChecked/stylisticTypeChecked, not merely described as such in a comment.
+function lintFull(code: string, filename: string) {
+  const config: Linter.Config[] = [
+    {
+      files: ['**'],
+      languageOptions: {
+        sourceType: 'module',
+        parser: tseslint.parser,
+        parserOptions: {
+          projectService: { allowDefaultProject: ['src/foo.ts', 'src/foo.test.ts', 'src/foo.spec.ts'] },
+          tsconfigRootDir: import.meta.dirname,
+        },
+      },
+    },
+    ...recommendedTypeChecked,
+  ] as Linter.Config[];
+  return linter.verify(code, config, filename).map((message) => message.ruleId);
+}
+
+describe('js.configs.recommended composition', () => {
+  it('genuinely includes a js.configs.recommended-only rule (no-debugger), not merely claimed in a comment', () => {
+    expect(lintFull('debugger;\n', 'src/foo.ts')).toContain('no-debugger');
+  });
+
+  it('does not flag an interface method-signature parameter as unused under the base no-unused-vars rule', () => {
+    // This is the exact regression this test guards against: js.configs.recommended sets the base no-unused-vars, which has no TypeScript awareness and treats an interface method signature's parameter names as real bindings that must be "used" -- they are type positions, not bindings. strictTypeChecked deliberately turns the base rule off in favour of the TS-aware
+    // @typescript-eslint/no-unused-vars, but only if it is composed AFTER js.configs.recommended in
+    // the array; composed in the wrong order (or omitted entirely and left to the consumer), the base rule wins and fires here. Confirmed as a real, not merely theoretical, failure against a live consumer (json-operators) before this fix.
+    const diagnostics = lintFull(
+      'export interface Resolvers {\n  resolveValue: (key: string, context: unknown) => Promise<string>;\n}\n',
+      'src/foo.ts',
+    );
+    expect(diagnostics).not.toContain('no-unused-vars');
+    expect(diagnostics).not.toContain('@typescript-eslint/no-unused-vars');
+  });
+});
+
 describe('recommended-type-checked test-file relaxation', () => {
   it('bans @ts-expect-error outright outside test files, even with a description', () => {
     expect(lint('// @ts-expect-error a genuine reason\nconst x = 1;\n', 'src/foo.ts')).toContain('@typescript-eslint/ban-ts-comment');
