@@ -1,3 +1,10 @@
+## [2.10.4](https://github.com/ExaDev/eslint-config/compare/v2.10.3...v2.10.4) (2026-09-03)
+
+
+### Bug Fixes
+
+* **barrel-policy:** skip export statements inside ambient module declarations ([8047629](https://github.com/ExaDev/eslint-config/commit/80476292a55b01954b2f944581455a2ddd31b967))
+
 ## [2.10.3](https://github.com/ExaDev/eslint-config/compare/v2.10.2...v2.10.3) (2026-09-03)
 
 
