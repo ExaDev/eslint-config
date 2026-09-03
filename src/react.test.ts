@@ -43,6 +43,14 @@ describe('buildReactConfig', () => {
   it('enabled: true and the anchor is present -- succeeds, no throw', () => {
     expect(() => buildReactConfig({ enabled: true })).not.toThrow();
   });
+
+  it('pairs recommended with jsx-runtime: react-in-jsx-scope and jsx-uses-react are off, not merely absent', () => {
+    // The classic-runtime rules must be explicitly turned off (0/'off'), not just missing from the merged rules map -- 'missing' would mean flat/recommended never enabled them at all, which is a different (and false) claim than "jsx-runtime turned them back off after recommended turned them on".
+    const result = buildReactConfig();
+    const mergedRules = result.reduce<Record<string, unknown>>((acc, config) => ({ ...acc, ...config.rules }), {});
+    expect(mergedRules['react/react-in-jsx-scope']).toBe(0);
+    expect(mergedRules['react/jsx-uses-react']).toBe(0);
+  });
 });
 
 describe('buildReactConfig -- file-glob scoping proof (the false-positive-activation safety net)', () => {
@@ -68,5 +76,13 @@ describe('buildReactConfig -- file-glob scoping proof (the false-positive-activa
   it('reports NO react/ violation for the identical code when the file is .js', () => {
     const ruleIds = lint(jsxViolatingCode, 'component.js');
     expect(ruleIds.some((id) => id?.startsWith('react/') === true)).toBe(false);
+  });
+
+  // Regression test for the jsx-runtime pairing above: flat/recommended alone assumes the classic runtime and flags this exact, otherwise-correct component with react/react-in-jsx-scope; every React 17+ project (the automatic-runtime default, and the only mode Next.js's own compiler supports) writes JSX with no React import in scope at all.
+  it('reports NO react-in-jsx-scope for a component with no React import (the automatic JSX runtime)', () => {
+    const automaticRuntimeCode = 'export function Greeting() {\n  return <span>hi</span>;\n}\n';
+    const ruleIds = lint(automaticRuntimeCode, 'component.jsx');
+    expect(ruleIds).not.toContain('react/react-in-jsx-scope');
+    expect(ruleIds).not.toContain('react/jsx-uses-react');
   });
 });

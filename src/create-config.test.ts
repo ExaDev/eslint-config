@@ -10,7 +10,7 @@ describe('exadevConfig', () => {
 
   it('with no args, auto-detects against this repo\'s own real devDependencies (react + hooks + a11y + nextjs all installed for testing)', () => {
     // This repo's package.json installs eslint-plugin-react, eslint-plugin-react-hooks, eslint-plugin-jsx-a11y, and @next/eslint-plugin-next as real devDependencies specifically so this integration check runs against genuinely resolvable packages, not a simulated environment.
-    const REACT_FAMILY_BLOCK_COUNT = 3; // react, react-hooks, jsx-a11y
+    const REACT_FAMILY_BLOCK_COUNT = 4; // react, jsx-runtime, react-hooks, jsx-a11y
     const NEXTJS_BLOCK_COUNT = 1;
     const result = exadevConfig();
     expect(result).toHaveLength(recommendedTypeChecked.length + REACT_FAMILY_BLOCK_COUNT + NEXTJS_BLOCK_COUNT);

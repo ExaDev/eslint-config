@@ -113,6 +113,8 @@ export default tseslint.config(
    If none of these resolve, `@exadev/eslint-config`'s default export is byte-for-byte identical to the plain TypeScript ruleset -- nothing about the base package changes.
 2. **For React specifically, the file must actually be `.jsx`/`.tsx`.** The React/hooks/a11y rule block is scoped to `files: ['**/*.jsx', '**/*.tsx']`, so even if `eslint-plugin-react` is resolvable only incidentally (e.g. hoisted as a transitive dependency of something unrelated in a monorepo, with zero real JSX anywhere in the linted project), its rules are never matched against a file that isn't JSX -- ESLint's flat-config `files` matching happens per linted file, at lint time, not at config-build time. `@next/eslint-plugin-next`'s block carries no such glob: its own presence is already an unambiguous signal on its own (nothing installs it except a real Next.js project).
 
+React support pairs `eslint-plugin-react`'s `flat/recommended` with its own `flat/jsx-runtime` config, which turns `react/react-in-jsx-scope` and `react/jsx-uses-react` back off. `flat/recommended` alone assumes the classic runtime, where every file using JSX needs `import React` in scope; the automatic JSX runtime, the default since React 17 and the only mode Next.js's own compiler supports, needs no such import. Without this pairing, a consumer on the automatic runtime would see `react/react-in-jsx-scope` fire on every JSX file in the project.
+
 ### Explicit control
 
 Two ways to override the automatic behaviour, for anyone who doesn't want to rely on it:
