@@ -4,6 +4,7 @@ import {
   isDirectSibling,
   isIndexFile,
   isBarrelMode,
+  isInsideAmbientModuleDeclaration,
   isMainBarrel,
   isPermittedBarrel,
   isPureReexport,
@@ -87,7 +88,7 @@ const barrelPolicy: Rule.RuleModule = {
       ImportDeclaration: (node) => { detector.visitImport(node); },
       ExportNamedDeclaration(node) {
         detector.visitExportNamed(node);
-        if (hasSource(node)) {
+        if (hasSource(node) && !isInsideAmbientModuleDeclaration(node)) {
           const source = node.source === null || node.source === undefined ? undefined : node.source.value;
           if (!isPermittedBarrel(filename, mode)) {
             context.report({ node, messageId: 'reexportOutsideBarrel' });
@@ -97,6 +98,7 @@ const barrelPolicy: Rule.RuleModule = {
         }
       },
       ExportAllDeclaration(node) {
+        if (isInsideAmbientModuleDeclaration(node)) return;
         const source = node.source.value;
         if (!isPermittedBarrel(filename, mode)) {
           context.report({ node, messageId: 'reexportOutsideBarrel' });

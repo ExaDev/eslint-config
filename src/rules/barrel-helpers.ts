@@ -49,6 +49,27 @@ export function isPermittedBarrel(filename: string, mode: BarrelMode): boolean {
   return isIndexFile(filename);
 }
 
+interface AncestorNode {
+  readonly type: string;
+  readonly parent?: AncestorNode | null;
+}
+
+function isAncestorNode(value: unknown): value is AncestorNode {
+  if (typeof value !== 'object' || value === null) return false;
+  if (!('type' in value)) return false;
+  return typeof value.type === 'string';
+}
+
+// `declare module "..." { ... }` / `declare module Foo { ... }` (a TSModuleDeclaration) describes an external package's or a namespace's types -- it produces no real runtime import chain, so an `export * from`/`export { x } from` written purely inside one (routinely used to re-export an untyped package's own types under a new module name, e.g. `declare module "untyped-pkg" { export * from "typed-pkg"; }`) carries nothing for barrel-policy to protect against: nothing is actually imported or re-exported at runtime at that location, it exists solely to satisfy the type checker. Walks the loosely-typed AncestorNode shape (rather than ESLint core's own Node union, which has no TSModuleDeclaration member) so this stays parser-agnostic rather than asserting a TypeScript-specific node type.
+export function isInsideAmbientModuleDeclaration(node: unknown): boolean {
+  let current: unknown = node;
+  while (isAncestorNode(current)) {
+    if (current.type === 'TSModuleDeclaration') return true;
+    current = current.parent;
+  }
+  return false;
+}
+
 // ─── Node types ─── Derived from ESLint's own Rule.RuleListener via Parameters<>, never hand-written and never imported from @types/estree directly (this package does not otherwise depend on it). Pulling them out of no-non-barrel-reexport.ts into this shared module so the umbrella rule and the standalone rules share one source of truth for the ESTree shapes they walk.
 export type ExportNamedDeclarationNode = Parameters<NonNullable<Rule.RuleListener['ExportNamedDeclaration']>>[0];
 export type ExportSpecifierNode = ExportNamedDeclarationNode['specifiers'][number];

@@ -14,6 +14,23 @@ ruleTester.run('barrel-policy', rule, {
     { code: 'export const x = 1;', filename: './src/foo.ts', options: [{ mode: 'banned' }] },
     { code: 'export function f() { return 1; }', filename: './src/foo.ts', options: [{ mode: 'banned' }] },
 
+    // ─── 'banned': a re-export written purely inside an ambient module declaration (declare module) is a type-only shim for an external package's or namespace's shape, not a real re-exporting ES module -- no runtime import chain exists here for the rule to protect against. ───
+    {
+      code: 'declare module "untyped-pkg" { export * from "typed-pkg"; }',
+      filename: './src/types/untyped-pkg.d.ts',
+      options: [{ mode: 'banned' }],
+    },
+    {
+      code: 'declare module "untyped-pkg" { export { Foo } from "typed-pkg"; }',
+      filename: './src/types/untyped-pkg.d.ts',
+      options: [{ mode: 'banned' }],
+    },
+    {
+      code: 'declare module MyNamespace { export * from "./sibling"; }',
+      filename: './src/foo.ts',
+      options: [{ mode: 'banned' }],
+    },
+
     // ─── 'single': src/index.ts may be a pure-reexport barrel. ───
     { code: "export { foo } from './foo';", filename: './src/index.ts', options: [{ mode: 'single' }] },
     { code: "export * from './foo';\nexport { bar } from './bar';", filename: './src/index.ts', options: [{ mode: 'single' }] },
