@@ -32,6 +32,9 @@ export function buildReactConfig(options: ReactConfigOptions = {}): ConfigArrayV
   }
   if (reactConfig === undefined) return [];
 
+  // `flat/recommended` alone assumes the classic runtime, requiring `import React` in scope in every JSX file -- wrong for every React 17+ project using the automatic JSX runtime (the default since React 17, and the only option Next.js's own compiler supports). `flat/jsx-runtime` is eslint-plugin-react's own documented pairing for exactly this: it turns `react/react-in-jsx-scope` and `react/jsx-uses-react` back off. Spread after `reactConfig` so its `off` wins the per-rule merge.
+  const jsxRuntimeConfig = readFlatConfig(reactModule, ['configs', 'flat', 'jsx-runtime']);
+
   const hooksModule = tryRequire('eslint-plugin-react-hooks', options.requireFn);
   const hooksConfig =
     readFlatConfig(hooksModule, ['configs', 'flat', 'recommended-latest']) ?? readFlatConfig(hooksModule, ['configs', 'recommended-latest']);
@@ -40,5 +43,7 @@ export function buildReactConfig(options: ReactConfigOptions = {}): ConfigArrayV
   const a11yModule = tryRequire('eslint-plugin-jsx-a11y', options.requireFn);
   const a11yConfig = readFlatConfig(a11yModule, ['flatConfigs', 'recommended']);
 
-  return [reactConfig, hooksConfig, a11yConfig].filter(isFlatConfig).map((config) => ({ ...config, files: [...JSX_FILE_PATTERNS] }));
+  return [reactConfig, jsxRuntimeConfig, hooksConfig, a11yConfig]
+    .filter(isFlatConfig)
+    .map((config) => ({ ...config, files: [...JSX_FILE_PATTERNS] }));
 }
