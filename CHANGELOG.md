@@ -1,3 +1,10 @@
+## [2.10.3](https://github.com/ExaDev/eslint-config/compare/v2.10.2...v2.10.3) (2026-09-03)
+
+
+### Bug Fixes
+
+* **react:** pair flat/recommended with flat/jsx-runtime to support the automatic JSX runtime ([78dd6f8](https://github.com/ExaDev/eslint-config/commit/78dd6f898bd7f41494f6fe675e94b2e0f226d089))
+
 ## [2.10.2](https://github.com/ExaDev/eslint-config/compare/v2.10.1...v2.10.2) (2026-08-31)
 
 
