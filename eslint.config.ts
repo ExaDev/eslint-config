@@ -21,4 +21,14 @@ export default [
       'exadev/barrel-policy': ['error', { mode: 'single' }],
     },
   },
+  {
+    // src/to-public-config-array.ts's one line is the sole, verified-necessary use of a type assertion in this codebase (see PublicConfigArray's own comment in src/config-types.ts) -- noInlineConfig rules out an inline disable, so this scoped override is the only mechanism available, and isolating the cast into its own single-purpose file keeps the override's blast radius to exactly that one line rather than a whole file that does other things too.
+    files: ['src/to-public-config-array.ts'],
+    rules: { '@typescript-eslint/consistent-type-assertions': 'off' },
+  },
+  {
+    // src/consumer-compatibility.ts deliberately exercises tseslint.config() (now @deprecated) to prove this package's exported array still satisfies it, so existing consumers who haven't migrated to defineConfig() keep working -- see that file's own comment.
+    files: ['src/consumer-compatibility.ts'],
+    rules: { '@typescript-eslint/no-deprecated': 'off' },
+  },
 ];
