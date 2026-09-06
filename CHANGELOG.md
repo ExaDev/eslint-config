@@ -1,3 +1,10 @@
+## [2.10.5](https://github.com/ExaDev/eslint-config/compare/v2.10.4...v2.10.5) (2026-09-06)
+
+
+### Bug Fixes
+
+* retype the exported config array against @eslint/core, not typescript-eslint ([13d767e](https://github.com/ExaDev/eslint-config/commit/13d767e3a171b80b205409ceaf2ecc99cc0ca96f))
+
 ## [2.10.4](https://github.com/ExaDev/eslint-config/compare/v2.10.3...v2.10.4) (2026-09-03)
 
 
