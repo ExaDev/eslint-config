@@ -1,11 +1,12 @@
 import type { TSESLint } from '@typescript-eslint/utils';
 import { describe, expect, it } from 'vitest';
 import { exadevConfig } from './create-config';
+import jsdocAndTsdoc from './jsdoc';
 import recommendedTypeChecked from './recommended-type-checked';
 
 describe('exadevConfig', () => {
-  it('with both features forced off, returns exactly the base recommendedTypeChecked length, regardless of what is installed', () => {
-    expect(exadevConfig({ react: false, nextjs: false })).toHaveLength(recommendedTypeChecked.length);
+  it('with both features forced off, returns exactly the base recommendedTypeChecked plus jsdocAndTsdoc length, regardless of what is installed', () => {
+    expect(exadevConfig({ react: false, nextjs: false })).toHaveLength(recommendedTypeChecked.length + jsdocAndTsdoc.length);
   });
 
   it('with no args, auto-detects against this repo\'s own real devDependencies (react + hooks + a11y + nextjs all installed for testing)', () => {
@@ -13,7 +14,7 @@ describe('exadevConfig', () => {
     const REACT_FAMILY_BLOCK_COUNT = 4; // react, jsx-runtime, react-hooks, jsx-a11y
     const NEXTJS_BLOCK_COUNT = 1;
     const result = exadevConfig();
-    expect(result).toHaveLength(recommendedTypeChecked.length + REACT_FAMILY_BLOCK_COUNT + NEXTJS_BLOCK_COUNT);
+    expect(result).toHaveLength(recommendedTypeChecked.length + jsdocAndTsdoc.length + REACT_FAMILY_BLOCK_COUNT + NEXTJS_BLOCK_COUNT);
   });
 
   it('appends trailing user configs, in order, after everything else', () => {
