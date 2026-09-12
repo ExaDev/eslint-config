@@ -57,6 +57,22 @@ jobs:
       - run: pnpm build
       - run: pnpm exec attw --pack
 
+  required-checks:
+    name: Required Checks
+    needs: [commitlint, lint, typecheck]
+    # Always runs, even if a dependency failed, so it can report that failure itself rather than being skipped -- a required check that's silently absent blocks a PR indefinitely instead of failing it visibly.
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fail if any required job failed or was cancelled
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            echo "One or more required jobs did not succeed:"
+            echo '${{ toJSON(needs) }}'
+            exit 1
+          fi
+
   release:
     name: Release
     needs: [commitlint, lint, typecheck]
