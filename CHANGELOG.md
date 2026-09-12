@@ -1,3 +1,17 @@
+# [2.11.0](https://github.com/ExaDev/eslint-config/compare/v2.10.6...v2.11.0) (2026-09-12)
+
+
+### Bug Fixes
+
+* **ci:** push release commits over SSH using a deploy key ([7f3beb0](https://github.com/ExaDev/eslint-config/commit/7f3beb0b8aab12cff9fbbd4139da228f821fc784))
+* **ci:** rewrite release pushes to SSH so the deploy key actually authenticates ([ab43046](https://github.com/ExaDev/eslint-config/commit/ab43046543f5cdbf1c79df0b28bc8eb59d2e741e))
+* **release:** push over SSH via repositoryUrl, not a git config rewrite ([a402b71](https://github.com/ExaDev/eslint-config/commit/a402b71656335637250874701bb81040bc448815))
+
+
+### Features
+
+* validate JSDoc/TSDoc quality on existing doc comments ([fb17d2a](https://github.com/ExaDev/eslint-config/commit/fb17d2a677057b049c236b67a004c797944f3902))
+
 ## [2.10.6](https://github.com/ExaDev/eslint-config/compare/v2.10.5...v2.10.6) (2026-09-06)
 
 ## [2.10.5](https://github.com/ExaDev/eslint-config/compare/v2.10.4...v2.10.5) (2026-09-06)
