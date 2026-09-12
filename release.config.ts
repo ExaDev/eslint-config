@@ -29,6 +29,8 @@ export const commitTypes: readonly CommitType[] = [
  */
 const config: Options = {
   branches: ['main'],
+  // Deliberately the SSH form, not package.json's own git+https:// repository field (that field stays https:// -- it's public consumer-facing metadata, unrelated to how this release pushes). semantic-release only embeds an x-access-token:$GITHUB_TOKEN@ credential into an https:// repositoryUrl; the default GITHUB_TOKEN it would embed has no way to bypass main's branch ruleset. An SSH URL skips that embedding entirely and pushes using whatever key actions/checkout's ssh-key input already wired into core.sshCommand -- the deploy key added as a DeployKey bypass actor on the ruleset.
+  repositoryUrl: 'git@github.com:ExaDev/eslint-config.git',
   plugins: [
     [
       '@semantic-release/commit-analyzer',
