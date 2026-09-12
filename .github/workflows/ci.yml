@@ -94,6 +94,9 @@ jobs:
           # semantic-release analyses the full commit history since the last release.
           fetch-depth: 0
           ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
+          # ssh-key only wires the deploy key into core.sshCommand for actions/checkout's own git commands -- it does not rewrite the "origin" remote or any later command's push URL. @semantic-release/git constructs its push against a plain https://github.com/... URL, which persist-credentials would otherwise satisfy with the default GITHUB_TOKEN instead of the deploy key, so that credential is turned off and every https://github.com/ URL is rewritten to the SSH form the deploy key actually authenticates.
+          persist-credentials: false
+      - run: git config --global url."git@github.com:".insteadOf "https://github.com/"
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
