@@ -88,15 +88,13 @@ jobs:
       published: ${{ steps.before.outputs.version != steps.after.outputs.version }}
       version: ${{ steps.after.outputs.version }}
     steps:
-      # main's own ruleset requires the "Required Checks" status and blocks direct pushes, and the default GITHUB_TOKEN has no way to bypass a repository ruleset (GitHub doesn't support naming the github-actions[bot] identity as a bypass actor at all) -- so semantic-release's own release-commit/tag push needs a bypass identity. A deploy key with write access, added as a DeployKey bypass actor on the ruleset, is the lightest-weight one: repo-scoped, no GitHub App installation to manage, no personal/org-admin credential involved.
+      # main's own ruleset requires the "Required Checks" status and blocks direct pushes, and the default GITHUB_TOKEN has no way to bypass a repository ruleset (GitHub doesn't support naming the github-actions[bot] identity as a bypass actor at all) -- so semantic-release's own release-commit/tag push needs a bypass identity. A deploy key with write access, added as a DeployKey bypass actor on the ruleset, is the lightest-weight one: repo-scoped, no GitHub App installation to manage, no personal/org-admin credential involved. ssh-key only wires the key into core.sshCommand for later git commands to use -- release.config.ts's own repositoryUrl is what actually makes semantic-release's push go out over SSH instead of an https:// URL with the default GITHUB_TOKEN embedded.
       - uses: actions/checkout@v7
         with:
           # semantic-release analyses the full commit history since the last release.
           fetch-depth: 0
           ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
-          # ssh-key only wires the deploy key into core.sshCommand for actions/checkout's own git commands -- it does not rewrite the "origin" remote or any later command's push URL. @semantic-release/git constructs its push against a plain https://github.com/... URL, which persist-credentials would otherwise satisfy with the default GITHUB_TOKEN instead of the deploy key, so that credential is turned off and every https://github.com/ URL is rewritten to the SSH form the deploy key actually authenticates.
           persist-credentials: false
-      - run: git config --global url."git@github.com:".insteadOf "https://github.com/"
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
