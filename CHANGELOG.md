@@ -1,3 +1,10 @@
+## [2.12.3](https://github.com/ExaDev/eslint-config/compare/v2.12.2...v2.12.3) (2026-09-14)
+
+
+### Bug Fixes
+
+* scope every unscoped rule block to JS/TS files ([8bc2222](https://github.com/ExaDev/eslint-config/commit/8bc2222c99cfc60ae19ede43a042199187fbffc3))
+
 ## [2.12.2](https://github.com/ExaDev/eslint-config/compare/v2.12.1...v2.12.2) (2026-09-14)
 
 ## [2.12.1](https://github.com/ExaDev/eslint-config/compare/v2.12.0...v2.12.1) (2026-09-14)
