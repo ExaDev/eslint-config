@@ -1,3 +1,10 @@
+## [2.12.1](https://github.com/ExaDev/eslint-config/compare/v2.12.0...v2.12.1) (2026-09-14)
+
+
+### Bug Fixes
+
+* pin eslint-plugin-jsdoc to an exact, already-mature version ([81c6f76](https://github.com/ExaDev/eslint-config/commit/81c6f767dd331b24621b8ba2b1d28ee17d4940cf))
+
 # [2.12.0](https://github.com/ExaDev/eslint-config/compare/v2.11.0...v2.12.0) (2026-09-14)
 
 
