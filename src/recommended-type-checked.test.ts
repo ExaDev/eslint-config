@@ -1,5 +1,6 @@
 import type { Linter } from 'eslint';
 import { Linter as LinterClass } from 'eslint';
+import json from '@eslint/json';
 import tseslint from 'typescript-eslint';
 import { describe, expect, it } from 'vitest';
 import recommendedTypeChecked from './recommended-type-checked';
@@ -142,5 +143,42 @@ describe('max-lines', () => {
   it('does not count blank lines or comment-only lines toward the limit', () => {
     const code = `${'\n// a comment\n'.repeat(NON_CODE_LINE_COUNT)}${generateLinesOfCode(1)}\n`;
     expect(lint(code, 'src/foo.ts')).not.toContain('max-lines');
+  });
+});
+
+// A consumer commonly lints other languages (JSON, Markdown) alongside this package's default export in the same flat-config array, each under its own `language` plugin. Every block in recommendedTypeChecked must therefore be scoped to JS/TS files specifically -- an unscoped block (js.configs.recommended shipped with none at all, confirmed directly) is matched against every file ESLint lints regardless of language, and at least one of its rules doesn't merely misfire against a non-ESTree source, it throws: no-irregular-whitespace calls sourceCode.getAllComments(), a method the JSON language's own source-code object doesn't implement. Reproduces the real consumer failure (agent-comms, linting **/*.json via @eslint/json alongside this package) rather than asserting scoping as an implementation detail.
+describe('file scoping against a non-JS/TS language in the same config array', () => {
+  function lintJsonAlongsideRecommended(code: string): Linter.LintMessage[] {
+    const config: Linter.Config[] = [
+      ...recommendedTypeChecked,
+      {
+        files: ['**/*.json'],
+        language: 'json/json',
+        plugins: { json },
+      },
+    ] as Linter.Config[];
+    return linter.verify(code, config, 'src/foo.json');
+  }
+
+  it('does not throw when linting a JSON file alongside this package\'s default export', () => {
+    expect(() => lintJsonAlongsideRecommended('{"a": 1}')).not.toThrow();
+  });
+
+  it('reports no JS/TS-scoped rule violations against JSON content', () => {
+    // A trailing comma and a duplicate key are genuine JSON-language violations (of json/json's own rules, not this package's) -- present only to confirm the linter actually ran and produced messages, not that it silently skipped the file. None of the message ruleIds may belong to this package's JS/TS-only rule set (@typescript-eslint/*, exadev/*, jsdoc/*, tsdoc/*, or unprefixed core rules like no-irregular-whitespace/max-lines/no-warning-comments), since none of those describe anything a JSON document could ever violate.
+    const messages = lintJsonAlongsideRecommended('{"a": 1, "a": 2}');
+    const jsScopedRuleId = messages.find((message) => {
+      const ruleId = message.ruleId ?? '';
+      return (
+        ruleId.startsWith('@typescript-eslint/')
+        || ruleId.startsWith('exadev/')
+        || ruleId.startsWith('jsdoc/')
+        || ruleId.startsWith('tsdoc/')
+        || ruleId === 'no-irregular-whitespace'
+        || ruleId === 'max-lines'
+        || ruleId === 'no-warning-comments'
+      );
+    });
+    expect(jsScopedRuleId).toBeUndefined();
   });
 });
