@@ -101,3 +101,46 @@ describe('recommended-type-checked test-file relaxation', () => {
     expect(lint('const x = <number>1;\n', 'src/foo.test.ts')).toContain('@typescript-eslint/consistent-type-assertions');
   });
 });
+
+describe('no-warning-comments (Stryker suppression comments)', () => {
+  it('bans a Stryker disable-next-line comment', () => {
+    expect(lint('// Stryker disable next-line all\nconst x = 1;\n', 'src/foo.ts')).toContain('no-warning-comments');
+  });
+
+  it('bans a Stryker disable comment scoped to a mutator list', () => {
+    expect(lint('// Stryker disable all: reason\nconst x = 1;\n', 'src/foo.ts')).toContain('no-warning-comments');
+  });
+
+  it('matches case-insensitively', () => {
+    expect(lint('// stryker DISABLE all\nconst x = 1;\n', 'src/foo.ts')).toContain('no-warning-comments');
+  });
+
+  it('does not flag an unrelated comment', () => {
+    expect(lint('// a perfectly ordinary comment\nconst x = 1;\n', 'src/foo.ts')).not.toContain('no-warning-comments');
+  });
+});
+
+// Matches the `max: 800` configured on the rule under test above.
+const MAX_LINES = 800;
+// Comfortably more blank/comment lines than MAX_LINES, to prove they are never counted no matter how many pile up.
+const NON_CODE_LINE_COUNT = MAX_LINES * 2;
+
+// Each generated line declares a uniquely-named const -- a repeated `const x = 1;` would itself be a parse error (redeclaration in the same scope), which would mask what these tests actually check.
+function generateLinesOfCode(count: number): string {
+  return Array.from({ length: count }, (_, index) => `const generatedLine${String(index)} = ${String(index)};`).join('\n');
+}
+
+describe('max-lines', () => {
+  it('bans a file over 800 real lines of code', () => {
+    expect(lint(generateLinesOfCode(MAX_LINES + 1), 'src/foo.ts')).toContain('max-lines');
+  });
+
+  it('allows a file at or under 800 real lines of code', () => {
+    expect(lint(generateLinesOfCode(MAX_LINES), 'src/foo.ts')).not.toContain('max-lines');
+  });
+
+  it('does not count blank lines or comment-only lines toward the limit', () => {
+    const code = `${'\n// a comment\n'.repeat(NON_CODE_LINE_COUNT)}${generateLinesOfCode(1)}\n`;
+    expect(lint(code, 'src/foo.ts')).not.toContain('max-lines');
+  });
+});
