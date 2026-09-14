@@ -42,6 +42,13 @@ export function isBarrelMode(value: unknown): value is BarrelMode {
   return value === 'banned' || value === 'single' || value === 'siblings';
 }
 
+// The umbrella rule's own JSON `mode` option, before 'auto' is resolved down to a concrete BarrelMode. 'auto' has no fourth branch anywhere downstream of readMode in barrel-policy.ts -- it always resolves to 'banned' or 'single' via resolveAutoMode (see barrel-auto-detect.ts) before create()'s own mode-dispatch logic ever sees it, so BarrelMode itself stays exactly the three concrete values every existing branch already switches on.
+export type RawBarrelMode = BarrelMode | 'auto';
+
+export function isRawBarrelMode(value: unknown): value is RawBarrelMode {
+  return value === 'auto' || isBarrelMode(value);
+}
+
 // Whether the file at `filename` is a permitted barrel under the given mode. 'banned' permits none; 'single' permits only src/index.ts; 'siblings' permits any index file.
 export function isPermittedBarrel(filename: string, mode: BarrelMode): boolean {
   if (mode === 'banned') return false;
