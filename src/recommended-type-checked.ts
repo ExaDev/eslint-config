@@ -79,6 +79,10 @@ const recommendedTypeChecked: ConfigArrayValue = [
       '@typescript-eslint/strict-void-return': 'error',
       // A switch over a union or enum missing a member, with no default to fall back on, silently does nothing for the missing case instead of erroring.
       '@typescript-eslint/switch-exhaustiveness-check': 'error',
+      // A file over 800 lines is a signal to split it, not a target to hit exactly -- `skipBlankLines`/`skipComments` count only real code, so a file isn't pushed over the limit by whitespace or the WHY-explanations this codebase's own conventions require.
+      'max-lines': ['error', { max: 800, skipBlankLines: true, skipComments: true }],
+      // A Stryker mutation-testing suppression comment (its own `disable`/`disable next-line` directive, always led by the tool's own name) silences coverage for the line(s) it annotates -- unlike an eslint-disable comment (already banned outright by noInlineConfig above), ESLint has no native awareness of Stryker's own comment syntax, so it is otherwise invisible to lint. `location: 'anywhere'` matches the term wherever it falls in the comment (Stryker's own syntax always trails it with a mutator list, `all`, or a reason), not only at the very start.
+      'no-warning-comments': ['error', { terms: ['stryker disable'], location: 'anywhere' }],
     },
   },
   {
