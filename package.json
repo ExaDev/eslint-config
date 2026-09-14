@@ -100,7 +100,7 @@
   "dependencies": {
     "@eslint/js": "^10.0.1",
     "@typescript-eslint/utils": "^8.67.0",
-    "eslint-plugin-jsdoc": "^64.3.9",
+    "eslint-plugin-jsdoc": "64.3.6",
     "eslint-plugin-tsdoc": "^0.5.2",
     "ts-api-utils": "^2.5.0"
   }
