@@ -1,10 +1,16 @@
-import { RuleTester } from 'eslint';
+import { Linter, RuleTester } from 'eslint';
 import tseslint from 'typescript-eslint';
-import rule from './barrel-policy';
+import { describe, expect, it } from 'vitest';
+import rule, { createBarrelPolicyRule } from './barrel-policy';
 
 const ruleTester = new RuleTester({
   languageOptions: { parser: tseslint.parser, sourceType: 'module' },
 });
+
+// A fake package.json shaped like a genuine publish-shaped entry point (real exports) -- resolves 'auto' to 'single'.
+const autoResolvesToSingle = createBarrelPolicyRule(() => ({ exports: { '.': './dist/index.js' } }));
+// No ancestor package.json at all -- resolves 'auto' to 'banned', the same conservative default a package with neither exports nor main gets.
+const autoResolvesToBanned = createBarrelPolicyRule(() => undefined);
 
 // The umbrella rule selects one of three complete index-file policies via { mode }. Each mode is exercised against the constructs that define it: which files may be barrels, what a barrel may contain, and where a barrel's re-exports may come from. The rule itself needs no type information -- it walks plain import/export/declaration nodes -- so no projectService/parserOptions.project is configured here.
 
@@ -126,4 +132,69 @@ ruleTester.run('barrel-policy', rule, {
       errors: [{ messageId: 'reexportOutsideBarrel' }],
     },
   ],
+});
+
+// 'auto' (and its two spellings of "unset": no options item at all, and an options object present with no `mode` key) resolves per file via the injected ReadPackageJsonFn -- exercised here against a resolver standing in for a publish-shaped package (real exports -> 'single'). Mirrors the 'single'-mode cases above one-for-one, since that is the concrete policy 'auto' resolves to for this resolver.
+ruleTester.run('barrel-policy (auto -> single)', autoResolvesToSingle, {
+  valid: [
+    { code: "export { foo } from './foo';", filename: './src/index.ts' },
+    { code: "export { foo } from './foo';", filename: './src/index.ts', options: [{}] },
+    { code: "export { foo } from './foo';", filename: './src/index.ts', options: [{ mode: 'auto' }] },
+    { code: 'export const x = 1;', filename: './src/foo.ts' },
+  ],
+  invalid: [
+    {
+      code: 'export {};',
+      filename: './src/sub/index.ts',
+      errors: [{ messageId: 'nonMainIndexFile' }],
+    },
+    {
+      code: 'export const x = 1;',
+      filename: './src/index.ts',
+      options: [{}],
+      errors: [{ messageId: 'sideEffectInBarrel' }],
+    },
+    {
+      code: "export { foo } from './foo';",
+      filename: './src/foo.ts',
+      options: [{ mode: 'auto' }],
+      errors: [{ messageId: 'reexportOutsideBarrel' }],
+    },
+  ],
+});
+
+// Same three "unset" spellings, this time against a resolver standing in for a package with no ancestor package.json at all -- 'auto' resolves to 'banned', identical to the pre-'auto' hardcoded default. Mirrors the 'banned'-mode cases above one-for-one.
+ruleTester.run('barrel-policy (auto -> banned)', autoResolvesToBanned, {
+  valid: [
+    { code: 'export const x = 1;', filename: './src/foo.ts' },
+    { code: 'export const x = 1;', filename: './src/foo.ts', options: [{}] },
+    { code: 'export const x = 1;', filename: './src/foo.ts', options: [{ mode: 'auto' }] },
+  ],
+  invalid: [
+    {
+      code: 'export {};',
+      filename: './src/index.ts',
+      options: [{}],
+      errors: [{ messageId: 'indexFileBanned' }],
+    },
+    {
+      code: "export { foo } from './foo';",
+      filename: './src/foo.ts',
+      options: [{ mode: 'auto' }],
+      errors: [{ messageId: 'reexportOutsideBarrel' }],
+    },
+  ],
+});
+
+describe('barrel-policy invalid mode option', () => {
+  it('throws when mode is present but not one of the recognized raw literals', () => {
+    const linter = new Linter();
+    expect(() =>
+      linter.verify('export {};', {
+        plugins: { exadev: { rules: { 'barrel-policy': rule } } },
+        rules: { 'exadev/barrel-policy': ['error', { mode: 'nonsense' }] },
+        languageOptions: { parser: tseslint.parser, sourceType: 'module' },
+      }),
+    ).toThrow();
+  });
 });
