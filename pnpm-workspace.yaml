@@ -1,2 +1,4 @@
 # This is a single-package repo, not a real pnpm workspace -- packages is deliberately empty. Its only purpose is to give turbo a workspace root to anchor local task caching against (see the turbo-task-caching-without-a-real-workspace pattern), matching every other repo in this family.
 packages: []
+# Every dependency add/update writes an exact version, never a ^/~ range -- a floating range lets a routine `pnpm install` silently resolve to a version nobody has reviewed, which is exactly how this repo ended up depending on a too-new, not-yet-mature eslint-plugin-jsdoc release. Pinning exact means a version bump is always a deliberate, reviewable diff.
+saveExact: true
