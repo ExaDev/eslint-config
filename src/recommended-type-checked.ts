@@ -34,8 +34,8 @@ const recommendedTypeChecked: ConfigArrayValue = [
     plugins: { exadev: plugin },
     linterOptions: { noInlineConfig: true },
     rules: {
-      // The recommended barrel policy is 'banned' (no index files at all). A published package whose src/index.ts is its package entry point overrides this to `{ mode: 'single' }` in its own eslint.config.ts — one line, since flat-config later blocks override earlier rule settings.
-      'exadev/barrel-policy': ['error', { mode: 'banned' }],
+      // No options object: an omitted `mode` resolves to 'auto', which decides per file by walking up to the nearest ancestor package.json and checking for a real `exports`/`main` — a package that looks like a genuine importable entry point gets 'single', everything else gets 'banned' (see barrel-auto-detect.ts). This is what makes the default export barrel-aware with zero config on the consumer's side: a published package's src/index.ts is permitted automatically, and an internal, non-exported package is banned exactly as before. A consumer who wants a fixed policy regardless of its own package.json shape still overrides with an explicit `{ mode: 'banned' | 'single' | 'siblings' }` in its own eslint.config.ts.
+      'exadev/barrel-policy': 'error',
       'exadev/no-array-isarray-mutation': 'error',
       'exadev/no-enum-number-widening': 'error',
       'exadev/no-enum-reverse-lookup-widening': 'error',

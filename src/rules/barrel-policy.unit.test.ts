@@ -1,19 +1,19 @@
 import { Linter, RuleTester } from 'eslint';
 import { describe, expect, it } from 'vitest';
 import tseslint from 'typescript-eslint';
-import rule, { readMode } from './barrel-policy';
+import rule, { createBarrelPolicyRule, readMode } from './barrel-policy';
 
 describe('readMode', () => {
-  it('throws for missing options — a safety net behind the rule schema, which real linting always enforces first', () => {
-    expect(() => readMode(undefined)).toThrow(/exadev\/barrel-policy requires options/);
+  it("returns 'auto' for missing options — an omitted mode is nothing stated, not a misconfiguration", () => {
+    expect(readMode(undefined)).toBe('auto');
+  });
+
+  it("returns 'auto' for an object with no mode key — the same omission under a different spelling", () => {
+    expect(readMode({})).toBe('auto');
   });
 
   it('throws for a non-object options value', () => {
     expect(() => readMode('banned')).toThrow(/exadev\/barrel-policy requires options/);
-  });
-
-  it('throws for an object missing the mode key', () => {
-    expect(() => readMode({})).toThrow(/exadev\/barrel-policy requires options/);
   });
 
   it('throws for an invalid mode value', () => {
@@ -24,6 +24,11 @@ describe('readMode', () => {
     expect(readMode({ mode: 'single' })).toBe('single');
   });
 });
+
+// A fake package.json shaped like a genuine publish-shaped entry point (real exports) — resolves 'auto' to 'single'.
+const autoResolvesToSingle = createBarrelPolicyRule(() => ({ exports: { '.': './dist/index.js' } }));
+// No ancestor package.json at all — resolves 'auto' to 'banned', the same conservative default a package with neither exports nor main gets.
+const autoResolvesToBanned = createBarrelPolicyRule(() => undefined);
 
 const ruleTester = new RuleTester({
   languageOptions: { parser: tseslint.parser, sourceType: 'module' },
@@ -38,13 +43,19 @@ function lintWithOptions(options: unknown): void {
 }
 
 describe('barrel-policy schema', () => {
-  it('rejects an options object missing the required mode key at the schema level, before create() ever runs', () => {
+  it('accepts an options object with no mode key at the schema level — the omission resolves to auto, so there is nothing to reject', () => {
     expect(() => {
       lintWithOptions({});
-    }).toThrow(/required property 'mode'/);
+    }).not.toThrow();
   });
 
-  it('rejects a mode value outside the banned/single/siblings enum at the schema level, before create() ever runs', () => {
+  it("accepts 'auto' itself at the schema level, like the three concrete literals", () => {
+    expect(() => {
+      lintWithOptions({ mode: 'auto' });
+    }).not.toThrow();
+  });
+
+  it('rejects a mode value outside the banned/single/siblings/auto enum at the schema level, before create() ever runs', () => {
     expect(() => {
       lintWithOptions({ mode: 'nonsense' });
     }).toThrow(/should be equal to one of the allowed values/);
@@ -269,6 +280,58 @@ ruleTester.run('barrel-policy', rule, {
         { messageId: 'sideEffectInBarrel', data: { description: 'ExportDefaultDeclaration' } },
         { messageId: 'notADirectSibling', data: { source: '../up' } },
       ],
+    },
+  ],
+});
+
+// 'auto' (and its two spellings of "unset": no options item at all, and an options object present with no `mode` key) resolves per file via the injected ReadPackageJsonFn — exercised here against a resolver standing in for a publish-shaped package (real exports, so 'single'). Mirrors the 'single'-mode cases above one-for-one, since that is the concrete policy 'auto' resolves to for this resolver.
+ruleTester.run('barrel-policy (auto -> single)', autoResolvesToSingle, {
+  valid: [
+    { code: "export { foo } from './foo';", filename: './src/index.ts' },
+    { code: "export { foo } from './foo';", filename: './src/index.ts', options: [{}] },
+    { code: "export { foo } from './foo';", filename: './src/index.ts', options: [{ mode: 'auto' }] },
+    { code: 'export const x = 1;', filename: './src/foo.ts' },
+  ],
+  invalid: [
+    {
+      code: 'export {};',
+      filename: './src/sub/index.ts',
+      errors: [{ messageId: 'nonMainIndexFile' }],
+    },
+    {
+      code: 'export const x = 1;',
+      filename: './src/index.ts',
+      options: [{}],
+      errors: [{ messageId: 'sideEffectInBarrel' }],
+    },
+    {
+      code: "export { foo } from './foo';",
+      filename: './src/foo.ts',
+      options: [{ mode: 'auto' }],
+      errors: [{ messageId: 'reexportOutsideBarrel' }],
+    },
+  ],
+});
+
+// Same three "unset" spellings, this time against a resolver standing in for a package with no ancestor package.json at all — 'auto' resolves to 'banned', identical to the pre-'auto' hardcoded default. Mirrors the 'banned'-mode cases above one-for-one.
+ruleTester.run('barrel-policy (auto -> banned)', autoResolvesToBanned, {
+  valid: [
+    { code: 'export const x = 1;', filename: './src/foo.ts' },
+    { code: 'export const x = 1;', filename: './src/foo.ts', options: [{}] },
+    { code: 'export const x = 1;', filename: './src/foo.ts', options: [{ mode: 'auto' }] },
+  ],
+  invalid: [
+    {
+      code: 'export {};',
+      filename: './src/index.ts',
+      options: [{}],
+      errors: [{ messageId: 'indexFileBanned' }],
+    },
+    {
+      code: "export { foo } from './foo';",
+      filename: './src/foo.ts',
+      options: [{ mode: 'auto' }],
+      errors: [{ messageId: 'reexportOutsideBarrel' }],
     },
   ],
 });
