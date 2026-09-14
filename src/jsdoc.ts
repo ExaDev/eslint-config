@@ -2,6 +2,9 @@ import jsdoc from 'eslint-plugin-jsdoc';
 import tsdoc from 'eslint-plugin-tsdoc';
 import type { ConfigArrayValue } from './config-types';
 
+// Neither jsdoc.configs['flat/recommended-tsdoc-error'] nor eslint-plugin-tsdoc's own rules carry a `files` key (confirmed directly against both packages) -- a doc-comment rule only makes sense against JS/TS source, but left unscoped it still gets matched against every other language a consumer lints in the same array (JSON, Markdown), which is at best a silent no-op and at worst a parser mismatch. Matches the identical fix and reasoning in recommended-type-checked.ts.
+const JS_TS_FILE_PATTERNS = '**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}';
+
 // eslint-plugin-jsdoc's own `flat/recommended-tsdoc-error` (not the plain `flat/recommended-typescript-error`) is the right base for this package: it is the variant tuned to not fight a TSDoc-flavoured comment style (the `{@link Foo}` inline tag and `@remarks`/`@example` block tags this package's own global comment convention already asks for), where the plain typescript variant instead expects classic JSDoc phrasing. The `-error` suffix (over the bare `flat/recommended-tsdoc`) matches this file's own all-`error` severities elsewhere in the package -- nothing here is a `warn`, so a jsdoc violation should not be the one exception. `flat/recommended-tsdoc-error` is itself a single flat config object, not an array (confirmed directly), hence the object-literal merge below rather than a spread.
 const jsdocConfig = jsdoc.configs['flat/recommended-tsdoc-error'];
 
@@ -29,6 +32,7 @@ const REQUIREMENTS_TIER_RULES = [
 
 const jsdocAndTsdoc: ConfigArrayValue = [
   {
+    files: [JS_TS_FILE_PATTERNS],
     ...jsdocConfig,
     rules: {
       ...jsdocConfig.rules,
@@ -37,6 +41,7 @@ const jsdocAndTsdoc: ConfigArrayValue = [
   },
   {
     // eslint-plugin-tsdoc ships no `configs` export at all (confirmed: its only export is `{ rules: { syntax } }`), so the plugin registration and the rule's severity are both set by hand here rather than spread from a preset. `tsdoc/syntax` validates that a doc comment's tags and inline references actually parse as valid TSDoc -- a check eslint-plugin-jsdoc itself does not perform, since it validates JSDoc's own (looser) grammar, not the TSDoc spec a `{@link}`/`@remarks`-style comment is written against.
+    files: [JS_TS_FILE_PATTERNS],
     plugins: { tsdoc },
     rules: {
       'tsdoc/syntax': 'error',

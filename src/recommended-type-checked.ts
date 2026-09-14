@@ -16,11 +16,20 @@ import plugin from './plugin';
 // A single brace-expansion glob rather than a flat array of near-duplicate strings -- confirmed against ESLint's own flat-config file matcher (minimatch) that brace expansion resolves correctly (src/recommended-type-checked.test.ts exercises this directly), so `{test,spec}` and the extension list each expand independently rather than needing every combination spelled out.
 const TEST_FILE_PATTERNS = '**/*.{test,spec}.{ts,tsx,mts,cts,js,jsx,mjs,cjs}';
 
+// js.configs.recommended ships as a bare { name, rules } object with no `files` key at all (confirmed directly: Object.keys is exactly ['name', 'rules']). typescript-eslint's own strictTypeChecked/stylisticTypeChecked presets are not fully scoped either, despite appearances: each is a 3-block array -- a files-less setup block (parser/plugin registration, no rules, harmless unscoped), a properly-scoped block restricted to files: ['**/*.ts', '**/*.tsx', '**/*.mts', '**/*.cts'], and a THIRD, unscoped block carrying the bulk of the real rules (77 in strictTypeChecked, 23 in stylisticTypeChecked -- confirmed directly by inspecting each preset's own exported array, not assumed from its scoped-looking middle block). An unscoped config object matches every file ESLint lints, including one being linted under an entirely different `language` plugin (e.g. `@eslint/json`'s `json/json`, `@eslint/markdown`'s `markdown/gfm`) in the same consumer array -- at best a silent no-op there, at worst a genuine crash or a bogus "missing parser services" error from a type-aware rule. Confirmed as a real, not merely theoretical, failure: it broke a consumer (`agent-comms`) that lints `**/*.json` via `@eslint/json` alongside this package's default export, both via a direct throw (`no-irregular-whitespace` calling `sourceCode.getAllComments()`, a method the JSON language's own source-code object doesn't implement) and via a `@typescript-eslint/await-thenable` "requires type information" error against a file that was never meant to be typechecked at all. `scopeToJsTs` below forces every block missing its own `files` key onto the same JS/TS extension set `TEST_FILE_PATTERNS` already draws from, preserving any block's own explicit `files` untouched -- every rule this package composes only makes sense against JS/TS source anyway, so this doesn't narrow real coverage, it just stops an unscoped block from being interpreted as "every file, of any language, ESLint touches."
+const JS_TS_FILE_PATTERNS = '**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}';
+
+function scopeToJsTs(configs: ConfigArrayValue): ConfigArrayValue {
+  return configs.map((config) => (config.files ? config : { ...config, files: [JS_TS_FILE_PATTERNS] }));
+}
+
 const recommendedTypeChecked: ConfigArrayValue = [
-  js.configs.recommended,
-  ...tseslint.configs.strictTypeChecked,
-  ...tseslint.configs.stylisticTypeChecked,
+  { ...js.configs.recommended, files: [JS_TS_FILE_PATTERNS] },
+  ...scopeToJsTs(tseslint.configs.strictTypeChecked),
+  ...scopeToJsTs(tseslint.configs.stylisticTypeChecked),
   {
+    // Scoped for the same reason js.configs.recommended is scoped above: every rule this block sets (exadev/*, @typescript-eslint/*) is JS/TS-specific, and leaving it unscoped means it's matched against any other language a consumer lints in the same array (JSON, Markdown) too -- at best a silent no-op there, at worst a parser mismatch. noInlineConfig narrowing to JS/TS with it is not a real loss: neither JSON's own grammar nor a Markdown/GFM file has eslint-disable-comment syntax ESLint would recognise there in the first place.
+    files: [JS_TS_FILE_PATTERNS],
     plugins: { exadev: plugin },
     linterOptions: { noInlineConfig: true },
     rules: {
