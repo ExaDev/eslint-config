@@ -1,3 +1,10 @@
+# [2.12.0](https://github.com/ExaDev/eslint-config/compare/v2.11.0...v2.12.0) (2026-09-14)
+
+
+### Features
+
+* ban Stryker suppression comments and enforce an 800-line file limit ([a09c74f](https://github.com/ExaDev/eslint-config/commit/a09c74f9c536af4e77b8658aae14f3233aec2b7b))
+
 # [2.11.0](https://github.com/ExaDev/eslint-config/compare/v2.10.6...v2.11.0) (2026-09-12)
 
 
