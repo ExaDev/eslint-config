@@ -6,6 +6,7 @@ import { buildReactConfig } from './react';
 import barrelDirectSiblingsOnly from './rules/barrel-direct-siblings-only';
 import barrelPolicy from './rules/barrel-policy';
 import noArrayIsarrayMutation from './rules/no-array-isarray-mutation';
+import noControlFlow from './rules/no-control-flow';
 import noEnumNumberWidening from './rules/no-enum-number-widening';
 import noEnumReverseLookupWidening from './rules/no-enum-reverse-lookup-widening';
 import noIndexFiles from './rules/no-index-files';
@@ -38,6 +39,7 @@ const plugin: TSESLint.FlatConfig.Plugin = {
     'barrel-direct-siblings-only': barrelDirectSiblingsOnly,
     'barrel-policy': barrelPolicy,
     'no-array-isarray-mutation': noArrayIsarrayMutation,
+    'no-control-flow': noControlFlow,
     'no-enum-number-widening': noEnumNumberWidening,
     'no-enum-reverse-lookup-widening': noEnumReverseLookupWidening,
     'no-index-files': noIndexFiles,
