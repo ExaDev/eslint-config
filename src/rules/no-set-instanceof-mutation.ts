@@ -151,10 +151,10 @@ const noSetInstanceofMutation = createRule({
           if (parent.consequent === current && matchesSetInstanceofOn(parent.test, parameterVariable, ruleContext)) return true;
           if (parent.alternate === current && isNegatedSetInstanceofExpression(parent.test, parameterVariable, ruleContext)) return true;
         }
+        // No separate `parent.right === current` check is needed here: current only ever climbs up from the mutating call's own ancestor chain, so for it to equal parent.left while the guard-matching check on parent.left is also true, current would have to BE the separate guard expression itself -- structurally impossible, since current and the guard are always two different nodes in the tree.
         if (
           parent.type === AST_NODE_TYPES.LogicalExpression &&
           parent.operator === '&&' &&
-          parent.right === current &&
           matchesSetInstanceofOn(parent.left, parameterVariable, ruleContext)
         ) {
           return true;
@@ -181,27 +181,20 @@ const noSetInstanceofMutation = createRule({
       while (current.parent) {
         const { parent } = current;
         if (parent.type === AST_NODE_TYPES.BlockStatement || parent.type === AST_NODE_TYPES.Program) {
-          // Every member of the Statement/ProgramStatement union parent.body holds structurally satisfies TSESTree.Node (type/loc/range/parent), so this assignment is plain structural covariance, not a cast — a manual reference scan is used instead of Array.prototype.indexOf specifically because indexOf's generic signature would otherwise force `current` (typed as the wider TSESTree.Node) to be asserted down to the narrower statement-union element type.
+          // Every member of the Statement/ProgramStatement union parent.body holds structurally satisfies TSESTree.Node (type/loc/range/parent), so this assignment is plain structural covariance, not a cast — typing this array explicitly as TSESTree.Node[] is what lets Array.prototype.indexOf accept `current` (also typed TSESTree.Node) directly, with no narrowing needed.
           const statements: readonly TSESTree.Node[] = parent.body;
-          let ownIndex = -1;
-          for (let i = 0; i < statements.length; i++) {
-            if (statements[i] === current) {
-              ownIndex = i;
-              break;
-            }
-          }
-          if (ownIndex > 0) {
-            for (let i = ownIndex - 1; i >= 0; i--) {
-              const sibling = statements[i];
-              if (
-                sibling?.type === AST_NODE_TYPES.IfStatement &&
+          // `current` is always exactly a body element of its own parent block (it became `parent`'s child by construction, on a previous iteration of the enclosing while loop), so indexOf here is never -1 in practice; slicing up to it is what makes "no preceding siblings" (index 0) and "found nothing eligible" naturally fall out of `.some()`'s own empty/no-match result, with no separate bound or sentinel of its own to get wrong.
+          const precedingSiblings = statements.slice(0, statements.indexOf(current));
+          if (
+            precedingSiblings.some(
+              (sibling) =>
+                sibling.type === AST_NODE_TYPES.IfStatement &&
                 !sibling.alternate &&
                 isNegatedSetInstanceofExpression(sibling.test, parameterVariable, ruleContext) &&
-                definitelyExits(sibling.consequent)
-              ) {
-                return true;
-              }
-            }
+                definitelyExits(sibling.consequent),
+            )
+          ) {
+            return true;
           }
         }
         current = parent;
