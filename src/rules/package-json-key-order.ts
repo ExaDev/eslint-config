@@ -188,12 +188,10 @@ export const packageJsonKeyOrder: PackageJsonKeyOrderRuleDefinition = {
     const sortAz = new Set(options.sortAz ?? DEFAULT_SORT_AZ);
     const { sourceCode } = context;
 
+    // A comment sitting after this node's own trailing comma needs no dedicated lookahead of its own: `hasAdjacentComment` is checked over every node in the same container (see its own call site below), a trailing comma is never valid JSONC syntax immediately before a closing bracket (confirmed directly: `@eslint/json`'s json/jsonc parser rejects it as "Unexpected token" rather than tolerating it), so whatever real syntax follows a comma is always another sibling node in this same container — and that sibling's own `before` check already sees the identical comment as the nearest preceding token.
     function hasAdjacentComment(node: MemberNode | ValueNode): boolean {
       const before = sourceCode.getTokenBefore(node, { includeComments: true });
-      let after = sourceCode.getTokenAfter(node, { includeComments: true });
-      if (after?.type === 'Comma') {
-        after = sourceCode.getTokenAfter(after, { includeComments: true });
-      }
+      const after = sourceCode.getTokenAfter(node, { includeComments: true });
       return (before !== null && commentTypes.has(before.type)) || (after !== null && commentTypes.has(after.type));
     }
 
@@ -222,14 +220,8 @@ export const packageJsonKeyOrder: PackageJsonKeyOrderRuleDefinition = {
       const permutation = computeOrderPermutation(keys, isValidOrder);
       if (isIdentityPermutation(permutation)) return;
 
-      // isValidOrder is a transitive total preorder (compareSyncpackKey's own comparison, or that plus sortFirst pinning): if every adjacent pair already satisfied it, the whole sequence would already be sorted and computeOrderPermutation would have returned the identity permutation above. A non-identity permutation therefore guarantees this loop finds a real violating pair before it exhausts — violationIndex's initial value of 1 is never actually observed, only ever overwritten.
-      let violationIndex = 1;
-      for (let index = 1; index < keys.length; index += 1) {
-        if (!isValidOrder(at(keys, index - 1), at(keys, index))) {
-          violationIndex = index;
-          break;
-        }
-      }
+      // isValidOrder is a transitive total preorder (compareSyncpackKey's own comparison, or that plus sortFirst pinning): if every adjacent pair already satisfied it, the whole sequence would already be sorted and computeOrderPermutation would have returned the identity permutation above. A non-identity permutation therefore guarantees findIndex locates a real violating pair — never -1 — so a hand-written loop bound (a comparison operator Stryker could push one past the array's own end with no observable effect, since the real violation is always found first) is unnecessary; letting Array.prototype.findIndex own its own iteration bound, and at()'s existing out-of-bounds throw catch the (unreachable) -1 case, needs no bound of its own to get right.
+      const violationIndex = keys.findIndex((curr, index) => index > 0 && !isValidOrder(at(keys, index - 1), curr));
 
       context.report({
         loc: reportLoc(at(nodes, violationIndex)),
