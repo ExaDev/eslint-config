@@ -1,3 +1,10 @@
+# [2.18.0](https://github.com/ExaDev/eslint-config/compare/v2.17.2...v2.18.0) (2026-09-15)
+
+
+### Features
+
+* add exadev/test-file-kind rule requiring a kind suffix ([2d64ec5](https://github.com/ExaDev/eslint-config/commit/2d64ec5a5c70bf05cf435eeeacd51547e9cc2749))
+
 ## [2.17.2](https://github.com/ExaDev/eslint-config/compare/v2.17.1...v2.17.2) (2026-09-15)
 
 ## [2.17.1](https://github.com/ExaDev/eslint-config/compare/v2.17.0...v2.17.1) (2026-09-15)
