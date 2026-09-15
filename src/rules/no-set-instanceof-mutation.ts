@@ -1,14 +1,15 @@
 import { AST_NODE_TYPES, ESLintUtils, TSESLint, type TSESTree } from '@typescript-eslint/utils';
+import { asIdentifierName } from './scope-guards';
 
-// `instanceof Set` narrows any constituent of a union down to the global `Set<T>` interface itself, with no way to preserve a `ReadonlySet` modifier through the narrowing -- narrowing a parameter or local variable whose real type includes a `ReadonlySet` through `instanceof Set` silently produces a fully mutable `Set<T>` inside the guarded branch. Confirmed directly: `function mutate(input: ReadonlySet<number> | number): void { if (input instanceof Set) { input.add(1); } }` compiles cleanly under `tsc --strict` with zero errors, even though `ReadonlySet<number>` has no `.add` method at all -- a caller's genuinely read-only set (`const frozen: ReadonlySet<number> = new Set([1, 2, 3]); mutate(frozen);`) gets mutated despite its own declaration. The identical hole reproduces for a plain local: `const frozen: ReadonlySet<number> = getShared(); if (frozen instanceof Set) { frozen.add(1); }` also compiles clean under `tsc --strict`, since `instanceof Set`'s own narrowing behaviour is a property of the guard, not of whether the narrowed binding happens to be a parameter or a `const`/`let` declared in the function body.
+// `instanceof Set` narrows any constituent of a union down to the global `Set<T>` interface itself, with no way to preserve a `ReadonlySet` modifier through the narrowing — narrowing a parameter or local variable whose real type includes a `ReadonlySet` through `instanceof Set` silently produces a fully mutable `Set<T>` inside the guarded branch. Confirmed directly: `function mutate(input: ReadonlySet<number> | number): void { if (input instanceof Set) { input.add(1); } }` compiles cleanly under `tsc --strict` with zero errors, even though `ReadonlySet<number>` has no `.add` method at all — a caller's genuinely read-only set (`const frozen: ReadonlySet<number> = new Set([1, 2, 3]); mutate(frozen);`) gets mutated despite its own declaration. The identical hole reproduces for a plain local: `const frozen: ReadonlySet<number> = getShared(); if (frozen instanceof Set) { frozen.add(1); }` also compiles clean under `tsc --strict`, since `instanceof Set`'s own narrowing behaviour is a property of the guard, not of whether the narrowed binding happens to be a parameter or a `const`/`let` declared in the function body.
 //
-// This is the same class of hole as no-array-isarray-mutation.ts's own (Array.isArray narrowing a readonly array to a mutable one), just for Set, and the equivalent narrowing gap exists for instanceof Map against ReadonlyMap too. `instanceof Array` does not have this problem (TypeScript's control-flow narrowing for `instanceof` against a class/interface pair genuinely preserves a `readonly`-shaped constituent when the checked class's own instance type isn't the wider mutable supertype -- confirmed separately that `if (input instanceof Array) { input.push(1); }` on a `readonly number[] | number` parameter still errors under strict mode), but `Set`'s own global type declaration and `ReadonlySet`'s are two separate interfaces with no subtype relationship enforced by `instanceof`'s narrowing, so the checker widens straight to the mutable `Set<T>`.
+// This is the same class of hole as no-array-isarray-mutation.ts's own (Array.isArray narrowing a readonly array to a mutable one), just for Set, and the equivalent narrowing gap exists for instanceof Map against ReadonlyMap too. `instanceof Array` does not have this problem (TypeScript's control-flow narrowing for `instanceof` against a class/interface pair genuinely preserves a `readonly`-shaped constituent when the checked class's own instance type isn't the wider mutable supertype — confirmed separately that `if (input instanceof Array) { input.push(1); }` on a `readonly number[] | number` parameter still errors under strict mode), but `Set`'s own global type declaration and `ReadonlySet`'s are two separate interfaces with no subtype relationship enforced by `instanceof`'s narrowing, so the checker widens straight to the mutable `Set<T>`.
 //
-// This rule reads real type information rather than matching the declaration's TSESTree type-annotation shape syntactically, specifically so it sees through a type alias (`type RO = ReadonlySet<number>; function f(input: RO | number)`) and catches a bare `ReadonlySet<T>` declaration with no union at all -- `instanceof Set` discards the read-only guarantee there too, with no union involved. `t.getSymbol()?.name === 'ReadonlySet'` is confirmed empirically (via the TS compiler API directly, and via the tsc --strict reproduction above) to distinguish a read-only set (`ReadonlySet`) from a mutable one (`Set`) even through a resolved type alias, since the checker's own type for an aliased type is the alias's real underlying type, not a separate "alias type." Unlike arrays, the checker has no `isArrayType`-equivalent helper for sets, so the symbol-name check alone is what identifies the shape -- confirmed sufficient because `ReadonlySet<T>` and `Set<T>` resolve to distinct symbols with no shared name.
+// This rule reads real type information rather than matching the declaration's TSESTree type-annotation shape syntactically, specifically so it sees through a type alias (`type RO = ReadonlySet<number>; function f(input: RO | number)`) and catches a bare `ReadonlySet<T>` declaration with no union at all — `instanceof Set` discards the read-only guarantee there too, with no union involved. `t.getSymbol()?.name === 'ReadonlySet'` is confirmed empirically (via the TS compiler API directly, and via the tsc --strict reproduction above) to distinguish a read-only set (`ReadonlySet`) from a mutable one (`Set`) even through a resolved type alias, since the checker's own type for an aliased type is the alias's real underlying type, not a separate "alias type." Unlike arrays, the checker has no `isArrayType`-equivalent helper for sets, so the symbol-name check alone is what identifies the shape — confirmed sufficient because `ReadonlySet<T>` and `Set<T>` resolve to distinct symbols with no shared name.
 //
-// The type is read at the declaration's own name node -- the parameter's own identifier, or a `VariableDeclarator`'s own `id` -- never at the reference inside the guard, for the same reason as the array sibling: by the time execution reaches `x instanceof Set`, control-flow narrowing has already discarded the readonly-ness at that location. Checking the declaration's own name node also makes a destructured local binding (`const { frozen } = getShared();`) fall out for free: destructuring only changes how the initializer is computed, not the definition kind eslint-scope records for the bound identifier, so it is picked up as an ordinary `DefinitionType.Variable` the same as a plain `const`.
+// The type is read at the declaration's own name node — the parameter's own identifier, or a `VariableDeclarator`'s own `id` — never at the reference inside the guard, for the same reason as the array sibling: by the time execution reaches `x instanceof Set`, control-flow narrowing has already discarded the readonly-ness at that location. Checking the declaration's own name node also makes a destructured local binding (`const { frozen } = getShared();`) fall out for free: destructuring only changes how the initializer is computed, not the definition kind eslint-scope records for the bound identifier, so it is picked up as an ordinary `DefinitionType.Variable` the same as a plain `const`.
 //
-// No autofix is shipped, for the same reason as no-array-isarray-mutation.ts: rewriting `input.add(x)` into a copy-first pattern (a fresh `Set` assigned to `input`) is not safely mechanical -- an alias taken before the mutating call (`const other = input; input.add(1); return other;`) observes the in-place mutation through `other` today, but would silently stop observing it if the call were rewritten to assign a fresh `Set` to `input` instead of mutating the shared object. Report-only, matching no-array-isarray-mutation.ts's own precedent of shipping zero fix when nothing is provably safe.
+// No autofix is shipped, for the same reason as no-array-isarray-mutation.ts: rewriting `input.add(x)` into a copy-first pattern (a fresh `Set` assigned to `input`) is not safely mechanical — an alias taken before the mutating call (`const other = input; input.add(1); return other;`) observes the in-place mutation through `other` today, but would silently stop observing it if the call were rewritten to assign a fresh `Set` to `input` instead of mutating the shared object. Report-only, matching no-array-isarray-mutation.ts's own precedent of shipping zero fix when nothing is provably safe.
 
 const MUTATING_SET_METHODS = new Set(['add', 'delete', 'clear']);
 
@@ -25,7 +26,7 @@ function isSetInstanceofExpression(node: TSESTree.Node): node is TSESTree.Binary
   );
 }
 
-// A statement that unconditionally leaves the enclosing function/loop -- enough to recognise the common early-return guard idiom (`if (!(x instanceof Set)) return; x.add(1);`) without a full control-flow analysis. Deliberately narrow: a return/throw/continue/break directly, or a block whose LAST statement is one of those -- an if/else inside the block that itself always exits either way is not recognised (a real gap, but one that would need genuine CFA to close, and this rule already documents what it does and does not catch).
+// A statement that unconditionally leaves the enclosing function/loop — enough to recognise the common early-return guard idiom (`if (!(x instanceof Set)) return; x.add(1);`) without a full control-flow analysis. Deliberately narrow: a return/throw/continue/break directly, or a block whose LAST statement is one of those — an if/else inside the block that itself always exits either way is not recognised (a real gap, but one that would need genuine CFA to close, and this rule already documents what it does and does not catch).
 function definitelyExits(statement: TSESTree.Statement): boolean {
   if (
     statement.type === AST_NODE_TYPES.ReturnStatement ||
@@ -53,7 +54,7 @@ const noSetInstanceofMutation = createRule({
     },
     messages: {
       unsound:
-        "'{{ method }}' mutates a parameter or local variable narrowed by instanceof Set -- instanceof Set's own narrowing widens straight to the mutable Set interface, so a value whose real type includes a ReadonlySet (a caller's set, for a parameter; the value's own declared type, for a local variable) can be mutated here despite that readonly guarantee. Copy the set before mutating (e.g. new Set(input)), or narrow with a check that preserves read-only instead of instanceof Set.",
+        "'{{ method }}' mutates a parameter or local variable narrowed by instanceof Set — instanceof Set's own narrowing widens straight to the mutable Set interface, so a value whose real type includes a ReadonlySet (a caller's set, for a parameter; the value's own declared type, for a local variable) can be mutated here despite that readonly guarantee. Copy the set before mutating (e.g. new Set(input)), or narrow with a check that preserves read-only instead of instanceof Set.",
     },
   },
   defaultOptions: [],
@@ -71,10 +72,10 @@ const noSetInstanceofMutation = createRule({
     return {
       CallExpression(node) {
         const { callee } = node;
+        // callee.object's own node type is never checked here: scope.references only ever resolves a plain Identifier reference, so a non-Identifier object (a nested member expression, `this`, `super`) can never match a variable below regardless, and the `!variable` check a few lines down already excludes it.
         if (
           callee.type !== AST_NODE_TYPES.MemberExpression ||
           callee.computed ||
-          callee.object.type !== AST_NODE_TYPES.Identifier ||
           callee.property.type !== AST_NODE_TYPES.Identifier ||
           !MUTATING_SET_METHODS.has(callee.property.name)
         ) {
@@ -84,7 +85,7 @@ const noSetInstanceofMutation = createRule({
         const scope = context.sourceCode.getScope(node);
         const variable = scope.references.find((reference) => reference.identifier === callee.object)?.resolved;
         if (!variable) return;
-        // A parameter or a plain local variable declaration (including a destructured binding, which eslint-scope still records as an ordinary DefinitionType.Variable) -- deliberately not FunctionName, ClassName, ImportBinding, or CatchClause, none of which can meaningfully hold a ReadonlySet-typed value the way a parameter or a variable declarator can.
+        // A parameter or a plain local variable declaration (including a destructured binding, which eslint-scope still records as an ordinary DefinitionType.Variable) — deliberately not FunctionName, ClassName, ImportBinding, or CatchClause, none of which can meaningfully hold a ReadonlySet-typed value the way a parameter or a variable declarator can.
         const declarationDefinition = variable.defs.find(
           (definition) =>
             definition.type === TSESLint.Scope.DefinitionType.Parameter ||
@@ -92,8 +93,8 @@ const noSetInstanceofMutation = createRule({
         );
         if (!declarationDefinition) return;
 
-        const declarationNode = declarationDefinition.name;
-        if (declarationNode.type !== AST_NODE_TYPES.Identifier) return;
+        // A Parameter/Variable Definition's own `.name` is typed as the wider TSESTree.BindingName (which structurally includes ArrayPattern/ObjectPattern) only because that field's declared type is shared across every definition kind eslint-scope has — for these two kinds specifically it is always the one Identifier a given Variable is actually bound to (destructuring creates one Definition per bound name, each pointing at its own Identifier, never at the enclosing pattern as a whole), so this names that guarantee rather than re-deriving it with a runtime check that could never see its own false branch.
+        const declarationNode = asIdentifierName(declarationDefinition.name);
         if (!declarationHasReadonlySetConstituent(declarationNode)) return;
 
         if (!isGuardedBySetInstanceof(node, variable, context)) return;
@@ -117,7 +118,7 @@ const noSetInstanceofMutation = createRule({
       return resolved === target;
     }
 
-    // A negated `instanceof Set` test -- `!(x instanceof Set)`, the shape the early-return and else-branch guard idioms both test against.
+    // A negated `instanceof Set` test — `!(x instanceof Set)`, the shape the early-return and else-branch guard idioms both test against.
     function isNegatedSetInstanceofExpression(
       testNode: TSESTree.Node,
       target: TSESLint.Scope.Variable,
@@ -170,7 +171,7 @@ const noSetInstanceofMutation = createRule({
       return isGuardedByPrecedingEarlyReturn(startNode, parameterVariable, ruleContext);
     }
 
-    // Walks the statement enclosing startNode back through its preceding siblings in the same block, looking for `if (!(x instanceof Set)) <exits>;` -- the early-return/early-throw idiom, where the mutating call is not nested inside any conditional at all.
+    // Walks the statement enclosing startNode back through its preceding siblings in the same block, looking for `if (!(x instanceof Set)) <exits>;` — the early-return/early-throw idiom, where the mutating call is not nested inside any conditional at all.
     function isGuardedByPrecedingEarlyReturn(
       startNode: TSESTree.Node,
       parameterVariable: TSESLint.Scope.Variable,
@@ -180,7 +181,7 @@ const noSetInstanceofMutation = createRule({
       while (current.parent) {
         const { parent } = current;
         if (parent.type === AST_NODE_TYPES.BlockStatement || parent.type === AST_NODE_TYPES.Program) {
-          // Every member of the Statement/ProgramStatement union parent.body holds structurally satisfies TSESTree.Node (type/loc/range/parent), so this assignment is plain structural covariance, not a cast -- a manual reference scan is used instead of Array.prototype.indexOf specifically because indexOf's generic signature would otherwise force `current` (typed as the wider TSESTree.Node) to be asserted down to the narrower statement-union element type.
+          // Every member of the Statement/ProgramStatement union parent.body holds structurally satisfies TSESTree.Node (type/loc/range/parent), so this assignment is plain structural covariance, not a cast — a manual reference scan is used instead of Array.prototype.indexOf specifically because indexOf's generic signature would otherwise force `current` (typed as the wider TSESTree.Node) to be asserted down to the narrower statement-union element type.
           const statements: readonly TSESTree.Node[] = parent.body;
           let ownIndex = -1;
           for (let i = 0; i < statements.length; i++) {
