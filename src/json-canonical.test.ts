@@ -1,13 +1,21 @@
 import { Linter } from 'eslint';
 import { describe, expect, it, vi } from 'vitest';
-import jsonCanonicalConfig, { isSingleFlatConfig } from './json-canonical';
 import { toPublicConfigArray } from './to-public-config-array';
 
-// `jsonCanonicalConfig` is typed as `ConfigArrayValue` (typescript-eslint's own flat-config type, needed for `...exadev`'s own type-checking elsewhere) — see config-types.ts's own comment on why that type isn't nominally assignable to a plain `Linter.Config[]` the real `Linter` class expects. `toPublicConfigArray` is this codebase's own single, isolated, justified cast for exactly this gap.
-const publicJsonCanonicalConfig = toPublicConfigArray(jsonCanonicalConfig);
+// A plain static `import ... from './json-canonical'` at file scope, or a shared `beforeAll` importing it once, would run that module's own top-level `requireConfig()` calls — which can throw — outside any single test's own execution, so Vitest reports the failure as a suite-level/hook-level error rather than a specific test failing (confirmed directly: under a mutation that makes isSingleFlatConfig always reject a genuinely valid config, both a top-level static import and a shared beforeAll produce a "Failed Suite" that a mutation testing tool's own result parsing does not register as a kill). Every test below instead performs its own `await import('./json-canonical')` inside its own body: Node's module cache means this is a cheap, already-resolved lookup once the module has loaded successfully, but if the module's own top-level code throws, that throw happens during this specific test's own execution and is reported as an ordinary failed test, exactly like the mocked-failure cases already were.
+async function loadJsonCanonicalConfig() {
+  const jsonCanonicalModule = await import('./json-canonical');
+  return jsonCanonicalModule.default;
+}
+
+async function loadIsSingleFlatConfig() {
+  const jsonCanonicalModule = await import('./json-canonical');
+  return jsonCanonicalModule.isSingleFlatConfig;
+}
 
 describe('jsonCanonicalConfig', () => {
-  it('is exactly three config blocks: plain JSON, JSONC-shaped families, and a package.json override', () => {
+  it('is exactly three config blocks: plain JSON, JSONC-shaped families, and a package.json override', async () => {
+    const jsonCanonicalConfig = await loadJsonCanonicalConfig();
     const blockCount = 3;
     expect(jsonCanonicalConfig).toHaveLength(blockCount);
     const [plainJson, jsonc, packageJsonOverride] = jsonCanonicalConfig;
@@ -19,32 +27,34 @@ describe('jsonCanonicalConfig', () => {
     expect(packageJsonOverride?.files).toStrictEqual(['**/package.json']);
   });
 
-  it('the plain-JSON block enables sort-keys (plain UTF-16 code-unit order), number-format, string-escaping, and pretty-format', () => {
-    const [plainJson] = jsonCanonicalConfig;
+  it('the plain-JSON block enables sort-keys (plain UTF-16 code-unit order), number-format, string-escaping, and pretty-format', async () => {
+    const [plainJson] = await loadJsonCanonicalConfig();
     expect(plainJson?.rules?.['json/sort-keys']).toStrictEqual(['error', 'asc', { caseSensitive: true, natural: false }]);
     expect(plainJson?.rules?.['json-canonical/number-format']).toBe('error');
     expect(plainJson?.rules?.['json-canonical/string-escaping']).toBe('error');
     expect(plainJson?.rules?.['json-canonical/pretty-format']).toBe('error');
   });
 
-  it('does not enable no-insignificant-whitespace: configs.recommended deliberately leaves it opt-in', () => {
-    const [plainJson] = jsonCanonicalConfig;
+  it('does not enable no-insignificant-whitespace: configs.recommended deliberately leaves it opt-in', async () => {
+    const [plainJson] = await loadJsonCanonicalConfig();
     expect(plainJson?.rules?.['json-canonical/no-insignificant-whitespace']).toBeUndefined();
   });
 
-  it('the package.json override turns off only json/sort-keys, leaving every other rule from the plain-JSON block active', () => {
-    const [, , packageJsonOverride] = jsonCanonicalConfig;
+  it('the package.json override turns off only json/sort-keys, leaving every other rule from the plain-JSON block active', async () => {
+    const [, , packageJsonOverride] = await loadJsonCanonicalConfig();
     expect(packageJsonOverride?.rules).toStrictEqual({ 'json/sort-keys': 'off' });
   });
 
-  it('driven through a real Linter, canonicalizes and pretty-prints a non-canonical plain JSON file', () => {
+  it('driven through a real Linter, canonicalizes and pretty-prints a non-canonical plain JSON file', async () => {
+    const publicJsonCanonicalConfig = toPublicConfigArray(await loadJsonCanonicalConfig());
     const linter = new Linter();
     const result = linter.verifyAndFix('{"b": 1.0, "a": "\\u0041"}', publicJsonCanonicalConfig, 'data.json');
     expect(result.fixed).toBe(true);
     expect(result.output).toBe('{\n  "a": "A",\n  "b": 1\n}\n');
   });
 
-  it('driven through a real Linter, package.json gets content canonicalization and pretty-printing but keeps its own key order', () => {
+  it('driven through a real Linter, package.json gets content canonicalization and pretty-printing but keeps its own key order', async () => {
+    const publicJsonCanonicalConfig = toPublicConfigArray(await loadJsonCanonicalConfig());
     const linter = new Linter();
     const result = linter.verifyAndFix('{"b": 1.0, "a": "\\u0041"}', publicJsonCanonicalConfig, 'package.json');
     expect(result.fixed).toBe(true);
@@ -52,7 +62,8 @@ describe('jsonCanonicalConfig', () => {
     expect(result.output).toBe('{\n  "b": 1,\n  "a": "A"\n}\n');
   });
 
-  it('driven through a real Linter, tsconfig.json gets content canonicalization only (json/jsonc, no layout rewriting)', () => {
+  it('driven through a real Linter, tsconfig.json gets content canonicalization only (json/jsonc, no layout rewriting)', async () => {
+    const publicJsonCanonicalConfig = toPublicConfigArray(await loadJsonCanonicalConfig());
     const linter = new Linter();
     const input = '{\n  // a comment\n  "b": 1.0,\n  "a": "\\u0041"\n}\n';
     const result = linter.verifyAndFix(input, publicJsonCanonicalConfig, 'tsconfig.json');
@@ -101,27 +112,29 @@ describe('jsonCanonicalConfig', () => {
 
   it('does not throw for the real eslint-plugin-json-canonical package on a fresh import (isSingleFlatConfig correctly accepts a genuine flat config)', async () => {
     vi.resetModules();
-    const freshModule = await import('./json-canonical');
     const blockCount = 3;
-    expect(freshModule.default).toHaveLength(blockCount);
+    await expect(loadJsonCanonicalConfig()).resolves.toHaveLength(blockCount);
   });
 });
 
-// Direct unit tests, distinct from the module-reimport cases above: a mutation testing tool's per-test coverage analysis attributes a dynamically re-imported module's own top-level code to whichever test triggered that specific `import()` call, but cannot always attribute it correctly when the same module was already loaded once, statically, at file-load time before any test ran — a plain, synchronous function call inside a normal `it()` block has no such ambiguity.
+// Direct unit tests, distinct from the module-reimport cases above: these call the already-loaded isSingleFlatConfig directly with deliberately malformed inputs, proving each of its own boolean sub-conditions individually rather than only through the one genuine flat-config shape the real eslint-plugin-json-canonical package happens to produce.
 describe('isSingleFlatConfig', () => {
-  it('rejects null, a non-object, and an array', () => {
+  it('rejects null, a non-object, and an array', async () => {
+    const isSingleFlatConfig = await loadIsSingleFlatConfig();
     const nonObjectValue = 42;
     expect(isSingleFlatConfig(null)).toBe(false);
     expect(isSingleFlatConfig(nonObjectValue)).toBe(false);
     expect(isSingleFlatConfig([])).toBe(false);
   });
 
-  it('rejects a plain object lacking the flat-config-only "language" field, even one carrying an empty-string key', () => {
+  it('rejects a plain object lacking the flat-config-only "language" field, even one carrying an empty-string key', async () => {
+    const isSingleFlatConfig = await loadIsSingleFlatConfig();
     expect(isSingleFlatConfig({})).toBe(false);
     expect(isSingleFlatConfig({ '': true })).toBe(false);
   });
 
-  it('accepts a plain object carrying a real "language" own property', () => {
+  it('accepts a plain object carrying a real "language" own property', async () => {
+    const isSingleFlatConfig = await loadIsSingleFlatConfig();
     expect(isSingleFlatConfig({ language: 'json/json' })).toBe(true);
   });
 });
