@@ -18,6 +18,7 @@ import noObjectAssign from './rules/no-object-assign';
 import noPointlessReassignment from './rules/no-pointless-reassignment';
 import noSetInstanceofMutation from './rules/no-set-instanceof-mutation';
 import noSideEffectsInIndex from './rules/no-side-effects-in-index';
+import packageJsonKeyOrder from './rules/package-json-key-order';
 import preferNumericSortCompare from './rules/prefer-numeric-sort-compare';
 import preferReadonlyArrayParam from './rules/prefer-readonly-array-param';
 import preferReadonlyObjectParam from './rules/prefer-readonly-object-param';
@@ -51,6 +52,7 @@ const plugin: TSESLint.FlatConfig.Plugin = {
     'no-pointless-reassignment': noPointlessReassignment,
     'no-set-instanceof-mutation': noSetInstanceofMutation,
     'no-side-effects-in-index': noSideEffectsInIndex,
+    'package-json-key-order': packageJsonKeyOrder,
     'prefer-numeric-sort-compare': preferNumericSortCompare,
     'prefer-readonly-array-param': preferReadonlyArrayParam,
     'prefer-readonly-object-param': preferReadonlyObjectParam,
