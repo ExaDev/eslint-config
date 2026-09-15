@@ -57,7 +57,7 @@ describe('buildPackageJsonKeyOrderConfig', () => {
     rmSync(cwd, { recursive: true, force: true });
   });
 
-  it('enabled: false wins over everything -- always []', () => {
+  it('enabled: false wins over everything — always []', () => {
     writeFileSync(join(cwd, '.syncpackrc.json'), '{}');
     expect(buildPackageJsonKeyOrderConfig({ enabled: false, cwd })).toEqual([]);
   });
@@ -71,12 +71,12 @@ describe('buildPackageJsonKeyOrderConfig', () => {
     expect(buildPackageJsonKeyOrderConfig({ cwd, requireFn: throwingRequireFn })).toEqual([]);
   });
 
-  it('enabled: true and @eslint/json is missing -- throws an actionable error', () => {
-    expect(() => buildPackageJsonKeyOrderConfig({ cwd, enabled: true, requireFn: throwingRequireFn })).toThrow(/@eslint\/json/);
+  it('enabled: true and @eslint/json is missing — throws an actionable error naming the real install command', () => {
+    expect(() => buildPackageJsonKeyOrderConfig({ cwd, enabled: true, requireFn: throwingRequireFn })).toThrow(/pnpm add -D @eslint\/json/);
   });
 
   it('auto-detect: a real config block when no syncpack config exists and @eslint/json genuinely resolves', () => {
-    // No requireFn override -- this repo's own real devDependency resolves for real.
+    // No requireFn override — this repo's own real devDependency resolves for real.
     const result = buildPackageJsonKeyOrderConfig({ cwd });
     expect(result).toHaveLength(1);
     expect(result[0]?.language).toBe('json/json');
@@ -84,7 +84,7 @@ describe('buildPackageJsonKeyOrderConfig', () => {
     expect(result[0]?.rules?.['exadev/package-json-key-order']).toStrictEqual(['error', {}]);
   });
 
-  it('enabled: true overrides a present syncpack config -- still enables', () => {
+  it('enabled: true overrides a present syncpack config — still enables', () => {
     writeFileSync(join(cwd, '.syncpackrc.json'), '{}');
     const result = buildPackageJsonKeyOrderConfig({ cwd, enabled: true });
     expect(result).toHaveLength(1);
@@ -93,5 +93,20 @@ describe('buildPackageJsonKeyOrderConfig', () => {
   it('threads sortFirst/sortAz through into the rule options', () => {
     const result = buildPackageJsonKeyOrderConfig({ cwd, sortFirst: ['name'], sortAz: ['scripts'] });
     expect(result[0]?.rules?.['exadev/package-json-key-order']).toStrictEqual(['error', { sortFirst: ['name'], sortAz: ['scripts'] }]);
+  });
+
+  it('resolves a json-language plugin that is its own default export directly, not nested under .default', () => {
+    const directPlugin = { languages: { json: {} } };
+    const result = buildPackageJsonKeyOrderConfig({ cwd, requireFn: () => directPlugin });
+    expect(result).toHaveLength(1);
+    expect(result[0]?.plugins?.['json']).toBe(directPlugin);
+  });
+
+  it('auto-detect: [] when the resolved module is neither a default-wrapped nor a direct json-language plugin', () => {
+    expect(buildPackageJsonKeyOrderConfig({ cwd, requireFn: () => ({ notAPlugin: true }) })).toEqual([]);
+  });
+
+  it('auto-detect: [] when the resolved module is null rather than an object — typeof null is "object", so this only holds if null is checked for explicitly', () => {
+    expect(buildPackageJsonKeyOrderConfig({ cwd, requireFn: () => null })).toEqual([]);
   });
 });
