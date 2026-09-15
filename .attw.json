@@ -1,3 +1,5 @@
 {
-  "ignoreRules": ["false-export-default"]
+  "ignoreRules": [
+    "false-export-default"
+  ]
 }
