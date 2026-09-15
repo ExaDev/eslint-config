@@ -1,3 +1,10 @@
+# [2.13.0](https://github.com/ExaDev/eslint-config/compare/v2.12.3...v2.13.0) (2026-09-15)
+
+
+### Features
+
+* add no-control-flow rule ([6c37f08](https://github.com/ExaDev/eslint-config/commit/6c37f08dbf7aa1ebc1b8f535f8c4e8c525296a9f))
+
 ## [2.12.3](https://github.com/ExaDev/eslint-config/compare/v2.12.2...v2.12.3) (2026-09-14)
 
 
