@@ -1,6 +1,6 @@
 import { Linter } from 'eslint';
 import { describe, expect, it, vi } from 'vitest';
-import jsonCanonicalConfig from './json-canonical';
+import jsonCanonicalConfig, { isSingleFlatConfig } from './json-canonical';
 import { toPublicConfigArray } from './to-public-config-array';
 
 // `jsonCanonicalConfig` is typed as `ConfigArrayValue` (typescript-eslint's own flat-config type, needed for `...exadev`'s own type-checking elsewhere) — see config-types.ts's own comment on why that type isn't nominally assignable to a plain `Linter.Config[]` the real `Linter` class expects. `toPublicConfigArray` is this codebase's own single, isolated, justified cast for exactly this gap.
@@ -104,5 +104,24 @@ describe('jsonCanonicalConfig', () => {
     const freshModule = await import('./json-canonical');
     const blockCount = 3;
     expect(freshModule.default).toHaveLength(blockCount);
+  });
+});
+
+// Direct unit tests, distinct from the module-reimport cases above: a mutation testing tool's per-test coverage analysis attributes a dynamically re-imported module's own top-level code to whichever test triggered that specific `import()` call, but cannot always attribute it correctly when the same module was already loaded once, statically, at file-load time before any test ran — a plain, synchronous function call inside a normal `it()` block has no such ambiguity.
+describe('isSingleFlatConfig', () => {
+  it('rejects null, a non-object, and an array', () => {
+    const nonObjectValue = 42;
+    expect(isSingleFlatConfig(null)).toBe(false);
+    expect(isSingleFlatConfig(nonObjectValue)).toBe(false);
+    expect(isSingleFlatConfig([])).toBe(false);
+  });
+
+  it('rejects a plain object lacking the flat-config-only "language" field, even one carrying an empty-string key', () => {
+    expect(isSingleFlatConfig({})).toBe(false);
+    expect(isSingleFlatConfig({ '': true })).toBe(false);
+  });
+
+  it('accepts a plain object carrying a real "language" own property', () => {
+    expect(isSingleFlatConfig({ language: 'json/json' })).toBe(true);
   });
 });
