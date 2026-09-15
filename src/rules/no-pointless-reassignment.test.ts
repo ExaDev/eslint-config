@@ -109,118 +109,132 @@ ruleTester.run('no-pointless-reassignment', rule, {
   valid: [
     { code: 'const foo = bar + 1;' },
     { code: 'let foo = bar;' },
+    // A `let` alias whose own source IS resolvable (unlike the plain-global case above) still must not be flagged — this specifically isolates the const-only check from the separate "source is ever written to" bail-out, since an unresolved global would otherwise mask a missing const check by bailing out first for an unrelated reason.
+    { code: ['let bar = 1;', 'let foo = bar;', 'console.log(foo);'].join('\n') },
     { code: 'const _foo = bar;' },
-    { code: 'let bar = 1;\nconst foo = bar;\nbar = 2;\nconsole.log(foo);' },
+    { code: ['let bar = 1;', 'const foo = bar;', 'bar = 2;', 'console.log(foo);'].join('\n') },
   ],
   invalid: [
     {
-      code: 'let bar = 1;\nconst foo = bar;\nconsole.log(foo);',
-      output: 'let bar = 1;\n\nconsole.log(bar);',
+      code: ['let bar = 1;', 'const foo = bar;', 'console.log(foo);'].join('\n'),
+      output: ['let bar = 1;', '', 'console.log(bar);'].join('\n'),
       errors: [{ messageId: 'pointlessReassignment', data: { name: 'foo', value: 'bar' } }],
     },
     // Only a LEADING underscore is exempt (the discard convention) — a trailing one is an ordinary name and still gets flagged.
     {
-      code: 'const bar = 1;\nconst foo_ = bar;\nconsole.log(foo_);',
-      output: 'const bar = 1;\n\nconsole.log(bar);',
+      code: ['const bar = 1;', 'const foo_ = bar;', 'console.log(foo_);'].join('\n'),
+      output: ['const bar = 1;', '', 'console.log(bar);'].join('\n'),
       errors: [{ messageId: 'pointlessReassignment', data: { name: 'foo_', value: 'bar' } }],
     },
     // A read this fixer cannot safely rewrite by plain text replacement — a JSX component tag's own identifier is a JSXIdentifier, not a plain Identifier — blocks the whole fix: removing the declaration would leave `<Foo />` referring to a binding that no longer exists.
     {
-      code: 'const Bar = 1;\nconst Foo = Bar;\nconst el = <Foo />;',
+      code: ['const Bar = 1;', 'const Foo = Bar;', 'const el = <Foo />;'].join('\n'),
       filename: 'test.tsx',
       output: null,
       errors: [{ messageId: 'pointlessReassignment', data: { name: 'Foo', value: 'Bar' } }],
     },
     {
-      code: 'let bar = 1;\nconst foo = bar,\n  other = 2;\nconsole.log(foo, other);',
+      code: ['let bar = 1;', 'const foo = bar,', '  other = 2;', 'console.log(foo, other);'].join('\n'),
       output: null,
       errors: [{ messageId: 'pointlessReassignment', data: { name: 'foo', value: 'bar' } }],
     },
     // The alias binding itself is reassigned after its own declaration — a real parse-level SyntaxError under `tsc` (assigning to a const), but ESLint's own parser and scope analysis track it as a plain write reference regardless, so this rule still needs to bail out of fixing rather than assume `const` alone rules it out.
     {
-      code: 'const bar = 1;\nconst foo = bar;\nfoo = 2;\nconsole.log(foo);',
+      code: ['const bar = 1;', 'const foo = bar;', 'foo = 2;', 'console.log(foo);'].join('\n'),
       output: null,
       errors: [{ messageId: 'pointlessReassignment', data: { name: 'foo', value: 'bar' } }],
     },
     {
-      code: 'const bar = 1;\nconst foo = bar;\nconst obj = { foo };\nconsole.log(obj);',
+      code: ['const bar = 1;', 'const foo = bar;', 'const obj = { foo };', 'console.log(obj);'].join('\n'),
       output: null,
       errors: [{ messageId: 'pointlessReassignment', data: { name: 'foo', value: 'bar' } }],
     },
     // The same shorthand hazard when the alias is NOT the first property — the token immediately before it is the previous property's own comma separator, not the opening brace. A fixer that instead kept walking backward past that comma would (and once genuinely did, during this rule's own development) find the PRECEDING property's unrelated colon and wrongly conclude this read isn't shorthand at all, silently renaming the object's own "foo" key to "bar" instead of leaving it alone.
     {
-      code: 'const bar = 1;\nconst foo = bar;\nconst obj = { a: 1, foo };\nconsole.log(obj);',
+      code: ['const bar = 1;', 'const foo = bar;', 'const obj = { a: 1, foo };', 'console.log(obj);'].join('\n'),
+      output: null,
+      errors: [{ messageId: 'pointlessReassignment', data: { name: 'foo', value: 'bar' } }],
+    },
+    // The mirror case: a shorthand property that is NOT the LAST one — its own next token is ',', not '}'. A "not shorthand" misclassification here would attempt the same unsafe key-renaming autofix as the case above, just triggered from the opposite direction.
+    {
+      code: ['const bar = 1;', 'const foo = bar;', 'const obj = { foo, b: 2 };', 'console.log(obj);'].join('\n'),
       output: null,
       errors: [{ messageId: 'pointlessReassignment', data: { name: 'foo', value: 'bar' } }],
     },
     // An explicit `key: foo` value is not shorthand at all — the token immediately before the read is the property's own colon, so it autofixes freely.
     {
-      code: 'const bar = 1;\nconst foo = bar;\nconst obj = { a: foo, b: 2 };\nconsole.log(obj);',
-      output: 'const bar = 1;\n\nconst obj = { a: bar, b: 2 };\nconsole.log(obj);',
+      code: ['const bar = 1;', 'const foo = bar;', 'const obj = { a: foo, b: 2 };', 'console.log(obj);'].join('\n'),
+      output: ['const bar = 1;', '', 'const obj = { a: bar, b: 2 };', 'console.log(obj);'].join('\n'),
       errors: [{ messageId: 'pointlessReassignment', data: { name: 'foo', value: 'bar' } }],
     },
     // A read nested inside an array literal value is never itself an object shorthand key, regardless of the comma separating it from a sibling array element.
     {
-      code: 'const bar = 1;\nconst foo = bar;\nconst obj = { arr: [foo, 1] };\nconsole.log(obj);',
-      output: 'const bar = 1;\n\nconst obj = { arr: [bar, 1] };\nconsole.log(obj);',
+      code: ['const bar = 1;', 'const foo = bar;', 'const obj = { arr: [foo, 1] };', 'console.log(obj);'].join('\n'),
+      output: ['const bar = 1;', '', 'const obj = { arr: [bar, 1] };', 'console.log(obj);'].join('\n'),
       errors: [{ messageId: 'pointlessReassignment', data: { name: 'foo', value: 'bar' } }],
     },
     // A read at the tail of a nested arrow-function body still ending exactly at the object's own closing brace: neither an immediate '{'/',' (shorthand) nor an immediate '['/'('/':' (a directly-nested value) resolves it, so the walk must step back past the arrow token itself before reaching the '(' that settles it as not shorthand.
     {
-      code: 'const bar = 1;\nconst foo = bar;\nconst obj = { cb: () => foo };\nconsole.log(obj);',
-      output: 'const bar = 1;\n\nconst obj = { cb: () => bar };\nconsole.log(obj);',
+      code: ['const bar = 1;', 'const foo = bar;', 'const obj = { cb: () => foo };', 'console.log(obj);'].join('\n'),
+      output: ['const bar = 1;', '', 'const obj = { cb: () => bar };', 'console.log(obj);'].join('\n'),
       errors: [{ messageId: 'pointlessReassignment', data: { name: 'foo', value: 'bar' } }],
     },
     // A read whose own next token is a ternary's ':' is never itself an object shorthand key, regardless of the enclosing object literal.
     {
-      code: 'const bar = 1;\nconst foo = bar;\ndeclare const cond: boolean;\nconst obj = { a: cond ? foo : 2 };\nconsole.log(obj);',
-      output: 'const bar = 1;\n\ndeclare const cond: boolean;\nconst obj = { a: cond ? bar : 2 };\nconsole.log(obj);',
+      code: ['const bar = 1;', 'const foo = bar;', 'declare const cond: boolean;', 'const obj = { a: cond ? foo : 2 };', 'console.log(obj);'].join('\n'),
+      output: ['const bar = 1;', '', 'declare const cond: boolean;', 'const obj = { a: cond ? bar : 2 };', 'console.log(obj);'].join('\n'),
       errors: [{ messageId: 'pointlessReassignment', data: { name: 'foo', value: 'bar' } }],
     },
     // An exported alias must have its whole `export` statement removed. Removing only the inner VariableDeclaration left a bare `export` keyword behind, which does not parse.
     {
-      code: 'const bar = 1;\nexport const foo = bar;\nconsole.log(foo);',
-      output: 'const bar = 1;\n\nconsole.log(bar);',
+      code: ['const bar = 1;', 'export const foo = bar;', 'console.log(foo);'].join('\n'),
+      output: ['const bar = 1;', '', 'console.log(bar);'].join('\n'),
       errors: [{ messageId: 'pointlessReassignment', data: { name: 'foo', value: 'bar' } }],
     },
     {
-      code: "import { bar } from './bar';\nexport const foo = bar;\nconsole.log(foo);",
-      output: "import { bar } from './bar';\n\nconsole.log(bar);",
+      code: ["import { bar } from './bar';", 'export const foo = bar;', 'console.log(foo);'].join('\n'),
+      output: ["import { bar } from './bar';", '', 'console.log(bar);'].join('\n'),
       errors: [{ messageId: 'pointlessReassignment', data: { name: 'foo', value: 'bar' } }],
     },
     // An exported alias with no other read still collapses to valid syntax.
     {
-      code: 'const bar = 1;\nexport const foo = bar;\n',
-      output: 'const bar = 1;\n\n',
+      code: ['const bar = 1;', 'export const foo = bar;', ''].join('\n'),
+      output: ['const bar = 1;', '', ''].join('\n'),
       errors: [{ messageId: 'pointlessReassignment', data: { name: 'foo', value: 'bar' } }],
     },
     // An explicit type annotation is load-bearing — still reported, never auto-fixed.
     {
-      code: 'function f(item: never) {\n  const exhaustive: never = item;\n  throw new Error(String(exhaustive));\n}',
+      code: ['function f(item: never) {', '  const exhaustive: never = item;', '  throw new Error(String(exhaustive));', '}'].join('\n'),
       output: null,
       errors: [{ messageId: 'pointlessReassignment', data: { name: 'exhaustive', value: 'item' } }],
     },
     {
-      code: 'const bar = 1;\nexport const foo: number = bar;\nconsole.log(foo);',
+      code: ['const bar = 1;', 'export const foo: number = bar;', 'console.log(foo);'].join('\n'),
       output: null,
       errors: [{ messageId: 'pointlessReassignment', data: { name: 'foo', value: 'bar' } }],
     },
     // Shadowing: rewriting the read to `bar` would bind to the parameter, not the outer constant.
     {
-      code: 'const bar = 1;\nconst foo = bar;\nexport function g(bar: number) {\n  return foo + bar;\n}',
+      code: ['const bar = 1;', 'const foo = bar;', 'export function g(bar: number) {', '  return foo + bar;', '}'].join('\n'),
       output: null,
       errors: [{ messageId: 'pointlessReassignment', data: { name: 'foo', value: 'bar' } }],
     },
     // The shadow guard is scoped to the read sites: a shadowing binding in a block the read is not inside does not block the fix.
     {
-      code: 'const bar = 1;\nconst foo = bar;\n{\n  const bar = 2;\n  console.log(bar);\n}\nconsole.log(foo);',
-      output: 'const bar = 1;\n\n{\n  const bar = 2;\n  console.log(bar);\n}\nconsole.log(bar);',
+      code: ['const bar = 1;', 'const foo = bar;', '{', '  const bar = 2;', '  console.log(bar);', '}', 'console.log(foo);'].join('\n'),
+      output: ['const bar = 1;', '', '{', '  const bar = 2;', '  console.log(bar);', '}', 'console.log(bar);'].join('\n'),
       errors: [{ messageId: 'pointlessReassignment', data: { name: 'foo', value: 'bar' } }],
     },
     // A read from inside a closure is still safely collapsible: the rule already refuses to report when the source is ever written, and a never-written source keeps both its runtime value and its narrowed type when read directly.
     {
-      code: 'const bar = 1;\nconst foo = bar;\nexport const h = () => foo;',
-      output: 'const bar = 1;\n\nexport const h = () => bar;',
+      code: ['const bar = 1;', 'const foo = bar;', 'export const h = () => foo;'].join('\n'),
+      output: ['const bar = 1;', '', 'export const h = () => bar;'].join('\n'),
+      errors: [{ messageId: 'pointlessReassignment', data: { name: 'foo', value: 'bar' } }],
+    },
+    // A bare, unparenthesized read whose own next token is neither '}' nor ',' (here, ';') must never even reach hasEnclosingShorthandBoundary's own backward walk: an earlier, wholly unrelated multi-declarator statement's own comma sits further back in the same file, and if the walk were consulted here it would misread that unrelated comma as this read's own shorthand-property boundary, wrongly refusing a fix that is actually perfectly safe.
+    {
+      code: ['const a = 1,', '  b = 2;', 'const bar = 3;', 'const foo = bar;', 'foo;'].join('\n'),
+      output: ['const a = 1,', '  b = 2;', 'const bar = 3;', '', 'bar;'].join('\n'),
       errors: [{ messageId: 'pointlessReassignment', data: { name: 'foo', value: 'bar' } }],
     },
   ],

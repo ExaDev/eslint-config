@@ -53,7 +53,7 @@ export function hasEnclosingShorthandBoundary(precedingTokens: readonly { readon
 // True when `identifier` is read as an object-literal shorthand property ({ x } from const x = y) — rewriting { x } -> { x: original } needs a key change replaceText can't do safely. A read whose own next token is '}' or ',' is already confirmed to sit at the tail of some comma-separated list ending in '}'; see hasEnclosingShorthandBoundary above for what happens from there.
 export function isShorthandPropertyRead(sourceCode: Rule.RuleContext['sourceCode'], identifier: Identifier): boolean {
   const afterToken = sourceCode.getTokenAfter(identifier);
-  if (afterToken?.value === ':') return false;
+  // A ':' is already excluded by the check below (it is neither '}' nor ','), so no separate check for it is needed on top.
   if (afterToken?.value !== '}' && afterToken?.value !== ',') return false;
   return hasEnclosingShorthandBoundary(sourceCode.getTokensBefore(identifier));
 }
