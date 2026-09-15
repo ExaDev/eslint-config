@@ -1,3 +1,15 @@
+# [2.15.0](https://github.com/ExaDev/eslint-config/compare/v2.14.0...v2.15.0) (2026-09-15)
+
+
+### Bug Fixes
+
+* **eslint.config:** scope js.configs.recommended and type-imports rules to JS/TS files ([3c9e555](https://github.com/ExaDev/eslint-config/commit/3c9e5554dafaf8ab934edd4066e61efef4de4ee4))
+
+
+### Features
+
+* add package-json-key-order rule for syncpack-compatible ordering ([7598ac3](https://github.com/ExaDev/eslint-config/commit/7598ac301012633c3e5009c358956fb1c98ed320))
+
 # [2.14.0](https://github.com/ExaDev/eslint-config/compare/v2.13.0...v2.14.0) (2026-09-15)
 
 
