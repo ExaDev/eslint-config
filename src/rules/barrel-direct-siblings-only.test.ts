@@ -13,13 +13,24 @@ ruleTester.run('barrel-direct-siblings-only', rule, {
     { code: "export { foo } from './sibling.ts';", filename: './src/index.ts' },
     { code: "export * from './sibling';", filename: './src/index.ts' },
     { code: "export type { Foo } from './sibling';", filename: './src/sub/index.ts' },
-    // A non-index file is never this rule's target -- it no-ops there (a barrel-policy umbrella or no-non-barrel-reexport handles re-exports outside barrels).
+    // A non-index file is never this rule's target — it no-ops there (a barrel-policy umbrella or no-non-barrel-reexport handles re-exports outside barrels).
     { code: "export { foo } from './a/b/c';", filename: './src/other.ts' },
     { code: "export { foo } from '../up';", filename: './src/other.ts' },
+    // A bare named export with no source at all is not a re-export — this rule only constrains where a re-export's source may point, so it has nothing to say here even inside a barrel.
+    { code: 'const foo = 1;\nexport { foo };', filename: './src/index.ts' },
   ],
   invalid: [
     // Nested path (two segments) in a barrel.
-    { code: "export { foo } from './a/b';", filename: './src/index.ts', errors: [{ messageId: 'notADirectSibling', data: { source: './a/b' } }] },
+    {
+      code: "export { foo } from './a/b';",
+      filename: './src/index.ts',
+      errors: [
+        {
+          message:
+            "A barrel may re-export only from a direct sibling file or folder ('./module' or './module.ts') — found './a/b'. Move the source closer, or import it directly at the call site rather than re-exporting it through this barrel.",
+        },
+      ],
+    },
     // Parent traversal.
     { code: "export { foo } from '../up';", filename: './src/index.ts', errors: [{ messageId: 'notADirectSibling', data: { source: '../up' } }] },
     // A bare package specifier.
