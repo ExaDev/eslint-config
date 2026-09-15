@@ -50,7 +50,7 @@ ruleTester.run('no-enum-reverse-lookup-widening', rule, {
     `${ENUM_DECL} const value: Direction = Direction['Up'];`,
     // A bare, non-literal string index is neither NumberLike nor a literal — out of scope for a rule specifically about the number -> name reverse lookup.
     `${ENUM_DECL} declare const key: 'Up' | 'Down'; const value = Direction[key];`,
-    // A plain, non-computed member access (`Direction.Up`, dot notation) is not an indexing expression at all — this rule is specifically about the computed `Direction[n]` reverse-lookup form.
+    // A plain, non-computed member access (`Direction.Up`, dot notation) is safe by the same assignability check a computed access to the enum's own member goes through: `Up`'s own property type is `Direction`'s own member type, which is always assignable to Direction's declared type, so this passes through without needing a dedicated "not computed" guard.
     `${ENUM_DECL} const value = Direction.Up;`,
   ],
   invalid: [

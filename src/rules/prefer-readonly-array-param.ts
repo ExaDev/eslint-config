@@ -12,9 +12,8 @@ const createRule = ESLintUtils.RuleCreator(
 
 type FixableType = TSESTree.TSArrayType | TSESTree.TSTupleType | TSESTree.TSTypeReference;
 
-// A single type node's fixable array/tuple shape, or undefined when it is not an array/tuple at all, or is already readonly (TSTypeOperator-wrapped, or already named `ReadonlyArray`).
+// A single type node's fixable array/tuple shape, or undefined when it is not an array/tuple at all, or is already readonly (TSTypeOperator-wrapped, or already named `ReadonlyArray`). A `readonly`-wrapped annotation needs no dedicated check of its own: a TSTypeOperator node matches none of the shapes below and falls through to the final `undefined`, the exact same result an explicit check would produce.
 function getFixableArrayOrTupleType(typeNode: TSESTree.TypeNode): FixableType | undefined {
-  if (typeNode.type === AST_NODE_TYPES.TSTypeOperator && typeNode.operator === 'readonly') return undefined;
   if (typeNode.type === AST_NODE_TYPES.TSArrayType) return typeNode;
   if (typeNode.type === AST_NODE_TYPES.TSTupleType) return typeNode;
   if (
