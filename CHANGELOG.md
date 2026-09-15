@@ -1,3 +1,10 @@
+# [2.16.0](https://github.com/ExaDev/eslint-config/compare/v2.15.0...v2.16.0) (2026-09-15)
+
+
+### Features
+
+* bump eslint-plugin-json-canonical to v2 for pretty-printing and JSONC ([a77cec1](https://github.com/ExaDev/eslint-config/commit/a77cec1f5529003d9f95f0f02406cf1f372db9c1))
+
 # [2.15.0](https://github.com/ExaDev/eslint-config/compare/v2.14.0...v2.15.0) (2026-09-15)
 
 
