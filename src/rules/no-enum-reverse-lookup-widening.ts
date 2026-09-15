@@ -39,8 +39,6 @@ const noEnumReverseLookupWidening = createRule({
 
     return {
       MemberExpression(node: TSESTree.MemberExpression) {
-        if (!node.computed) return;
-
         const objectTsNode = asExpression(services.esTreeNodeToTSNodeMap.get(node.object));
 
         const objectType = checker.getTypeAtLocation(objectTsNode);

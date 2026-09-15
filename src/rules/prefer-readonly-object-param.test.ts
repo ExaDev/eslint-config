@@ -31,7 +31,7 @@ describe('rule metadata', () => {
   });
 });
 
-// This rule reads real type information (checker.getPropertiesOfType/getIndexInfosOfType/getSignaturesOfType, plus isArrayType/isTupleType and symbol-name/flag checks), specifically to resolve a named interface/type-alias reference down to its real properties and to see through generics — none of which is visible from the parameter's own TSESTree type-annotation syntax alone. `projectService.allowDefaultProject` lets each inline code snippet below run against an ad hoc single-file project, matching this package's other type-aware rule tests (e.g. no-map-instanceof-mutation.test.ts).
+// This rule reads real type information (checker.getPropertiesOfType/getIndexInfosOfType/getSignaturesOfType, plus symbol-name/flag checks), specifically to resolve a named interface/type-alias reference down to its real properties and to see through generics — none of which is visible from the parameter's own TSESTree type-annotation syntax alone. `projectService.allowDefaultProject` lets each inline code snippet below run against an ad hoc single-file project, matching this package's other type-aware rule tests (e.g. no-map-instanceof-mutation.test.ts).
 const ruleTester = new RuleTester({
   languageOptions: {
     parserOptions: {
@@ -63,7 +63,7 @@ ruleTester.run('prefer-readonly-object-param', rule, {
     'function f({ a }: { a: string } = { a: \'x\' }): void {}',
     // A qualified type name (Foo.Bar) is conservatively skipped — the referenced shape can't be reasoned about the same way as a plain unqualified identifier.
     'namespace Foo { export interface Bar { a: string } } function f(x: Foo.Bar): void {}',
-    // A named alias to an array or tuple type — reachable as a TSTypeReference candidate (unlike a bare `number[]`/`[string, number]` annotation, which is never even a candidate type node), and excluded by the same isArrayType/isTupleType check prefer-readonly-array-param.ts's own domain relies on.
+    // A named alias to an array or tuple type — reachable as a TSTypeReference candidate (unlike a bare `number[]`/`[string, number]` annotation, which is never even a candidate type node); excluded because its own `[Symbol.unscopables]` property fails the property-flatness loop, not by a dedicated array/tuple check (prefer-readonly-array-param.ts's own domain).
     'type Arr = number[]; function f(x: Arr): void {}',
     'type Tup = [string, number]; function f(x: Tup): void {}',
     // A callable type as the WHOLE parameter (not nested inside a property) — a different shape from a flat object with a callback property.
