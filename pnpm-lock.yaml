@@ -176,8 +176,8 @@ importers:
         specifier: 64.3.6
         version: 64.3.6(eslint@10.8.0(jiti@2.6.1)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)
       eslint-plugin-json-canonical:
-        specifier: 2.0.0
-        version: 2.0.0(@eslint/json@2.1.0)(eslint@10.8.0(jiti@2.6.1)(supports-color@7.2.0))
+        specifier: 2.1.0
+        version: 2.1.0(@eslint/json@2.1.0)(eslint@10.8.0(jiti@2.6.1)(supports-color@7.2.0))
       eslint-plugin-tsdoc:
         specifier: ^0.5.2
         version: 0.5.2(eslint@10.8.0(jiti@2.6.1)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)
@@ -1705,8 +1705,8 @@ packages:
     peerDependencies:
       eslint: ^7.0.0 || ^8.0.0 || ^9.0.0 || ^10.0.0
 
-  eslint-plugin-json-canonical@2.0.0:
-    resolution: {integrity: sha512-Jqteoh3/6LJVdzwcwcz6JHnWgV53BE9RJ8VgZEVD0kjXqVrPf5vu7W8iDaKC+DYLWblX3RuHA0BIwVck3lQsIQ==}
+  eslint-plugin-json-canonical@2.1.0:
+    resolution: {integrity: sha512-sjT8FdqSvpEiB0yzCOGBozbEJ64SLxDp8CYlV9wHEgL0HFLj3kJdfWl5UuzMe72OoOXbwzo418VeUlxX5iNfgg==}
     engines: {node: '>=20'}
     peerDependencies:
       '@eslint/json': ^2.1.0
@@ -5265,7 +5265,7 @@ snapshots:
       - supports-color
       - typescript
 
-  eslint-plugin-json-canonical@2.0.0(@eslint/json@2.1.0)(eslint@10.8.0(jiti@2.6.1)(supports-color@7.2.0)):
+  eslint-plugin-json-canonical@2.1.0(@eslint/json@2.1.0)(eslint@10.8.0(jiti@2.6.1)(supports-color@7.2.0)):
     dependencies:
       '@eslint/json': 2.1.0
       eslint: 10.8.0(jiti@2.6.1)(supports-color@7.2.0)
