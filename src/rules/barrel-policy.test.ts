@@ -1,4 +1,4 @@
-import { RuleTester } from 'eslint';
+import { Linter, RuleTester } from 'eslint';
 import { describe, expect, it } from 'vitest';
 import tseslint from 'typescript-eslint';
 import rule, { readMode } from './barrel-policy';
@@ -29,34 +29,38 @@ const ruleTester = new RuleTester({
   languageOptions: { parser: tseslint.parser, sourceType: 'module' },
 });
 
-// The rule's own meta.schema is the FIRST line of defence against a bad `{ mode }` option — rejected by ESLint itself before create() ever runs, well ahead of readMode's own runtime throw (a safety net behind the schema, exercised directly in the readMode describe block above). These probe the schema's own constraints — the enum of allowed mode values, and additionalProperties — independent of readMode entirely.
+// The rule's own meta.schema is the FIRST line of defence against a bad `{ mode }` option — rejected by ESLint itself before create() ever runs, well ahead of readMode's own runtime throw (a safety net behind the schema, exercised directly in the readMode describe block above). These use a plain Linter instance rather than ruleTester.run: RuleTester.describe/.it are wired to Vitest's own (see vitest.setup.ts), and a schema-validation failure for an `invalid` case happens deep inside RuleTester's own nested, DEFERRED it() registration rather than as a synchronous throw back to the caller — so wrapping ruleTester.run in `expect(() => { ... }).toThrow()` can never observe it (confirmed directly: that pattern kept "passing" even with additionalProperties flipped to `true`, since the actual rejection surfaced only as a separate, unrelated nested test failure). Linter#verify has no such indirection: a schema violation throws synchronously, straight back to the caller.
+const schemaLinter = new Linter();
+const schemaLintConfig = [{ files: ['**'], plugins: { exadev: { rules: { 'barrel-policy': rule } } } }];
+
+function lintWithOptions(options: unknown): void {
+  schemaLinter.verify('export {};', [...schemaLintConfig, { rules: { 'exadev/barrel-policy': ['error', options] } }], 'src/index.ts');
+}
+
 describe('barrel-policy schema', () => {
+  it('rejects an options object missing the required mode key at the schema level, before create() ever runs', () => {
+    expect(() => {
+      lintWithOptions({});
+    }).toThrow(/required property 'mode'/);
+  });
+
   it('rejects a mode value outside the banned/single/siblings enum at the schema level, before create() ever runs', () => {
     expect(() => {
-      ruleTester.run('barrel-policy-schema-enum', rule, {
-        valid: [],
-        invalid: [{ code: 'export {};', filename: './src/index.ts', options: [{ mode: 'nonsense' }], errors: [{ messageId: 'indexFileBanned' }] }],
-      });
-    }).not.toThrow(/exadev\/barrel-policy requires options/);
+      lintWithOptions({ mode: 'nonsense' });
+    }).toThrow(/should be equal to one of the allowed values/);
   });
 
   it('rejects an unrecognised property alongside mode at the schema level', () => {
+    // additionalProperties: false is the only thing standing between an unrecognised 'extra' key and a rule run that would otherwise complete normally (mode is still valid) — so unlike the checks above, a permissive mutant here rejects nothing at all rather than producing a different schema message.
     expect(() => {
-      ruleTester.run('barrel-policy-schema-additional-properties', rule, {
-        valid: [],
-        invalid: [{ code: 'export {};', filename: './src/index.ts', options: [{ mode: 'banned', extra: true }], errors: [{ messageId: 'indexFileBanned' }] }],
-      });
-      // additionalProperties: false is the only thing standing between an unrecognised 'extra' key and a rule run that would otherwise complete normally (mode is still valid) — so unlike the two checks above, a permissive mutant here throws nothing at all rather than readMode's own message.
-    }).toThrow();
+      lintWithOptions({ mode: 'banned', extra: true });
+    }).toThrow(/should NOT have additional properties/);
   });
 
   it('rejects a non-object options value at the schema level, before create() ever runs', () => {
     expect(() => {
-      ruleTester.run('barrel-policy-schema-type', rule, {
-        valid: [],
-        invalid: [{ code: 'export {};', filename: './src/index.ts', options: ['banned'], errors: [{ messageId: 'indexFileBanned' }] }],
-      });
-    }).not.toThrow(/exadev\/barrel-policy requires options/);
+      lintWithOptions('banned');
+    }).toThrow(/should be object/);
   });
 });
 
