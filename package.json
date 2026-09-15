@@ -6,7 +6,7 @@
     "@eslint/js": "^10.0.1",
     "@typescript-eslint/utils": "8.67.0",
     "eslint-plugin-jsdoc": "64.3.6",
-    "eslint-plugin-json-canonical": "2.0.0",
+    "eslint-plugin-json-canonical": "2.1.0",
     "eslint-plugin-tsdoc": "^0.5.2",
     "ts-api-utils": "^2.5.0"
   },
