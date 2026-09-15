@@ -289,7 +289,7 @@ describe('package-json-key-order (comment-adjacent members are reported but neve
     expect(result.output).toBe(input);
   });
 
-  test('a comment sitting after a member\'s own trailing comma blocks the fix too — detected only by skipping past the comma to look beyond it', () => {
+  test('a comment sitting after a member\'s own trailing comma blocks the fix too — caught via the following member\'s own preceding-token check, since the comment is the nearest token before it either way', () => {
     const linter = new Linter();
     const input = '{\n  "version": "1.0.0",\n  // pin\n  "name": "x"\n}';
     const result = linter.verifyAndFix(input, jsoncConfig);
