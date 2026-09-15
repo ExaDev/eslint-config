@@ -3,11 +3,11 @@ import { readFlatConfig, tryRequire } from './optional-plugin';
 
 describe('tryRequire', () => {
   it('returns the resolved module on real, successful resolution', () => {
-    // 'eslint' is a genuine, always-present peer/dev dependency of this repo -- proves the real success path end-to-end, not just an injected stand-in.
+    // 'eslint' is a genuine, always-present peer/dev dependency of this repo — proves the real success path end-to-end, not just an injected stand-in.
     expect(tryRequire('eslint')).toBeDefined();
   });
 
-  it('returns undefined for a real, genuinely unresolvable specifier -- no uninstalling required', () => {
+  it('returns undefined for a real, genuinely unresolvable specifier — no uninstalling required', () => {
     expect(tryRequire('@exadev/definitely-not-a-real-package')).toBeUndefined();
   });
 
@@ -46,8 +46,43 @@ describe('readFlatConfig', () => {
     expect(readFlatConfig('a string', ['configs', 'recommended'])).toBeUndefined();
   });
 
+  it('returns undefined for a null module, without throwing — typeof null === "object", so the explicit null check is load-bearing, not redundant', () => {
+    expect(() => readFlatConfig(null, ['configs'])).not.toThrow();
+    expect(readFlatConfig(null, ['configs'])).toBeUndefined();
+  });
+
+  it('returns undefined when an intermediate path segment is null, without throwing', () => {
+    const module = { configs: null };
+    expect(() => readFlatConfig(module, ['configs', 'recommended'])).not.toThrow();
+    expect(readFlatConfig(module, ['configs', 'recommended'])).toBeUndefined();
+  });
+
   it('returns the value at the root when path is empty', () => {
     const module = { rules: {} };
     expect(readFlatConfig(module, [])).toEqual(module);
+  });
+
+  it('relocates a legacy top-level parserOptions into languageOptions.parserOptions', () => {
+    const module = { configs: { recommended: { parserOptions: { ecmaFeatures: { jsx: true } }, rules: {} } } };
+    expect(readFlatConfig(module, ['configs', 'recommended'])).toEqual({
+      languageOptions: { parserOptions: { ecmaFeatures: { jsx: true } } },
+      rules: {},
+    });
+  });
+
+  it('merges a legacy top-level parserOptions into an already-present languageOptions rather than overwriting it', () => {
+    const module = {
+      configs: {
+        recommended: {
+          parserOptions: { ecmaFeatures: { jsx: true } },
+          languageOptions: { sourceType: 'module' },
+          rules: {},
+        },
+      },
+    };
+    expect(readFlatConfig(module, ['configs', 'recommended'])).toEqual({
+      languageOptions: { sourceType: 'module', parserOptions: { ecmaFeatures: { jsx: true } } },
+      rules: {},
+    });
   });
 });
