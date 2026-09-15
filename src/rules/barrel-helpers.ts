@@ -1,21 +1,29 @@
 import { posix } from 'node:path';
 import type { Rule } from 'eslint';
 
-// Shared predicates and the split-statement re-export detector used by the standalone barrel rules (no-non-barrel-reexport, no-side-effects-in-index, no-non-barrel-index, no-index-files, barrel-direct-siblings-only) and the barrel-policy umbrella rule. Centralising these here means a fix to the "what counts as an index file" or "what counts as a direct sibling" question lands once rather than in each rule, and the umbrella composes the identical detection the standalone rules apply -- no behavioural drift between the convenience rule and its granular equivalents.
+// Shared predicates and the split-statement re-export detector used by the standalone barrel rules (no-non-barrel-reexport, no-side-effects-in-index, no-non-barrel-index, no-index-files, barrel-direct-siblings-only) and the barrel-policy umbrella rule. Centralising these here means a fix to the "what counts as an index file" or "what counts as a direct sibling" question lands once rather than in each rule, and the umbrella composes the identical detection the standalone rules apply — no behavioural drift between the convenience rule and its granular equivalents.
 
 // The three modes the barrel-policy umbrella rule selects between, and that the isPermittedBarrel predicate below keys on. 'banned' = no index files at all; 'single' = exactly src/index.ts may be a barrel; 'siblings' = any index file may be a barrel but its re-exports must come from direct siblings.
 export type BarrelMode = 'banned' | 'single' | 'siblings';
 
-// Reusable across rules: the basename an index file has, matching ts/tsx/js/jsx/mjs/mts/cjs/cts. Identical to no-non-barrel-index's own INDEX_BASENAME -- deliberately duplicated as the single declared constant both modules import, rather than each rule re-deriving the regex.
+// Reusable across rules: the basename an index file has, matching ts/tsx/js/jsx/mjs/mts/cjs/cts. Identical to no-non-barrel-index's own INDEX_BASENAME — deliberately duplicated as the single declared constant both modules import, rather than each rule re-deriving the regex.
 export const INDEX_BASENAME = /^index\.[cm]?[tj]sx?$/;
 
+// filename.slice(-1 + 1) is filename.slice(0), the whole string, so lastIndexOf('/') returning -1 (no slash) already produces the right answer without a branch — a conditional here would only ever take the branch the unconditional slice already computes.
 export function basenameOf(filename: string): string {
-  const slash = filename.lastIndexOf('/');
-  return slash === -1 ? filename : filename.slice(slash + 1);
+  return filename.slice(filename.lastIndexOf('/') + 1);
 }
 
 export function isIndexFile(filename: string): boolean {
   return INDEX_BASENAME.test(basenameOf(filename));
+}
+
+// A module specifier's own grammar only ever produces a string literal in source position — ESTree's wider Literal.value union (string | number | boolean | RegExp | bigint | null) exists for literals generally, not for this specific AST position (an ExportNamedDeclaration/ExportAllDeclaration/ImportDeclaration's own `source`). Exported so that guarantee is checked directly against a deliberately non-string literal, rather than trusted on the strength of this comment alone.
+export function moduleSpecifierValue(literal: { readonly value?: unknown }): string {
+  if (typeof literal.value !== 'string') {
+    throw new Error(`Unreachable: a module specifier's own grammar only ever produces a string literal, got ${typeof literal.value} instead.`);
+  }
+  return literal.value;
 }
 
 // The single designated barrel in 'single' mode. Mirrors no-non-barrel-index's own carve-out exactly (endsWith('/src/index.ts')), so the umbrella's 'single' mode and the standalone no-non-barrel-index rule agree on which file is the one permitted barrel.
@@ -23,13 +31,13 @@ export function isMainBarrel(filename: string): boolean {
   return filename.endsWith('/src/index.ts');
 }
 
-// True for re-export statements only: `export * from '...'` / `export { x } from '...'` / `export type { x } from '...'`. A file restricted to these cannot execute anything at import time -- no semantic "does this statement have a side effect" judgement needed, which matters because top-level schema construction (z.object/z.discriminatedUnion/z.codec) throughout every non-barrel module would need special-casing under any naive "no top-level function calls" heuristic.
+// True for re-export statements only: `export * from '...'` / `export { x } from '...'` / `export type { x } from '...'`. A file restricted to these cannot execute anything at import time — no semantic "does this statement have a side effect" judgement needed, which matters because top-level schema construction (z.object/z.discriminatedUnion/z.codec) throughout every non-barrel module would need special-casing under any naive "no top-level function calls" heuristic.
 export function isPureReexport(statement: { type: string; source?: unknown }): boolean {
   if (statement.type === 'ExportAllDeclaration') return true;
   return statement.type === 'ExportNamedDeclaration' && statement.source !== null && statement.source !== undefined;
 }
 
-// True when a re-export's source specifier resolves to a direct sibling of the barrel -- `./module` or `./module.ts` (a sibling file or a sibling folder, the latter resolving via its own index). Rejects nested paths (`./a/b`), parent traversal (`../x`, `./..`), bare package specifiers (`foo`, `document-schema.js`), and self (`.`/`./`). node:path's posix.normalize collapses the pathological-but-valid `./a/../b` to `b` (a genuine sibling) rather than rejecting it on a syntactic technicality, which a raw regex like `/^\.\/[^/]+$/` (the approach an earlier repo's selector took) could not do.
+// True when a re-export's source specifier resolves to a direct sibling of the barrel — `./module` or `./module.ts` (a sibling file or a sibling folder, the latter resolving via its own index). Rejects nested paths (`./a/b`), parent traversal (`../x`, `./..`), bare package specifiers (`foo`, `document-schema.js`), and self (`.`/`./`). node:path's posix.normalize collapses the pathological-but-valid `./a/../b` to `b` (a genuine sibling) rather than rejecting it on a syntactic technicality, which a raw regex like `/^\.\/[^/]+$/` (the approach an earlier repo's selector took) could not do.
 export function isDirectSibling(specifier: string): boolean {
   if (!specifier.startsWith('./')) return false; // bare package or ../ -> not a sibling of this barrel
   let rest = posix.normalize(specifier.slice(2)); // collapse ./a/../b, ./a/./b, double slashes
@@ -60,7 +68,7 @@ function isAncestorNode(value: unknown): value is AncestorNode {
   return typeof value.type === 'string';
 }
 
-// `declare module "..." { ... }` / `declare module Foo { ... }` (a TSModuleDeclaration) describes an external package's or a namespace's types -- it produces no real runtime import chain, so an `export * from`/`export { x } from` written purely inside one (routinely used to re-export an untyped package's own types under a new module name, e.g. `declare module "untyped-pkg" { export * from "typed-pkg"; }`) carries nothing for barrel-policy to protect against: nothing is actually imported or re-exported at runtime at that location, it exists solely to satisfy the type checker. Walks the loosely-typed AncestorNode shape (rather than ESLint core's own Node union, which has no TSModuleDeclaration member) so this stays parser-agnostic rather than asserting a TypeScript-specific node type.
+// `declare module "..." { ... }` / `declare module Foo { ... }` (a TSModuleDeclaration) describes an external package's or a namespace's types — it produces no real runtime import chain, so an `export * from`/`export { x } from` written purely inside one (routinely used to re-export an untyped package's own types under a new module name, e.g. `declare module "untyped-pkg" { export * from "typed-pkg"; }`) carries nothing for barrel-policy to protect against: nothing is actually imported or re-exported at runtime at that location, it exists solely to satisfy the type checker. Walks the loosely-typed AncestorNode shape (rather than ESLint core's own Node union, which has no TSModuleDeclaration member) so this stays parser-agnostic rather than asserting a TypeScript-specific node type.
 export function isInsideAmbientModuleDeclaration(node: unknown): boolean {
   let current: unknown = node;
   while (isAncestorNode(current)) {
@@ -82,14 +90,20 @@ export interface TrackedImport {
   specifier: ImportSpecifierNode;
 }
 
-// The bare ESTree node types above carry no `.parent`, so they don't satisfy Rule.Node -- but fixer.remove/sourceCode.getRange need only their own parameter type, derived here from the real methods (the same "don't hand-type it" convention every rule in this package follows).
+// Narrows an ExportNamedDeclarationNode to the with-source shape (a real `export { x } from '...'`) rather than a bare `export { x };`. The parser only ever sets `source` to a real Literal or to `null`, never `undefined` — the `source?: unknown` field on the underlying ESTree type nonetheless allows it, so both checks are genuinely independent rather than one subsuming the other.
+export function hasSource(node: ExportNamedDeclarationNode): node is ExportNamedDeclarationNode & { source: NonNullable<ExportNamedDeclarationNode['source']> } {
+  return node.source !== null && node.source !== undefined;
+}
+
+// The bare ESTree node types above carry no `.parent`, so they don't satisfy Rule.Node — but fixer.remove/sourceCode.getRange need only their own parameter type, derived here from the real methods (the same "don't hand-type it" convention every rule in this package follows).
 export type SyntaxElement = Parameters<Rule.RuleFixer['remove']>[0];
 export type ReferenceIdentifier = ReturnType<Rule.RuleContext['sourceCode']['getDeclaredVariables']>[number]['references'][number]['identifier'];
 
-// ─── Split-statement re-export detector ─── The single-statement re-export forms (`export { x } from '...'`, `export * from '...'`) are caught directly by walking ExportNamedDeclaration[source] / ExportAllDeclaration. The split-statement form -- `import { x } from './y'; export { x };` or `import { x } from './y'; export default x;` -- binds x locally and hands it back out under its own name, achieving the identical coupling across two statements that neither a source-bearing export nor an AST selector can match. This detector tracks every name an ImportDeclaration binds, then at flush() (called from Program:exit so an import written below its export is still seen) returns each split-statement re-export it found, carrying enough about the originating import for a caller that wants to fix it (no-non-barrel-reexport) or merely report it (the umbrella).
+// ─── Split-statement re-export detector ─── The single-statement re-export forms (`export { x } from '...'`, `export * from '...'`) are caught directly by walking ExportNamedDeclaration[source] / ExportAllDeclaration. The split-statement form — `import { x } from './y'; export { x };` or `import { x } from './y'; export default x;` — binds x locally and hands it back out under its own name, achieving the identical coupling across two statements that neither a source-bearing export nor an AST selector can match. This detector tracks every name an ImportDeclaration binds, then at flush() (called from Program:exit so an import written below its export is still seen) returns each split-statement re-export it found, carrying enough about the originating import for a caller that wants to fix it (no-non-barrel-reexport) or merely report it (the umbrella).
 export type SplitReexportViolation =
   | { readonly kind: 'named'; readonly specifier: ExportSpecifierNode; readonly declaration: ExportNamedDeclarationNode; readonly name: string; readonly trackedImport: TrackedImport }
-  | { readonly kind: 'default'; readonly declaration: ExportDefaultDeclarationNode; readonly name: string; readonly trackedImport: TrackedImport };
+  // identifierNode carries the already-narrowed Identifier this violation's own name was read from — computed once in violations() below, where the narrowing genuinely happens, rather than asked of a caller to re-derive with a runtime check that (once a violation exists at all) could never see its own false branch.
+  | { readonly kind: 'default'; readonly declaration: ExportDefaultDeclarationNode; readonly identifierNode: ReferenceIdentifier; readonly name: string; readonly trackedImport: TrackedImport };
 
 export function createSplitReexportDetector(): {
   visitImport: (node: ImportDeclarationNode) => void;
@@ -108,7 +122,7 @@ export function createSplitReexportDetector(): {
       }
     },
     visitExportNamed(node) {
-      if (node.source !== null && node.source !== undefined) return; // the single-statement form -- detected separately, not here.
+      if (node.source !== null && node.source !== undefined) return; // the single-statement form — detected separately, not here.
       for (const specifier of node.specifiers) {
         bareExportSpecifiers.push({ declaration: node, specifier });
       }
@@ -126,11 +140,11 @@ export function createSplitReexportDetector(): {
         out.push({ kind: 'named', specifier, declaration, name, trackedImport });
       }
       for (const declarationNode of defaultExportDeclarations) {
-        const name = declarationNode.declaration.type === 'Identifier' ? declarationNode.declaration.name : undefined;
-        if (name === undefined) continue;
-        const trackedImport = importsByName.get(name);
+        if (declarationNode.declaration.type !== 'Identifier') continue;
+        const identifierNode = declarationNode.declaration;
+        const trackedImport = importsByName.get(identifierNode.name);
         if (trackedImport === undefined) continue;
-        out.push({ kind: 'default', declaration: declarationNode, name, trackedImport });
+        out.push({ kind: 'default', declaration: declarationNode, identifierNode, name: identifierNode.name, trackedImport });
       }
       return out;
     },

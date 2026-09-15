@@ -22,7 +22,12 @@ ruleTester.run('no-side-effects-in-index', rule, {
     {
       code: 'export default 1;',
       filename: './src/index.ts',
-      errors: [{ messageId: 'notAPureReexport', data: { description: 'ExportDefaultDeclaration' } }],
+      errors: [
+        {
+          message:
+            "A barrel (index) file may contain only re-export statements ('export * from ...' / 'export { x } from ...' / 'export type { x } from ...') — nothing else, so it can never have a side effect at import time by construction. Found: ExportDefaultDeclaration.",
+        },
+      ],
     },
     {
       code: 'export const x = 1;',
@@ -34,7 +39,7 @@ ruleTester.run('no-side-effects-in-index', rule, {
       filename: './src/index.ts',
       errors: [{ messageId: 'notAPureReexport', data: { description: 'ExpressionStatement' } }],
     },
-    // A non-main index file is still an index file after the generalisation -- a side effect there is flagged just as it is in src/index.ts.
+    // A non-main index file is still an index file after the generalisation — a side effect there is flagged just as it is in src/index.ts.
     {
       code: 'export const x = 1;',
       filename: './src/sub/index.ts',
