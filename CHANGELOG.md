@@ -1,3 +1,10 @@
+# [2.17.0](https://github.com/ExaDev/eslint-config/compare/v2.16.1...v2.17.0) (2026-09-15)
+
+
+### Features
+
+* derive ESLint ignores from the consumer's own .gitignore ([2000077](https://github.com/ExaDev/eslint-config/commit/20000771d311750e8d78e11efce05e99608bfa46))
+
 ## [2.16.1](https://github.com/ExaDev/eslint-config/compare/v2.16.0...v2.16.1) (2026-09-15)
 
 
