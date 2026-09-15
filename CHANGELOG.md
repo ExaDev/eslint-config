@@ -1,3 +1,10 @@
+## [2.16.1](https://github.com/ExaDev/eslint-config/compare/v2.16.0...v2.16.1) (2026-09-15)
+
+
+### Bug Fixes
+
+* exempt numeric literal types from no-magic-numbers ([0259947](https://github.com/ExaDev/eslint-config/commit/025994725e1e5556487c29dbf1330a328fdc150f))
+
 # [2.16.0](https://github.com/ExaDev/eslint-config/compare/v2.15.0...v2.16.0) (2026-09-15)
 
 
