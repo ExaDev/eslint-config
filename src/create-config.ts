@@ -1,5 +1,6 @@
 import type { TSESLint } from '@typescript-eslint/utils';
 import type { ConfigArrayValue, PublicConfigArray } from './config-types';
+import { buildGitignoreConfig } from './gitignore';
 import jsdocAndTsdoc from './jsdoc';
 import jsonCanonicalConfig from './json-canonical';
 import { buildNextjsConfig } from './nextjs';
@@ -13,13 +14,16 @@ export interface ExadevConfigOptions {
   readonly nextjs?: boolean;
   // true: enforce package.json key order (see src/rules/package-json-key-order.ts) regardless of syncpack. false: never enforce it. undefined (the default): auto-detect -- enabled unless the consumer's own project already has syncpack configured, since syncpack already produces this exact order for free.
   readonly packageJsonKeyOrder?: boolean;
+  // true: derive ESLint's ignores from .gitignore, throwing if no .gitignore exists. false: never derive it. undefined (the default): auto-detect -- on if the consumer's project has a .gitignore, silently off if it doesn't (a project with no .gitignore at all -- no version control set up yet -- has nothing for this to read).
+  readonly gitignore?: boolean;
 }
 
 // jsdocAndTsdoc and jsonCanonicalConfig are bundled unconditionally, the same way recommendedTypeChecked itself is -- unlike react/nextjs below, neither is a consumer framework choice with its own optional peer dependency to resolve; eslint-plugin-jsdoc, eslint-plugin-tsdoc, and eslint-plugin-json-canonical are all plain dependencies of this package (see package.json), so every consumer already has them the moment they depend on this package at all.
 //
-// The tri-state per feature threads straight into each builder's own `enabled` option -- true forces on (throwing if the underlying peer isn't resolvable), false forces off (skipping resolution entirely), undefined auto-detects (silently empty if unresolvable, or if an equivalent tool -- syncpack, for packageJsonKeyOrder -- already does the job). One resolution pass per feature; no separate pre-check gate that would resolve twice.
+// The tri-state per feature threads straight into each builder's own `enabled` option -- true forces on (throwing if the underlying peer isn't resolvable), false forces off (skipping resolution entirely), undefined auto-detects (silently empty if unresolvable, or if an equivalent tool -- syncpack, for packageJsonKeyOrder, or a project's own .gitignore, for gitignore -- already does the job). One resolution pass per feature; no separate pre-check gate that would resolve twice.
 export function exadevConfig(options: ExadevConfigOptions = {}, ...userConfigs: readonly TSESLint.FlatConfig.Config[]): PublicConfigArray {
   const built: ConfigArrayValue = [
+    ...buildGitignoreConfig({ enabled: options.gitignore }),
     ...recommendedTypeChecked,
     ...jsdocAndTsdoc,
     ...jsonCanonicalConfig,
