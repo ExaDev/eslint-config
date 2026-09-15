@@ -166,7 +166,23 @@ Every JSON file (`**/*.json`, excluding `**/tsconfig*.json`, `**/turbo.json`, an
 
 The plugin's own whitespace-collapsing rule (`no-insignificant-whitespace`, which reformats a document to a single compacted line) is deliberately not part of `configs.recommended` and is not enabled here either -- it stays available for a consumer to opt into directly for their own genuine canonicalization pass.
 
-`**/tsconfig*.json` and `**/turbo.json` are excluded because they genuinely carry comments (TypeScript and turbo both accept them), which `@eslint/json`'s `json/json` language -- what this plugin's recommended config hard-codes -- has no concept of and fails to parse. `**/package.json` is excluded because its key order is a distinct, separately-optional concern (syncpack-style field-priority pinning, not RFC 8785's plain alphabetical order); a project wanting that instead reaches for `eslint-plugin-json-canonical` directly on its own terms, not through this package.
+`**/tsconfig*.json` and `**/turbo.json` are excluded because they genuinely carry comments (TypeScript and turbo both accept them), which `@eslint/json`'s `json/json` language -- what this plugin's recommended config hard-codes -- has no concept of and fails to parse. `**/package.json`'s own key order is excluded from this bundle specifically (its number-format/string-escaping rules still apply) since ordering is the separate, syncpack-aware concern the next section covers.
+
+## Optional package.json key ordering
+
+`exadevConfig({ packageJsonKeyOrder: true })` enables `exadev/package-json-key-order` for `**/package.json`, requiring the same key order [`syncpack format`](https://syncpack.dev/command/format) would produce -- `sortFirst` fields (`name`, `description`, `version`, `author` by default) pinned to the top in that exact order, then every other top-level key alphabetically; and, inside each `sortAz`-listed field's own object or array value (`dependencies`, `devDependencies`, `scripts`, `keywords`, and the rest of syncpack's own default list), its members/elements sorted the same way. Confirmed directly against real `syncpack@15` output, not assumed from its docs -- see this rule's own source comment for the exact reverse-engineering method (a symbol-before-digit-before-letter, case-insensitive comparison syncpack's docs don't specify precisely enough to derive from prose alone).
+
+This exists for a project that wants real `package.json` canonicalization without installing syncpack, and so a project that already has syncpack never sees the two fight: `eslint --fix` and `syncpack format` converge on the identical output.
+
+| Value | `options.packageJsonKeyOrder` |
+| --- | --- |
+| `true` | Force on -- throws if `@eslint/json` isn't resolvable |
+| `false` | Force off -- always `[]`, no resolution attempted |
+| `undefined` / omitted | Auto-detect (the default): on unless the project already has a syncpack config (a `.syncpackrc*`/`syncpack.config.*` file, or a `"syncpack"` key in its own `package.json`), since syncpack already produces this exact order for free |
+
+Like React/Next.js support, this needs its own optional peer resolvable -- `pnpm add -D @eslint/json` -- and, unlike them, also needs its `json/json` language registered for the file (this option's own config block does that for you; nothing extra to wire up).
+
+Bundled into `exadevConfig()`'s default output the same way React/Next.js auto-detection is (see the table above) -- `packageJsonKeyOrder: true`/`false` only forces the tri-state explicitly, it isn't the only way to reach it. Not part of `plugin.configs.recommended`, and not available as a `plugin.configs.packageJsonKeyOrder` explicit-tier config the way `.react`/`.nextjs` are, since wiring it through `plugin.configs` would need `plugin.ts` and this option's own config builder to import each other.
 
 ## Rules
 
@@ -190,6 +206,7 @@ The plugin's own whitespace-collapsing rule (`no-insignificant-whitespace`, whic
 | `no-enum-number-widening` | | A bare (non-literal) `number` is accepted anywhere a numeric enum is expected, without checking it is actually one of the enum's members -- only a numeric *literal* gets range-checked by `tsc`. No autofix: the only provably safe fix is a genuine runtime membership check against the enum's own values, which is a behavioural choice a mechanical fix cannot responsibly make. Requires type information -- only in the default (type-checked) export, not `plugin.configs.recommended`. |
 | `no-enum-reverse-lookup-widening` | suggestion | Indexing a numeric enum's reverse mapping (`Direction[n]`) with a bare (non-literal) `number`, or with a different enum's member, types as plain `string` for any index, including one outside the enum's actual members, where it genuinely returns `undefined` at runtime -- `tsc` does not range-check even a numeric literal index here. When the indexed expression is the init of a variable with an explicit `: string` annotation, a suggestion widens it to `: string \| undefined`, forcing later uses as a bare `string` to surface as real compile errors; every other syntactic position gets a plain report with no fix, and no case gets a full `--fix` autofix. Requires type information -- only in the default (type-checked) export, not `plugin.configs.recommended`. |
 | `prefer-numeric-sort-compare` | suggestion | A deliberately narrow addition alongside `@typescript-eslint/require-array-sort-compare` (which already flags any bare `.sort()`/`.toSorted()` except on a plain string array, with no fix): when the array's element type is definitively `number`, a suggestion offers an ascending compare function (`(a, b) => a - b`), since the default comparator sorts lexicographically (`[1, 2, 10].sort()` becomes `[1, 10, 2]`). Not a full autofix -- descending order is a real, if less common, alternative intent. Requires type information -- only in the default (type-checked) export, not `plugin.configs.recommended`, since it needs the checker to confirm the array's element type. |
+| `package-json-key-order` | ✓ | Requires `package.json`'s keys to be ordered the same way `syncpack format` would order them. See [Optional package.json key ordering](#optional-package-json-key-ordering) -- opt-in via `exadevConfig({ packageJsonKeyOrder: true })`, not part of `recommended`/`barrel`. A JSON-language rule (`@eslint/json`'s `json/json`), not a TSESLint one -- needs no type information and doesn't apply to any `.ts`/`.js` file. |
 
 ## Barrel policy
 
