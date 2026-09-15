@@ -12,10 +12,13 @@ export default defineConfig(
       parserOptions: { project: './tsconfig.json', tsconfigRootDir: import.meta.dirname },
     },
   },
-  js.configs.recommended,
+  // js.configs.recommended ships with no `files` key at all (see recommended-type-checked.ts's own comment on this exact shape); scoped explicitly for the same reason as the trailing override block below, now that json-canonical.ts lints **/*.json under a different language in this same array.
+  { ...js.configs.recommended, files: ['**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}'] },
   // Dogfooding this package's own factory export on itself, imported directly by relative path rather than as a dependency on itself -- the live proof that `exadevConfig(...)` (spread) typechecks and behaves correctly. `react: false, nextjs: false` forced explicitly: eslint-plugin-react/@next/eslint-plugin-next are real devDependencies of THIS repo (needed to test src/react.ts/src/nextjs.ts's own "package is resolvable" branch), so plain auto-detection would activate them here too -- and @next/eslint-plugin-next's own no-html-link-for-pages rule warns to the console about a missing pages/ directory on every lint run, since this repo obviously isn't a Next.js app despite the package being resolvable. This is exactly the scenario the factory's explicit tri-state exists for. The default export ships barrel-policy at mode 'banned', but this repo (like every published package in its consumer family) keeps src/index.ts as its package entry point, so it overrides to 'single' in the next block.
   ...exadevConfig({ react: false, nextjs: false }),
   {
+    // Scoped explicitly, not left unscoped: an unscoped block matches every file ESLint lints, including one linted under an entirely different `language` plugin in the same array -- exactly the failure mode recommended-type-checked.ts's own scopeToJsTs already guards against for the presets it composes. This block sat unscoped safely only because nothing in this array registered a non-JS/TS language before json-canonical.ts started linting **/*.json alongside it; once it did, this same block started demanding the @typescript-eslint plugin for JSON files too.
+    files: ['**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}'],
     rules: {
       '@typescript-eslint/consistent-type-imports': ['error', { fixStyle: 'inline-type-imports' }],
       // This package's own src/index.ts is its public entry point (package.json exports), so it keeps one barrel: override the default 'banned' policy to 'single'.

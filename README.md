@@ -160,6 +160,14 @@ export default tseslint.config(
 
 Trailing arguments are arbitrary flat-config objects, appended in order after everything else -- `exadevConfig({}, { rules: { 'no-console': 'warn' } })` is equivalent to spreading the default export plus one more config object.
 
+## RFC 8785 canonical JSON formatting
+
+Every JSON file (`**/*.json`, excluding `**/tsconfig*.json`, `**/turbo.json`, and `**/package.json`) is linted against [`eslint-plugin-json-canonical`](https://github.com/ExaDev/eslint-plugin-json-canonical)'s `configs.recommended` -- plain UTF-16 code-unit key ordering, canonical number formatting, and canonical string escaping, per [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785). This is bundled unconditionally, the same way jsdoc/tsdoc support is: `eslint-plugin-json-canonical` is a plain dependency of this package, so every consumer already has it. There is no option to turn it off.
+
+The plugin's own whitespace-collapsing rule (`no-insignificant-whitespace`, which reformats a document to a single compacted line) is deliberately not part of `configs.recommended` and is not enabled here either -- it stays available for a consumer to opt into directly for their own genuine canonicalization pass.
+
+`**/tsconfig*.json` and `**/turbo.json` are excluded because they genuinely carry comments (TypeScript and turbo both accept them), which `@eslint/json`'s `json/json` language -- what this plugin's recommended config hard-codes -- has no concept of and fails to parse. `**/package.json` is excluded because its key order is a distinct, separately-optional concern (syncpack-style field-priority pinning, not RFC 8785's plain alphabetical order); a project wanting that instead reaches for `eslint-plugin-json-canonical` directly on its own terms, not through this package.
+
 ## Rules
 
 | Rule | Fixable | Description |
