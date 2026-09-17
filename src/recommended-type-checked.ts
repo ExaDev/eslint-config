@@ -46,6 +46,7 @@ const recommendedTypeChecked: ConfigArrayValue = [
       'exadev/no-set-instanceof-mutation': 'error',
       'exadev/prefer-numeric-sort-compare': 'error',
       'exadev/prefer-readonly-array-param': 'error',
+      // Known interaction with `consistent-type-assertions` and genuinely mutable foreign objects: when a config callback must mutate a property of an object it does not own (webpack's `resource.request = ...` inside a Next.js config's webpack hook is the confirmed real case from ExaDev/monorepo-template), the readonly-parameter fix and the assertion ban together leave direct assignment illegal. The escape that satisfies everything is `Object.assign(target, { prop: value })` — mutation without a property-assignment expression, no assertion, no disable comment. Prefer that over `eslint-disable` or a `-readonly` mapped type when the mutation is genuine.
       'exadev/prefer-readonly-object-param': 'error',
       'exadev/test-file-kind': 'error',
       // strictTypeChecked's own default already bans @ts-ignore/@ts-nocheck outright and allows @ts-expect-error with a description; this raises @ts-expect-error to the same outright ban, since noInlineConfig above already removes eslint-disable as an escape hatch — a partial options object here, so the untouched keys (ts-ignore/ts-nocheck/ts-check) keep the rule's own built-in defaults rather than needing to be restated (confirmed empirically: passing only `{ 'ts-expect-error': true }` still reports the existing @ts-ignore violation unchanged).
@@ -81,7 +82,7 @@ const recommendedTypeChecked: ConfigArrayValue = [
       '@typescript-eslint/no-use-before-define': ['error', { functions: false }],
       // A class field only ever assigned in the constructor that isn't marked readonly — has a real automatic fixer (`meta.fixable: 'code'`), one of only a handful of rules in this batch that do (alongside method-signature-style above and the type-import/export/promise-async rules below).
       '@typescript-eslint/prefer-readonly': 'error',
-      // A function that returns a Promise without being declared async hurts async stack traces and error-handling consistency. Has a real autofix (meta.fixable: 'code').
+      // A function that returns a Promise without being declared async hurts async stack traces and error-handling consistency. Has a real autofix (meta.fixable: 'code'). Known interaction with `require-await` (on in the strictTypeChecked preset this config spreads): once the autofix adds `async` to a promise-returning arrow whose body has no `await` (e.g. `() => somePromise` becomes `async () => somePromise`), `require-await` fires on the result, and the two rules' fixers push back and forth. The stable shape that satisfies both is `async () => Promise.resolve(x)` or an explicit `return somePromise` inside the async body — write that directly rather than fighting the pair (confirmed over a full day of real consumer work in ExaDev/monorepo-template, where the equilibrium had to be rediscovered per file).
       '@typescript-eslint/promise-function-async': 'error',
       // `.sort()` with no compare function sorts lexicographically even on numbers — `[10, 2, 1].sort()` silently becomes `[1, 10, 2]` — a classic, easy-to-miss runtime bug.
       '@typescript-eslint/require-array-sort-compare': 'error',
