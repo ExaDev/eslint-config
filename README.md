@@ -16,14 +16,14 @@ Multiple ExaDev repos carried identical copies of a handful of custom ESLint rul
 pnpm add -D @exadev/eslint-config typescript-eslint eslint
 ```
 
-Requires `eslint >=10.0.0` and `typescript-eslint >=8.0.0` as peer dependencies. Importing anything from this package resolves `typescript-eslint`, since the default export and the `plugin` named export share one root module — see [Architecture](#architecture).
+Requires [`eslint`](https://eslint.org) `>=10.0.0` and [`typescript-eslint`](https://typescript-eslint.io/packages/typescript-eslint) `>=8.0.0` as peer dependencies. Importing anything from this package resolves `typescript-eslint`, since the default export and the `plugin` named export share one root module — see [Architecture](#architecture).
 
 ```ts
 // eslint.config.ts
+import { defineConfig } from 'eslint/config';
 import exadev from '@exadev/eslint-config';
-import tseslint from 'typescript-eslint';
 
-export default tseslint.config(
+export default defineConfig(
   {
     languageOptions: {
       parserOptions: { project: './tsconfig.json', tsconfigRootDir: import.meta.dirname },
@@ -34,13 +34,15 @@ export default tseslint.config(
 );
 ```
 
-**Remove your own `tseslint.configs.recommended`/`recommendedTypeChecked`/`strictTypeChecked`/`stylisticTypeChecked` spreads.** The default export already includes `strictTypeChecked` (which subsumes both plain `recommended` and `recommendedTypeChecked`) plus `stylisticTypeChecked`, and registers the `@typescript-eslint` plugin/parser itself — flat config rejects two different plugin object instances registered under the same namespace. You still supply your own `languageOptions.parserOptions.project`/`projectService` pointing at your tsconfig(s).
+**Why [`defineConfig()`](https://eslint.org/docs/latest/use/configure/configuration-files#defineconfig-utility) rather than `tseslint.config()` here:** [`tseslint.config()`](https://typescript-eslint.io/packages/typescript-eslint/#config-deprecated) is now `@deprecated` upstream in favour of ESLint core's own `defineConfig()`, so this package's default export is typed against ESLint core's own config type specifically so it satisfies `defineConfig()` directly. If you haven't migrated off `tseslint.config()` yet, it still works exactly the same — this package's exported config array is typed to satisfy either wrapper, and that compatibility is itself covered by a real regression test (`src/consumer-compatibility.ts`) — but new consumers should reach for `defineConfig()`.
+
+**Remove your own `tseslint.configs.recommended`/`recommendedTypeChecked`/`strictTypeChecked`/`stylisticTypeChecked` spreads.** The default export already includes [`strictTypeChecked`](https://typescript-eslint.io/users/configs/#strict-type-checked) (which subsumes both plain [`recommended`](https://typescript-eslint.io/users/configs/#recommended) and [`recommendedTypeChecked`](https://typescript-eslint.io/users/configs/#recommended-type-checked)) plus [`stylisticTypeChecked`](https://typescript-eslint.io/users/configs/#stylistic-type-checked), and registers the `@typescript-eslint` plugin/parser itself — [flat config](https://eslint.org/docs/latest/use/configure/configuration-files) rejects two different plugin object instances registered under the same namespace. You still supply your own `languageOptions.parserOptions.project`/`projectService` pointing at your tsconfig(s).
 
 ### What the default export includes
 
 **typescript-eslint presets:**
 
-- `strictTypeChecked` + `stylisticTypeChecked` — already covers [`no-deprecated`](https://typescript-eslint.io/rules/no-deprecated/), [`no-misused-spread`](https://typescript-eslint.io/rules/no-misused-spread/), [`no-mixed-enums`](https://typescript-eslint.io/rules/no-mixed-enums/), [`no-unnecessary-condition`](https://typescript-eslint.io/rules/no-unnecessary-condition/), [`use-unknown-in-catch-callback-variable`](https://typescript-eslint.io/rules/use-unknown-in-catch-callback-variable/), [`return-await`](https://typescript-eslint.io/rules/return-await/), [`related-getter-setter-pairs`](https://typescript-eslint.io/rules/related-getter-setter-pairs/), [`no-unnecessary-type-parameters`](https://typescript-eslint.io/rules/no-unnecessary-type-parameters/), and more (not re-listed individually below).
+- [`strictTypeChecked`](https://typescript-eslint.io/users/configs/#strict-type-checked) + [`stylisticTypeChecked`](https://typescript-eslint.io/users/configs/#stylistic-type-checked) — already covers [`no-deprecated`](https://typescript-eslint.io/rules/no-deprecated/), [`no-misused-spread`](https://typescript-eslint.io/rules/no-misused-spread/), [`no-mixed-enums`](https://typescript-eslint.io/rules/no-mixed-enums/), [`no-unnecessary-condition`](https://typescript-eslint.io/rules/no-unnecessary-condition/), [`use-unknown-in-catch-callback-variable`](https://typescript-eslint.io/rules/use-unknown-in-catch-callback-variable/), [`return-await`](https://typescript-eslint.io/rules/return-await/), [`related-getter-setter-pairs`](https://typescript-eslint.io/rules/related-getter-setter-pairs/), [`no-unnecessary-type-parameters`](https://typescript-eslint.io/rules/no-unnecessary-type-parameters/), and more (not re-listed individually below).
 
 **This package's own rules** (full details in [Rules](#rules)):
 
@@ -72,7 +74,7 @@ export default tseslint.config(
   - *Why:* `let`/`const`/`class`/enum bindings have a genuine temporal-dead-zone crash risk, but function declarations are fully hoisted and safe to call before their point of textual declaration — this codebase's own rule files consistently define helper functions after the logic that calls them.
 - **[`ban-ts-comment`](https://typescript-eslint.io/rules/ban-ts-comment/)** — bans `@ts-expect-error` outright (relaxed in test files, see below).
 - **[`method-signature-style`](https://typescript-eslint.io/rules/method-signature-style/)** set to `'property'`.
-  - *Why:* method-shorthand signatures are checked bivariantly under `strictFunctionTypes`, which is unsound.
+  - *Why:* method-shorthand signatures are checked bivariantly under [`strictFunctionTypes`](https://www.typescriptlang.org/tsconfig/#strictFunctionTypes), which is unsound.
 - **[`prefer-readonly`](https://typescript-eslint.io/rules/prefer-readonly/)**, **[`promise-function-async`](https://typescript-eslint.io/rules/promise-function-async/)**, **[`require-array-sort-compare`](https://typescript-eslint.io/rules/require-array-sort-compare/)** — plain presence, no extra config.
 - **[`strict-void-return`](https://typescript-eslint.io/rules/strict-void-return/)** — bans passing a value-returning function where a void-returning one is expected (e.g. `arr.forEach(x => otherArray.push(x))`).
   - *Why:* not yet in any typescript-eslint preset; this typechecks today only because of TS's own void-return contravariance leniency.
@@ -100,10 +102,10 @@ For a project that wants only this package's own rules without the full type-che
 
 ```ts
 // eslint.config.ts
+import { defineConfig } from 'eslint/config';
 import { plugin } from '@exadev/eslint-config';
-import tseslint from 'typescript-eslint';
 
-export default tseslint.config(
+export default defineConfig(
   // ...your own config...
   {
     files: ['src/**/*.ts'],
@@ -132,7 +134,7 @@ export default defineConfig([
 ]);
 ```
 
-`tseslint.config()` does **not** accept string `extends` (only `defineConfig()` does); pass the config value directly instead:
+[`tseslint.config()`](https://typescript-eslint.io/packages/typescript-eslint#config) does **not** accept string `extends` (only [`defineConfig()`](https://eslint.org/docs/latest/use/configure/configuration-files#defineconfig-utility) does); pass the config value directly instead:
 
 ```ts
 import { plugin } from '@exadev/eslint-config';
@@ -163,10 +165,10 @@ Every tri-state option above (`true`/`false`/`undefined`) is passed through the 
 
 ```ts
 // eslint.config.ts
+import { defineConfig } from 'eslint/config';
 import { exadevConfig } from '@exadev/eslint-config';
-import tseslint from 'typescript-eslint';
 
-export default tseslint.config(
+export default defineConfig(
   {
     languageOptions: {
       parserOptions: { project: './tsconfig.json', tsconfigRootDir: import.meta.dirname },
@@ -183,7 +185,7 @@ Trailing arguments are arbitrary flat-config objects, appended in order after ev
 
 React/hooks/a11y and Next.js rule blocks fold in automatically, with no separate import or config needed, gated on two independent, always-both-required conditions:
 
-1. **The corresponding package must actually be resolvable.** `eslint-plugin-react`, `eslint-plugin-react-hooks`, `eslint-plugin-jsx-a11y`, and `@next/eslint-plugin-next` are all *optional* peer dependencies (`peerDependenciesMeta.<pkg>.optional: true`) — install only whichever your project actually needs:
+1. **The corresponding package must actually be resolvable.** [`eslint-plugin-react`](https://github.com/jsx-eslint/eslint-plugin-react), [`eslint-plugin-react-hooks`](https://github.com/facebook/react/tree/main/packages/eslint-plugin-react-hooks), [`eslint-plugin-jsx-a11y`](https://github.com/jsx-eslint/eslint-plugin-jsx-a11y), and [`@next/eslint-plugin-next`](https://github.com/vercel/next.js/tree/canary/packages/eslint-plugin-next) are all *optional* peer dependencies (`peerDependenciesMeta.<pkg>.optional: true`) — install only whichever your project actually needs:
    ```sh
    pnpm add -D eslint-plugin-react eslint-plugin-react-hooks eslint-plugin-jsx-a11y   # React support
    pnpm add -D @next/eslint-plugin-next                                               # Next.js support
@@ -197,10 +199,10 @@ React support pairs `eslint-plugin-react`'s `flat/recommended` with its own `fla
 
 - **`plugin.configs.react`/`plugin.configs.nextjs`** — explicit tier selection, mirroring `plugin.configs.recommended`/`.barrel`. Unlike those two, selecting `.react`/`.nextjs` is itself an explicit request: it **throws** a clear, actionable error if the underlying peer isn't installed, rather than silently returning nothing.
   ```ts
+  import { defineConfig } from 'eslint/config';
   import { plugin } from '@exadev/eslint-config';
-  import tseslint from 'typescript-eslint';
 
-  export default tseslint.config(
+  export default defineConfig(
     // ...your own config...
     {
       files: ['**/*.tsx'],
@@ -237,7 +239,7 @@ Every JSON file is linted against [`eslint-plugin-json-canonical`](https://githu
 
 The plugin's own full-canonicalization rule ([`no-insignificant-whitespace`](https://github.com/ExaDev/eslint-plugin-json-canonical/blob/main/src/rules/no-insignificant-whitespace.ts), which collapses a document to a single compacted line with no whitespace at all) is deliberately not part of the config this package extends — it stays available for a consumer to opt into directly for their own genuine canonicalization pass (hashing, signing, byte-for-byte comparison).
 
-`**/*.jsonc`, `**/tsconfig*.json`, and `**/turbo.json` get the plugin's `configs.contentOnlyJsonc` instead of the plain-JSON config: they genuinely carry comments (TypeScript and turbo both accept them), which `@eslint/json`'s `json/json` language has no concept of and fails to parse, and neither pretty-printing nor whitespace-collapsing has a well-defined answer for a comment's own attachment to a member once its surrounding whitespace is rewritten. Content canonicalization (key order, number/string formatting) still applies to these files under `json/jsonc`.
+`**/*.jsonc`, `**/tsconfig*.json`, and `**/turbo.json` get the plugin's `configs.contentOnlyJsonc` instead of the plain-JSON config: they genuinely carry comments (TypeScript and turbo both accept them), which [`@eslint/json`](https://github.com/eslint/json#readme)'s `json/json` language has no concept of and fails to parse, and neither pretty-printing nor whitespace-collapsing has a well-defined answer for a comment's own attachment to a member once its surrounding whitespace is rewritten. Content canonicalization (key order, number/string formatting) still applies to these files under `json/jsonc`.
 
 `**/package.json` gets everything the plain-JSON config gives every other file — including pretty-printed layout — except [`json/sort-keys`](https://github.com/eslint/json/blob/main/docs/rules/sort-keys.md), turned back off in its own override block, since its key order is the separate, syncpack-aware concern the next section covers.
 
@@ -316,11 +318,13 @@ pnpm test
 pnpm build
 ```
 
-- Each rule has a co-located `*.unit.test.ts` exercising it with ESLint's `RuleTester` under Vitest. [`vitest.setup.ts`](vitest.setup.ts) wires `RuleTester.describe`/`.it`/`.itOnly` to Vitest's `describe`/`it` explicitly (no `test.globals`). Each test uses typescript-eslint's parser for TypeScript-only fixtures; none need type information.
+[`pnpm`](https://pnpm.io) is this repo's own package manager, pinned via `packageManager`.
+
+- Each rule has a co-located `*.unit.test.ts` exercising it with ESLint's [`RuleTester`](https://eslint.org/docs/latest/integrate/nodejs-api#ruletester) under [Vitest](https://vitest.dev). [`vitest.setup.ts`](vitest.setup.ts) wires `RuleTester.describe`/`.it`/`.itOnly` to Vitest's `describe`/`it` explicitly (no `test.globals`). Each test uses typescript-eslint's parser for TypeScript-only fixtures; none need type information.
 - Every test file's own name declares its kind via a filename suffix immediately before `.test`/`.spec` — `.unit`, `.integration`, or `.e2e` by default (`exadev/test-file-kind`, part of `recommended`; see [Rules](#rules)) — so a file's test kind is always visible from its name alone, without opening it, and downstream tooling (e.g. a Vitest project split by test kind) can select by filename glob rather than by convention nobody enforces. This package's own tests are exclusively `.unit.test.ts` today (a `.internal.unit.test.ts` variant exists for a handful of files that also test non-exported internals directly, `internal` just being an ordinary extra name segment — see [`no-mutable-union-array-param.internal.unit.test.ts`](src/rules/no-mutable-union-array-param.internal.unit.test.ts)).
-- `pnpm test` always measures coverage (`@vitest/coverage-v8`), scoped to `src/**/*.ts` excluding `*.test.ts`. Text output in terminal; `html`/`lcov` in `coverage/` (gitignored alongside `.eslintcache` and `dist/`).
-- The `lint`/`typecheck`/`test`/`build` npm scripts wrap turbo tasks named `_lint`/`_typecheck`/`_test`/`_build` — run `pnpm build`, not `turbo run build`.
-- `pnpm build` runs `tsdown` from [`src/index.ts`](src/index.ts), bundling the whole module graph into ESM + CJS + declarations. `prepublishOnly` re-runs lint, typecheck, `test`, `tsdown`, `publint`, and `attw --pack`.
+- `pnpm test` always measures [coverage](https://vitest.dev/guide/coverage) (`@vitest/coverage-v8`), scoped to `src/**/*.ts` excluding `*.test.ts`. Text output in terminal; `html`/`lcov` in `coverage/` (gitignored alongside `.eslintcache` and `dist/`).
+- The `lint`/`typecheck`/`test`/`build` npm scripts wrap [turbo](https://turborepo.dev) tasks named `_lint`/`_typecheck`/`_test`/`_build` — run `pnpm build`, not `turbo run build`.
+- `pnpm build` runs [`tsdown`](https://tsdown.dev) from [`src/index.ts`](src/index.ts), bundling the whole module graph into ESM + CJS + declarations. `prepublishOnly` re-runs lint, typecheck, `test`, `tsdown`, [`publint`](https://publint.dev), and [`attw`](https://github.com/arethetypeswrong/arethetypeswrong.github.io) `--pack`.
 
 ### Architecture
 
@@ -328,13 +332,13 @@ pnpm build
 <summary>Expand for implementation internals (not needed for ordinary consumption)</summary>
 
 - [`src/plugin.ts`](src/plugin.ts) builds a `TSESLint.FlatConfig.Plugin` combining [`src/rules/`](src/rules) into a flat `rules` map.
-  - That's `@typescript-eslint/utils`'s own type, not ESLint's own `ESLint.Plugin` — the latter can't hold a rule built with `ESLintUtils.RuleCreator`.
+  - That's [`@typescript-eslint/utils`](https://typescript-eslint.io/packages/utils)'s own type, not ESLint's own `ESLint.Plugin` — the latter can't hold a rule built with [`ESLintUtils.RuleCreator`](https://typescript-eslint.io/developers/custom-rules).
   - `configs.recommended`, `.barrel`, `.react`, and `.nextjs` are getters in the object literal, since each references the fully-built `plugin` (`plugins: { exadev: plugin }`), which a plain property initializer can't do mid-construction.
   - `recommended` ships `barrel-policy` at `mode: 'banned'`; `barrel` at `mode: 'single'`; `.react`/`.nextjs` call `buildReactConfig`/`buildNextjsConfig` with `enabled: true` (see below).
 - [`src/config-types.ts`](src/config-types.ts) holds `ConfigValue`/`ConfigArrayValue` (`ConfigArrayValue = Extract<ConfigValue, unknown[]>`, the array-only member of ESLint's own config-value union), shared by every file below rather than redefined per file.
   - *Why:* annotating a config array with the wider `ConfigValue` union directly broke `...exadev` with `TS2488` ("must have a Symbol.iterator method").
 - [`src/optional-plugin.ts`](src/optional-plugin.ts) is the lazy-resolution helper behind React/Next.js support.
-  - `tryRequire` wraps `createRequire(import.meta.url)` in try/catch, returning `unknown` (never a cast) so every call site narrows explicitly before use.
+  - `tryRequire` wraps [`createRequire(import.meta.url)`](https://nodejs.org/api/module.html#modulecreaterequirefilename) in try/catch, returning `unknown` (never a cast) so every call site narrows explicitly before use.
   - `readFlatConfig` walks a property path through that `unknown` value via a real type guard, normalizing a stray legacy top-level `parserOptions` key into `languageOptions.parserOptions` along the way.
   - Confirmed necessary: `eslint-plugin-jsx-a11y`'s own `configs.recommended` export carries exactly this legacy shape, which flat config's schema rejects outright rather than ignores.
 - [`src/react.ts`](src/react.ts)/[`src/nextjs.ts`](src/nextjs.ts) each export a `build*Config(options)` function: resolve the relevant optional peer(s) via `tryRequire`, extract their real flat config via `readFlatConfig`, and return an array of 0-or-more config blocks.
@@ -354,15 +358,15 @@ pnpm build
 ### Conventions
 
 - [`eslint.config.ts`](eslint.config.ts) dogfoods this package's own factory export on itself (`import { exadevConfig } from './src/index'`), spreading `exadevConfig({ react: false, nextjs: false })` — forced off explicitly, not the plain auto-detecting default, since `eslint-plugin-react`/`@next/eslint-plugin-next` are real devDependencies of *this* repo (needed to test [`src/react.ts`](src/react.ts)/[`src/nextjs.ts`](src/nextjs.ts)'s own "package is resolvable" branch) even though this repo is neither a React nor a Next.js project. `no-side-effects-in-index` and `no-non-barrel-reexport` self-scope to [`src/index.ts`](src/index.ts) internally, so no `files`/`ignores` wiring is needed here. Plugin construction lives in [`src/plugin.ts`](src/plugin.ts) specifically so `src/index.ts` stays a pure re-export point.
-- [`tsconfig.json`](tsconfig.json) enables `verbatimModuleSyntax` (`import type`/`export type` required for type-only imports — also enforced by `consistent-type-imports`) and `noUncheckedIndexedAccess` (narrow indexed access before use rather than asserting).
-- Conventional commits are enforced by commitlint, restricted to the type-enum defined once in [`release.config.ts`](release.config.ts)'s `commitTypes` — both commitlint and semantic-release derive from that single list.
+- [`tsconfig.json`](tsconfig.json) enables [`verbatimModuleSyntax`](https://www.typescriptlang.org/tsconfig/#verbatimModuleSyntax) (`import type`/`export type` required for type-only imports — also enforced by `consistent-type-imports`) and [`noUncheckedIndexedAccess`](https://www.typescriptlang.org/tsconfig/#noUncheckedIndexedAccess) (narrow indexed access before use rather than asserting).
+- Conventional commits are enforced by [commitlint](https://commitlint.js.org), restricted to the type-enum defined once in [`release.config.ts`](release.config.ts)'s `commitTypes` — both commitlint and semantic-release derive from that single list.
 
 ### Gotchas and quirks
 
-- [`.attw.json`](.attw.json) ignores `false-export-default`: tsdown/rolldown's CJS output for this plugin's sole default export doesn't emit the `export =` form `arethetypeswrong` wants under legacy `node10` resolution. The modes ESLint flat config uses (`node16`, `bundler`) are unaffected, so the rule is suppressed rather than changing the default-export shape.
+- [`.attw.json`](.attw.json) ignores `false-export-default`: tsdown/[rolldown](https://rolldown.rs)'s CJS output for this plugin's sole default export doesn't emit the `export =` form [`arethetypeswrong`](https://github.com/arethetypeswrong/arethetypeswrong.github.io) wants under legacy `node10` resolution. The modes ESLint flat config uses (`node16`, `bundler`) are unaffected, so the rule is suppressed rather than changing the default-export shape.
 - [`src/index.ts`](src/index.ts) mixing a default export with a named one triggers rolldown's `MIXED_EXPORTS` warning: a raw CommonJS `require()` would see the raw exports object instead of the default. ESM `import` (the actual consumer path) resolves both correctly; `attw --pack` and `publint` report no problems, so the warning is accepted (see [`tsdown.config.ts`](tsdown.config.ts)).
-- Husky hooks: `pre-commit` runs lint-staged (`eslint --fix` on staged `*.ts`), `commit-msg` runs commitlint, `pre-push` runs typecheck + test + build.
-- The CI release job sets `HUSKY=0` (commit-msg hook skips the automated release commit) and blanks `NPM_TOKEN`/`NODE_AUTH_TOKEN` explicitly so an inherited token can't win over OIDC trusted publishing.
+- [Husky](https://github.com/typicode/husky) hooks: `pre-commit` runs [lint-staged](https://github.com/lint-staged/lint-staged#readme) (`eslint --fix` on staged `*.ts`), `commit-msg` runs commitlint, `pre-push` runs typecheck + test + build.
+- The CI release job sets `HUSKY=0` (commit-msg hook skips the automated release commit) and blanks `NPM_TOKEN`/`NODE_AUTH_TOKEN` explicitly so an inherited token can't win over [OIDC trusted publishing](https://docs.npmjs.com/trusted-publishers).
 - A consumer who already has `eslint-plugin-react`/`@next/eslint-plugin-next` resolvable for unrelated reasons (e.g. hoisted in a monorepo) and writes `.jsx`/`.tsx` files may see new rule activity the moment they upgrade to a version of this package that ships React/Next.js support — with zero action on their part. See the compatibility note under [Optional React and Next.js support](#optional-react-and-nextjs-support).
 
 ### Contributing
@@ -371,7 +375,7 @@ Conventional commits are enforced by a husky `commit-msg` hook and re-checked in
 
 ### Release
 
-Conventional commits drive [semantic-release](https://semantic-release.gitbook.io/semantic-release) on every push to `main`: version bump, `CHANGELOG.md`, GitHub Release, and npm publish via OIDC (no stored token). A second CI job republishes the identical build under the unscoped alias `exadev-eslint-config`.
+Conventional commits drive [semantic-release](https://semantic-release.gitbook.io/semantic-release) on every push to `main`: version bump, `CHANGELOG.md`, GitHub Release, and npm publish via [OIDC trusted publishing](https://docs.npmjs.com/trusted-publishers) (no stored token). A second CI job republishes the identical build under the unscoped alias `exadev-eslint-config`.
 
 ## License
 
