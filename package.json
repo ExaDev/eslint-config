@@ -1,7 +1,7 @@
 {
   "name": "@exadev/eslint-config",
   "description": "Shared custom ESLint rules and plugin for ExaDev projects",
-  "version": "2.19.3",
+  "version": "2.19.4",
   "dependencies": {
     "@eslint/js": "^10.0.1",
     "@typescript-eslint/utils": "8.67.0",
