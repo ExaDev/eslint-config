@@ -63,24 +63,34 @@ export default tseslint.config(
 - **`linterOptions.noInlineConfig`** — no `eslint-disable` comments of any kind.
 - **`consistent-type-assertions`** — bans all type assertions (relaxed in test files, see below).
 - **`consistent-type-imports`** and **`consistent-type-exports`** — plain presence, no extra config.
-- **`consistent-return`** — a function can't implicitly return `undefined` on one path and a real value on another. *Why:* that split is usually a bug, not a deliberate design.
-- **`no-non-null-assertion`** — bans the `!` operator. *Why:* it's the same manual-override escape hatch as a type assertion, under a different spelling.
+- **`consistent-return`** — a function can't implicitly return `undefined` on one path and a real value on another.
+  - *Why:* that split is usually a bug, not a deliberate design.
+- **`no-non-null-assertion`** — bans the `!` operator.
+  - *Why:* it's the same manual-override escape hatch as a type assertion, under a different spelling.
 - **`no-redeclare`** and **`no-shadow`** — plain presence, no extra config.
-- **`no-use-before-define`** set to `{ functions: false }` — everything except function declarations must be defined before use. *Why:* `let`/`const`/`class`/enum bindings have a genuine temporal-dead-zone crash risk, but function declarations are fully hoisted and safe to call before their point of textual declaration — this codebase's own rule files consistently define helper functions after the logic that calls them.
+- **`no-use-before-define`** set to `{ functions: false }` — everything except function declarations must be defined before use.
+  - *Why:* `let`/`const`/`class`/enum bindings have a genuine temporal-dead-zone crash risk, but function declarations are fully hoisted and safe to call before their point of textual declaration — this codebase's own rule files consistently define helper functions after the logic that calls them.
 - **`ban-ts-comment`** — bans `@ts-expect-error` outright (relaxed in test files, see below).
-- **`method-signature-style`** set to `'property'`. *Why:* method-shorthand signatures are checked bivariantly under `strictFunctionTypes`, which is unsound.
+- **`method-signature-style`** set to `'property'`.
+  - *Why:* method-shorthand signatures are checked bivariantly under `strictFunctionTypes`, which is unsound.
 - **`prefer-readonly`**, **`promise-function-async`**, **`require-array-sort-compare`** — plain presence, no extra config.
-- **`strict-void-return`** — bans passing a value-returning function where a void-returning one is expected (e.g. `arr.forEach(x => otherArray.push(x))`). *Why:* not yet in any typescript-eslint preset; this typechecks today only because of TS's own void-return contravariance leniency.
+- **`strict-void-return`** — bans passing a value-returning function where a void-returning one is expected (e.g. `arr.forEach(x => otherArray.push(x))`).
+  - *Why:* not yet in any typescript-eslint preset; this typechecks today only because of TS's own void-return contravariance leniency.
 - **`switch-exhaustiveness-check`** — plain presence, no extra config.
-- **`strict-boolean-expressions`** at the rule's own bare defaults. *Why:* an unambiguous non-nullable truthy check stays allowed; an ambiguous nullable check does not.
+- **`strict-boolean-expressions`** at the rule's own bare defaults.
+  - *Why:* an unambiguous non-nullable truthy check stays allowed; an ambiguous nullable check does not.
 - **`no-magic-numbers`** — tuned to exempt array indexes, enum members, readonly class properties, default parameter values, numeric literal types (e.g. `type Indent = 2 | 4`), and the handful of universally-idiomatic bare numbers (`-1`, `0`, `1`, `2`).
-- **`max-lines`** set to `{ max: 800, skipBlankLines: true, skipComments: true }`. *Why:* counting only real code means a file isn't pushed over the limit by whitespace or its own WHY-explanation comments.
-- **`no-warning-comments`** — bans any comment containing `Stryker disable`. *Why:* that's Stryker's own mutation-testing suppression directive, invisible to `noInlineConfig` above since it isn't an eslint-disable comment.
+- **`max-lines`** set to `{ max: 800, skipBlankLines: true, skipComments: true }`.
+  - *Why:* counting only real code means a file isn't pushed over the limit by whitespace or its own WHY-explanation comments.
+- **`no-warning-comments`** — bans any comment containing `Stryker disable`.
+  - *Why:* that's Stryker's own mutation-testing suppression directive, invisible to `noInlineConfig` above since it isn't an eslint-disable comment.
 
 **Test files** (`**/*.{test,spec}.{ts,tsx,mts,cts,js,jsx,mjs,cjs}`) get two narrow relaxations of this package's own additions, and only these two:
 
-- **`@ts-expect-error`** reverts to `allow-with-description`. *Why:* a compile-time-only assertion of a type failure is a legitimate test pattern; `@ts-ignore`/`@ts-nocheck` stay banned since `@ts-expect-error` is strictly better.
-- **`consistent-type-assertions`** relaxes to `assertionStyle: 'as'`. *Why:* the legacy `<Type>value` form stays banned everywhere.
+- **`@ts-expect-error`** reverts to `allow-with-description`.
+  - *Why:* a compile-time-only assertion of a type failure is a legitimate test pattern; `@ts-ignore`/`@ts-nocheck` stay banned since `@ts-expect-error` is strictly better.
+- **`consistent-type-assertions`** relaxes to `assertionStyle: 'as'`.
+  - *Why:* the legacy `<Type>value` form stays banned everywhere.
 
 Nothing else inherited from the presets is relaxed.
 
@@ -317,12 +327,26 @@ pnpm build
 <details>
 <summary>Expand for implementation internals (not needed for ordinary consumption)</summary>
 
-- [`src/plugin.ts`](src/plugin.ts) builds a `TSESLint.FlatConfig.Plugin` (`@typescript-eslint/utils`'s own type — not ESLint's own `ESLint.Plugin`, which can't hold a rule built with `ESLintUtils.RuleCreator`) combining [`src/rules/`](src/rules) into a flat `rules` map. `configs.recommended`, `.barrel`, `.react`, and `.nextjs` are getters in the object literal — each references the fully-built `plugin` (`plugins: { exadev: plugin }`), which a plain property initializer can't do mid-construction. `recommended` ships `barrel-policy` at `mode: 'banned'`; `barrel` at `mode: 'single'`; `.react`/`.nextjs` call `buildReactConfig`/`buildNextjsConfig` with `enabled: true` (see below).
-- [`src/config-types.ts`](src/config-types.ts) holds `ConfigValue`/`ConfigArrayValue` (`ConfigArrayValue = Extract<ConfigValue, unknown[]>`, the array-only member of ESLint's own config-value union), shared by every file below rather than redefined per file — annotating a config array with the wider `ConfigValue` union directly broke `...exadev` with `TS2488` ("must have a Symbol.iterator method").
-- [`src/optional-plugin.ts`](src/optional-plugin.ts) is the lazy-resolution helper behind React/Next.js support: `tryRequire` wraps `createRequire(import.meta.url)` in try/catch, returning `unknown` (never a cast) so every call site narrows explicitly before use; `readFlatConfig` walks a property path through that `unknown` value via a real type guard, normalizing a stray legacy top-level `parserOptions` key into `languageOptions.parserOptions` along the way (confirmed necessary: `eslint-plugin-jsx-a11y`'s own `configs.recommended` export carries exactly this legacy shape, which flat config's schema rejects outright rather than ignores).
-- [`src/react.ts`](src/react.ts)/[`src/nextjs.ts`](src/nextjs.ts) each export a `build*Config(options)` function: resolve the relevant optional peer(s) via `tryRequire`, extract their real flat config via `readFlatConfig`, and return an array of 0-or-more config blocks — `[]` if unresolvable and not explicitly forced on, a thrown `Error` if explicitly forced on (`enabled: true`) and still unresolvable. `react.ts`'s blocks are scoped to `files: ['**/*.jsx', '**/*.tsx']`; `nextjs.ts`'s is not (see [Optional React and Next.js support](#optional-react-and-nextjs-support) for why).
-- [`src/create-config.ts`](src/create-config.ts) is config assembly's single source of truth: `exadevConfig(options, ...userConfigs)` concatenates `recommendedTypeChecked` with both builders' output (each fed the matching tri-state option) and any trailing user configs; `defaultConfig` is `exadevConfig()` evaluated once, eagerly, at module load.
-- [`src/index.ts`](src/index.ts) is the entry point, still a pure re-export barrel (required by `no-side-effects-in-index`/`no-non-barrel-reexport`, both of which assume this file contains nothing but `export ... from ...`): `export { defaultConfig as default, exadevConfig } from './create-config'; export { default as plugin } from './plugin';`. All exports share one root module, so importing `{ plugin }` alone still resolves `typescript-eslint` via the sibling re-export — an accepted trade-off (an earlier separate-subpath split proved more awkward in practice). React/Next.js support never adds to this cost: none of the four optional packages are ever statically imported, only passed as a runtime string to `createRequire`'s resolver, so their absence never affects module evaluation for a consumer who doesn't use them.
+- [`src/plugin.ts`](src/plugin.ts) builds a `TSESLint.FlatConfig.Plugin` combining [`src/rules/`](src/rules) into a flat `rules` map.
+  - That's `@typescript-eslint/utils`'s own type, not ESLint's own `ESLint.Plugin` — the latter can't hold a rule built with `ESLintUtils.RuleCreator`.
+  - `configs.recommended`, `.barrel`, `.react`, and `.nextjs` are getters in the object literal, since each references the fully-built `plugin` (`plugins: { exadev: plugin }`), which a plain property initializer can't do mid-construction.
+  - `recommended` ships `barrel-policy` at `mode: 'banned'`; `barrel` at `mode: 'single'`; `.react`/`.nextjs` call `buildReactConfig`/`buildNextjsConfig` with `enabled: true` (see below).
+- [`src/config-types.ts`](src/config-types.ts) holds `ConfigValue`/`ConfigArrayValue` (`ConfigArrayValue = Extract<ConfigValue, unknown[]>`, the array-only member of ESLint's own config-value union), shared by every file below rather than redefined per file.
+  - *Why:* annotating a config array with the wider `ConfigValue` union directly broke `...exadev` with `TS2488` ("must have a Symbol.iterator method").
+- [`src/optional-plugin.ts`](src/optional-plugin.ts) is the lazy-resolution helper behind React/Next.js support.
+  - `tryRequire` wraps `createRequire(import.meta.url)` in try/catch, returning `unknown` (never a cast) so every call site narrows explicitly before use.
+  - `readFlatConfig` walks a property path through that `unknown` value via a real type guard, normalizing a stray legacy top-level `parserOptions` key into `languageOptions.parserOptions` along the way.
+  - Confirmed necessary: `eslint-plugin-jsx-a11y`'s own `configs.recommended` export carries exactly this legacy shape, which flat config's schema rejects outright rather than ignores.
+- [`src/react.ts`](src/react.ts)/[`src/nextjs.ts`](src/nextjs.ts) each export a `build*Config(options)` function: resolve the relevant optional peer(s) via `tryRequire`, extract their real flat config via `readFlatConfig`, and return an array of 0-or-more config blocks.
+  - `[]` if unresolvable and not explicitly forced on; a thrown `Error` if explicitly forced on (`enabled: true`) and still unresolvable.
+  - `react.ts`'s blocks are scoped to `files: ['**/*.jsx', '**/*.tsx']`; `nextjs.ts`'s is not (see [Optional React and Next.js support](#optional-react-and-nextjs-support) for why).
+- [`src/create-config.ts`](src/create-config.ts) is config assembly's single source of truth.
+  - `exadevConfig(options, ...userConfigs)` concatenates `recommendedTypeChecked` with both builders' output (each fed the matching tri-state option) and any trailing user configs.
+  - `defaultConfig` is `exadevConfig()` evaluated once, eagerly, at module load.
+- [`src/index.ts`](src/index.ts) is the entry point, still a pure re-export barrel: `export { defaultConfig as default, exadevConfig } from './create-config'; export { default as plugin } from './plugin';`.
+  - Required by `no-side-effects-in-index`/`no-non-barrel-reexport`, both of which assume this file contains nothing but `export ... from ...`.
+  - All exports share one root module, so importing `{ plugin }` alone still resolves `typescript-eslint` via the sibling re-export — an accepted trade-off (an earlier separate-subpath split proved more awkward in practice).
+  - React/Next.js support never adds to this cost: none of the four optional packages are ever statically imported, only passed as a runtime string to `createRequire`'s resolver, so their absence never affects module evaluation for a consumer who doesn't use them.
 - [`pnpm-workspace.yaml`](pnpm-workspace.yaml) declares an empty `packages: []` — not a real workspace, just giving turbo a root for local task caching.
 
 </details>
