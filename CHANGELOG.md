@@ -1,3 +1,10 @@
+# [2.19.0](https://github.com/ExaDev/eslint-config/compare/v2.18.1...v2.19.0) (2026-09-18)
+
+
+### Features
+
+* **barrel-policy:** add auto mode that detects single vs banned from package.json ([c829516](https://github.com/ExaDev/eslint-config/commit/c829516ddfb1d399698e3742024a4302aef475c2))
+
 ## [2.18.1](https://github.com/ExaDev/eslint-config/compare/v2.18.0...v2.18.1) (2026-09-17)
 
 # [2.18.0](https://github.com/ExaDev/eslint-config/compare/v2.17.2...v2.18.0) (2026-09-15)
