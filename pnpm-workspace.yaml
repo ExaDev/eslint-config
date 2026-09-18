@@ -3,6 +3,6 @@ packages: []
 # Every dependency add/update writes an exact version, never a ^/~ range -- a floating range lets a routine `pnpm install` silently resolve to a version nobody has reviewed, which is exactly how this repo ended up depending on a too-new, not-yet-mature eslint-plugin-jsdoc release. Pinning exact means a version bump is always a deliberate, reviewable diff.
 saveExact: true
 
-# ExaDev's own published packages: the minimumReleaseAge gate exists to guard against a compromised third-party maintainer publishing a malicious version before the wider community catches it. That threat model doesn't apply to a package this org publishes itself, since the release pipeline and the change are already reviewed. Excluded by bare name, not a pinned version, so every future release stays covered without editing this file again.
+# ExaDev's own published packages: the minimumReleaseAge gate exists to guard against a compromised third-party maintainer publishing a malicious version before the wider community catches it. That threat model doesn't apply to a package this org publishes itself, since the release pipeline and the change are already reviewed. eslint-plugin-json-canonical is unscoped (not under @exadev/*), so it's excluded by its own bare package name, not a pinned version, so every future release stays covered without editing this file again.
 minimumReleaseAgeExclude:
   - 'eslint-plugin-json-canonical'
