@@ -1,3 +1,10 @@
+## [2.20.1](https://github.com/ExaDev/eslint-config/compare/v2.20.0...v2.20.1) (2026-09-19)
+
+
+### Bug Fixes
+
+* **plugin:** register prefer-options-object-param in the lighter bundle too ([4994124](https://github.com/ExaDev/eslint-config/commit/4994124fdd4719e945a536c31eab45035a05826b))
+
 # [2.20.0](https://github.com/ExaDev/eslint-config/compare/v2.19.4...v2.20.0) (2026-09-19)
 
 
