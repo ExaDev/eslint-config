@@ -36,7 +36,7 @@ describe('rule metadata', () => {
   });
 });
 
-// No type information is needed at lint time for this rule (every check is answerable from a parameter's own TSESTree shape, and the fixer only ever echoes verbatim source text) — see the rule's own file header for why it is registered only in the type-checked bundle regardless. parserOptions.project/projectService is deliberately omitted here, matching prefer-readonly-array-param.unit.test.ts's own rationale for the same reason.
+// No type information is needed at lint time for this rule (every check is answerable from a parameter's own TSESTree shape, and the fixer only ever echoes verbatim source text) — see the rule's own file header for why it is therefore registered in both plugin.configs.recommended and the type-checked bundle. parserOptions.project/projectService is deliberately omitted here, matching prefer-readonly-array-param.unit.test.ts's own rationale for the same reason.
 const ruleTester = new RuleTester({
   languageOptions: { parser: tseslint.parser, sourceType: 'module' },
 });
