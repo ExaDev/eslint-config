@@ -29,3 +29,16 @@ export function lastTokenOrThrow<TNode, TToken>(sourceCode: Readonly<LastTokenSo
   }
   return token;
 }
+
+interface FirstTokenSource<TNode, TToken> {
+  getFirstToken: (node: TNode) => TToken | null;
+}
+
+// The first-token mirror of lastTokenOrThrow above, for the identical reason: `getFirstToken` only ever returns null for a node with genuinely no tokens at all — never true of a real, parsed AST node this codebase's own rules call it on (e.g. a function's own BlockStatement body always has at least one token, its opening brace). Exported so that guarantee is checked directly against a deliberately token-less fake source, rather than assumed away with a cast.
+export function firstTokenOrThrow<TNode, TToken>(sourceCode: Readonly<FirstTokenSource<TNode, TToken>>, node: TNode): TToken {
+  const token = sourceCode.getFirstToken(node);
+  if (token === null) {
+    throw new Error('Unreachable: getFirstToken returned null for a node expected to always have at least one token.');
+  }
+  return token;
+}

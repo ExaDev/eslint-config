@@ -2,7 +2,7 @@ import { RuleTester } from '@typescript-eslint/rule-tester';
 import { ESLintUtils } from '@typescript-eslint/utils';
 import * as ts from 'typescript';
 import { describe, expect, it } from 'vitest';
-import { asExpression, asTypeReference, lastTokenOrThrow } from './ts-node-guards';
+import { asExpression, asTypeReference, firstTokenOrThrow, lastTokenOrThrow } from './ts-node-guards';
 
 function definedOrThrow<T>(value: T | undefined): T {
   if (value === undefined) {
@@ -84,5 +84,17 @@ describe('lastTokenOrThrow', () => {
   it('throws when getLastToken returns null — never true of a real, parsed AST node', () => {
     const fakeSourceCode = { getLastToken: () => null };
     expect(() => lastTokenOrThrow(fakeSourceCode, {})).toThrow(/Unreachable/);
+  });
+});
+
+describe('firstTokenOrThrow', () => {
+  it('returns the token when getFirstToken genuinely finds one', () => {
+    const fakeSourceCode = { getFirstToken: () => 'token' };
+    expect(firstTokenOrThrow(fakeSourceCode, {})).toBe('token');
+  });
+
+  it('throws when getFirstToken returns null — never true of a real, parsed AST node', () => {
+    const fakeSourceCode = { getFirstToken: () => null };
+    expect(() => firstTokenOrThrow(fakeSourceCode, {})).toThrow(/Unreachable/);
   });
 });
