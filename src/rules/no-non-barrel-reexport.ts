@@ -8,8 +8,14 @@ import type { ImportDeclarationNode, ReferenceIdentifier, SyntaxElement, Tracked
 //
 // Self-scoped away from ANY index file via isIndexFile (context.filename), not just src/index.ts — this rule's point is banning the split-statement re-export shape OUTSIDE a barrel, so a barrel (where a real, single-statement `export { x } from '...'` re-export is the normal, intended shape) is exempt whatever it is called. In a 'single'-mode repo, no-non-barrel-index guarantees src/index.ts is the only index file, so this collapses to the historical behaviour; in a 'siblings'-mode repo any index file is a legitimate barrel and this rule no-ops there too.
 
+// The fixer/sourceCode pair every call site below always passes together, bundled into one parameter so removeListMember itself stays under this codebase's own max-params threshold — a plain grouping of "how to build a fix", not a domain concept of its own.
+export interface FixerContext {
+  readonly fixer: Rule.RuleFixer;
+  readonly sourceCode: Rule.RuleContext['sourceCode'];
+}
+
 // Removes one member from a comma-separated specifier list, collapsing the whole surrounding declaration instead when that member is the only one left — `import {} from 'x'` and a bare `export {};` are both legal but pointless, so a fully-drained list takes its declaration with it rather than leaving debris behind. Exported so its own array-indexing invariant (a list with more than one member always has a neighbor either side of any member within it) can be exercised directly, alongside the real multi-specifier RuleTester fixtures in the co-located test file, rather than relying solely on a defensive throw that real ES syntax can never actually trigger. Takes the real Rule.RuleFixer/SourceCode types directly (rather than a narrower structural interface) since fixer.removeRange's own real parameter type is a MUTABLE tuple — a narrower `readonly [number, number]` interface would be structurally incompatible with it under contravariant parameter checking, and marking that tuple readonly (as this package's own prefer-readonly-array-param would otherwise ask of any other array/tuple parameter) would break that real compatibility rather than merely stylistic preference.
-export function removeListMember(fixer: Rule.RuleFixer, sourceCode: Rule.RuleContext['sourceCode'], declaration: SyntaxElement, members: readonly SyntaxElement[], target: SyntaxElement): Rule.Fix {
+export function removeListMember({ fixer, sourceCode }: FixerContext, declaration: SyntaxElement, members: readonly SyntaxElement[], target: SyntaxElement): Rule.Fix {
   if (members.length === 1) {
     return fixer.remove(declaration);
   }
@@ -82,9 +88,9 @@ const noNonBarrelReexport: Rule.RuleModule = {
               messageId: 'splitStatementReexport',
               data: { name },
               fix(fixer) {
-                const fixes = [removeListMember(fixer, sourceCode, declaration, declaration.specifiers, specifier)];
+                const fixes = [removeListMember({ fixer, sourceCode }, declaration, declaration.specifiers, specifier)];
                 if (specifier.local.type === 'Identifier' && importIsOnlyUsedByThisExport(sourceCode, trackedImport, specifier.local)) {
-                  fixes.push(removeListMember(fixer, sourceCode, trackedImport.declaration, trackedImport.declaration.specifiers, trackedImport.specifier));
+                  fixes.push(removeListMember({ fixer, sourceCode }, trackedImport.declaration, trackedImport.declaration.specifiers, trackedImport.specifier));
                 }
                 return fixes;
               },
@@ -98,7 +104,7 @@ const noNonBarrelReexport: Rule.RuleModule = {
               fix(fixer) {
                 const fixes: Rule.Fix[] = [fixer.remove(declaration)];
                 if (importIsOnlyUsedByThisExport(sourceCode, trackedImport, identifierNode)) {
-                  fixes.push(removeListMember(fixer, sourceCode, trackedImport.declaration, trackedImport.declaration.specifiers, trackedImport.specifier));
+                  fixes.push(removeListMember({ fixer, sourceCode }, trackedImport.declaration, trackedImport.declaration.specifiers, trackedImport.specifier));
                 }
                 return fixes;
               },
