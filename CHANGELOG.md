@@ -1,3 +1,16 @@
+# [2.20.0](https://github.com/ExaDev/eslint-config/compare/v2.19.4...v2.20.0) (2026-09-19)
+
+
+### Bug Fixes
+
+* **no-non-barrel-reexport:** bundle fixer and sourceCode into one context param ([727b223](https://github.com/ExaDev/eslint-config/commit/727b22380c892ef9ff747742ba2ab6879aeb7db2))
+
+
+### Features
+
+* **config:** register prefer-options-object-param and max-params ([2fbaf46](https://github.com/ExaDev/eslint-config/commit/2fbaf467f002e500fe354e1838868cd83fab4b70))
+* **rules:** add prefer-options-object-param rule ([112bccf](https://github.com/ExaDev/eslint-config/commit/112bccf7b4d79aea9419213d12efd42a97d0f2c7))
+
 ## [2.19.4](https://github.com/ExaDev/eslint-config/compare/v2.19.3...v2.19.4) (2026-09-18)
 
 ## [2.19.3](https://github.com/ExaDev/eslint-config/compare/v2.19.2...v2.19.3) (2026-09-18)
