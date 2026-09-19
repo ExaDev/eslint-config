@@ -20,6 +20,7 @@ describe('plugin.configs.recommended', () => {
       expect(config?.rules?.['exadev/no-mutable-union-array-param']).toBe('error');
       expect(config?.rules?.['exadev/no-object-assign']).toBe('error');
       expect(config?.rules?.['exadev/no-pointless-reassignment']).toBe('error');
+      expect(config?.rules?.['exadev/prefer-options-object-param']).toBe('error');
       expect(config?.rules?.['exadev/prefer-readonly-array-param']).toBe('error');
     }
   });
