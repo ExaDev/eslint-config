@@ -45,6 +45,7 @@ const recommendedTypeChecked: ConfigArrayValue = [
       'exadev/no-pointless-reassignment': 'error',
       'exadev/no-set-instanceof-mutation': 'error',
       'exadev/prefer-numeric-sort-compare': 'error',
+      'exadev/prefer-options-object-param': 'error',
       'exadev/prefer-readonly-array-param': 'error',
       // Known interaction with `consistent-type-assertions` and genuinely mutable foreign objects: when a config callback must mutate a property of an object it does not own (webpack's `resource.request = ...` inside a Next.js config's webpack hook is the confirmed real case from ExaDev/monorepo-template), the readonly-parameter fix and the assertion ban together leave direct assignment illegal. The escape that satisfies everything is `Object.assign(target, { prop: value })` — mutation without a property-assignment expression, no assertion, no disable comment. Prefer that over `eslint-disable` or a `-readonly` mapped type when the mutation is genuine.
       'exadev/prefer-readonly-object-param': 'error',
@@ -94,6 +95,8 @@ const recommendedTypeChecked: ConfigArrayValue = [
       '@typescript-eslint/switch-exhaustiveness-check': 'error',
       // A file over 800 lines is a signal to split it, not a target to hit exactly — `skipBlankLines`/`skipComments` count only real code, so a file isn't pushed over the limit by whitespace or the WHY-explanations this codebase's own conventions require.
       'max-lines': ['error', { max: 800, skipBlankLines: true, skipComments: true }],
+      // A deliberately loose backstop against a genuinely excessive number of REQUIRED parameters — distinct from exadev/prefer-options-object-param above, which already offers a real fix for the different (and more common) shape of a run of 2+ trailing OPTIONAL parameters, a case this rule's own threshold-on-total-count design structurally cannot see until the count crosses 4 regardless of how many of them are optional. The threshold is one above the rule's own default of 3, specifically so it stays a backstop for excessive required parameters rather than a near-duplicate of the custom rule. No autofix exists for this rule at all (report-only upstream), so there is no fixer risk to weigh here.
+      'max-params': ['error', { max: 4 }],
       // A Stryker mutation-testing suppression comment (its own `disable`/`disable next-line` directive, always led by the tool's own name) silences coverage for the line(s) it annotates — unlike an eslint-disable comment (already banned outright by noInlineConfig above), ESLint has no native awareness of Stryker's own comment syntax, so it is otherwise invisible to lint. `location: 'anywhere'` matches the term wherever it falls in the comment (Stryker's own syntax always trails it with a mutator list, `all`, or a reason), not only at the very start.
       'no-warning-comments': ['error', { terms: ['stryker disable'], location: 'anywhere' }],
     },
