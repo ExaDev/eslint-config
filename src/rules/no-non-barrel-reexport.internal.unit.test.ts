@@ -73,7 +73,7 @@ describe('removeListMember', () => {
     const target = definedOrThrow(realSpecifierNode);
     const fixer = definedOrThrow(realFixer);
     const sourceCode = definedOrThrow(realSourceCode);
-    expect(removeListMember(fixer, sourceCode, declaration, [target], target)).toStrictEqual({ range: declaration.range, text: '' });
+    expect(removeListMember({ fixer, sourceCode }, declaration, [target], target)).toStrictEqual({ range: declaration.range, text: '' });
   });
 
   it('throws for a member list that does not actually contain the target — an empty specifier list is not something real ES syntax can pair with a tracked split re-export', () => {
@@ -81,7 +81,7 @@ describe('removeListMember', () => {
     const target = definedOrThrow(realSpecifierNode);
     const fixer = definedOrThrow(realFixer);
     const sourceCode = definedOrThrow(realSourceCode);
-    expect(() => removeListMember(fixer, sourceCode, declaration, [], target)).toThrow(/Unreachable/);
+    expect(() => removeListMember({ fixer, sourceCode }, declaration, [], target)).toThrow(/Unreachable/);
   });
 });
 
