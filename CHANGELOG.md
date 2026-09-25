@@ -1,3 +1,10 @@
+## [2.20.2](https://github.com/ExaDev/eslint-config/compare/v2.20.1...v2.20.2) (2026-09-25)
+
+
+### Bug Fixes
+
+* **rules:** skip no-pointless-reassignment for exported aliases ([3b20413](https://github.com/ExaDev/eslint-config/commit/3b20413868caa1392159bb466bf03082de307065))
+
 ## [2.20.1](https://github.com/ExaDev/eslint-config/compare/v2.20.0...v2.20.1) (2026-09-19)
 
 
