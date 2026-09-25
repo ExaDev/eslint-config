@@ -1,6 +1,6 @@
 import type { Rule, Scope } from 'eslint';
 
-// Detects and auto-fixes redundant alias declarations — `const foo = bar` where both sides are plain identifiers and the alias adds no transformation. The fixer replaces all reads of the alias with the original name and removes the declaration. Variables prefixed with `_` are exempt (discard convention). Aliases that are written to after declaration are not auto-fixed (scope mutation), nor is an alias read as a shorthand object property (`{ x }` from `const x = y` would need its key rewritten to `{ x: y }`, which a plain text-replacement fixer cannot do safely), nor one carrying an explicit type annotation, nor one whose reads sit where the original name is shadowed (see the individual bail-out comments in `fix` below).
+// Detects and auto-fixes redundant alias declarations — `const foo = bar` where both sides are plain identifiers and the alias adds no transformation. The fixer replaces all reads of the alias with the original name and removes the declaration. Variables prefixed with `_` are exempt (discard convention). Aliases that are written to after declaration are not auto-fixed (scope mutation), nor is an alias read as a shorthand object property (`{ x }` from `const x = y` would need its key rewritten to `{ x: y }`, which a plain text-replacement fixer cannot do safely), nor one carrying an explicit type annotation, nor one whose reads sit where the original name is shadowed (see the individual bail-out comments in `fix` below). An alias that is itself part of the module's exported surface (`export const alias = original;`, a later `export { alias }`/`export { alias as other }`, or `export default alias;`) is neither reported nor fixed at all, since collapsing it would rename or delete a binding every importer of this module depends on; see isExportedAlias below.
 //
 // A scope reference's own `identifier` field is typed `ESTree.Identifier | JSXIdentifier` (eslint's own Scope.Reference), but `JSXIdentifier` isn't itself an exported type from `eslint` — there is nothing to import or name directly. `IdentifierReference` narrows to the `Identifier` branch structurally via `Extract`, and `isIdentifierReference` is the real (non-`as`) type-guard predicate that performs the narrowing at the one place a reference's identifier is actually read (this codebase bans type assertions entirely — see `@typescript-eslint/consistent-type-assertions` in eslint.config.ts).
 type Identifier = Extract<Scope.Reference['identifier'], { type: 'Identifier' }>;
@@ -21,6 +21,19 @@ export function isConstDeclarator(declarator: { readonly parent: { readonly type
     throw new Error(`Unreachable: expected a VariableDeclarator's own parent to be a VariableDeclaration, got "${declarator.parent.type}" instead.`);
   }
   return declarator.parent.kind === 'const';
+}
+
+// The identical grammar guarantee isConstDeclarator above already relies on and documents, but returning the narrowed value itself (rather than a boolean) so every later access to the result's own `.declarations`/`.kind`/`.parent` flows without a further type-level check, matching this file's own asExpression/asTypeReference-style helpers elsewhere in this codebase (see src/rules/ts-node-guards.ts). Exported so the throw is exercised directly, the same way isConstDeclarator's own is.
+export function asVariableDeclaration(node: Rule.Node): Extract<Rule.Node, { readonly type: 'VariableDeclaration' }> {
+  if (node.type !== 'VariableDeclaration') {
+    throw new Error(`Unreachable: expected a VariableDeclarator's own parent to be a VariableDeclaration, got "${node.type}" instead.`);
+  }
+  return node;
+}
+
+// getScope(Program) itself returns the outer "global" scope, not the scope a top-level binding actually lives in: under sourceType "module" every top-level const/let sits in a "module" scope that is a CHILD of global, so resolving straight from the global scope would never find one. Falling back to the global scope itself covers sourceType "script", where there is no separate module scope and top-level bindings live directly in it. Exported so the fallback branch is exercised directly against a deliberately module-scope-less fake scope: in practice, sourceType "module" always produces a real module child scope regardless of a file's own content, and sourceType "script" can never syntactically contain an export statement for isExportedAlias to resolve against, so no real fixture reaches the fallback either way.
+export function findTopLevelScope(globalScope: Scope.Scope): Scope.Scope {
+  return globalScope.childScopes.find((child) => child.type === 'module') ?? globalScope;
 }
 
 // `scope.set` is guaranteed to hold `name` at the one real call site in this file: `scope` is the exact VariableDeclarator's own containing scope, and `name` is the very name it declares in it. Exported so that guarantee is checked directly against a deliberately absent name, rather than assumed away with a cast.
@@ -58,6 +71,35 @@ export function isShorthandPropertyRead(sourceCode: Rule.RuleContext['sourceCode
   return hasEnclosingShorthandBoundary(sourceCode.getTokensBefore(identifier));
 }
 
+// Structural, not the full ESTree union: a narrow interface matching this file's existing style (see isConstDeclarator above) rather than importing large upstream node types wholesale. `name` is optional rather than this being a proper `type: 'Identifier'`-discriminated union, since a two-member union whose second branch is the unconstrained `{ type: string }` isn't actually discriminated (that branch's own wide `type` field already covers the literal `'Identifier'` too), so a `.type === 'Identifier'` check alone would never narrow `.name` into scope. An ExportSpecifier's own local/exported fields are typed `Identifier | Literal` upstream (a Literal only ever appears for a string-named re-export forwarded from another module, which the `source == null` guard in isExportedAlias below already excludes from consideration), and an ExportDefaultDeclaration's own declaration is typed as a large expression/declaration union whose non-Identifier members never carry a `name` field at all.
+interface MaybeIdentifier {
+  readonly type: string;
+  readonly name?: string;
+}
+
+interface ExportSpecifierLike {
+  readonly local: MaybeIdentifier;
+}
+
+interface ProgramStatementLike {
+  readonly type: string;
+  readonly source?: unknown;
+  readonly specifiers?: readonly ExportSpecifierLike[];
+  readonly declaration?: MaybeIdentifier | null | undefined;
+}
+
+// True when the alias `const` binding `aliasVariable` names is itself part of the module's own exported surface: `export const alias = original;` (declarationParentType is 'ExportNamedDeclaration', since that is the alias's own VariableDeclaration's parent in that shape), a later top-level `export { alias }`/`export { alias as other }`, or `export default alias;`. An exported binding is part of the module's interface, so collapsing every read of it to the original name is not a local rewrite: it renames (or, for a direct `export const`, deletes outright) something every importer of this module depends on by that exact name. `resolve`, which is `resolveFrom` closed over the module's own top-level scope, matches a specifier/default identifier against `aliasVariable` by real scope identity rather than by name alone, so a nested, differently-scoped local sharing a name with some unrelated top-level export is never mistaken for that export: resolving that name from module scope finds the real top-level binding, not the nested one. A specifier whose export carries its own `source` (`export { x } from './other'`) never refers to a local binding at all, since it forwards a name straight from another module, so those statements are skipped entirely rather than matched by name.
+export function isExportedAlias(declarationParentType: string, programBody: readonly ProgramStatementLike[], resolve: (name: string) => Scope.Variable | undefined, aliasVariable: Scope.Variable): boolean {
+  if (declarationParentType === 'ExportNamedDeclaration') return true;
+  return programBody.some((statement) => {
+    if (statement.type === 'ExportNamedDeclaration' && statement.source == null) {
+      return (statement.specifiers ?? []).some((specifier) => specifier.local.type === 'Identifier' && specifier.local.name !== undefined && resolve(specifier.local.name) === aliasVariable);
+    }
+    const target = statement.type === 'ExportDefaultDeclaration' ? statement.declaration : undefined;
+    return target?.type === 'Identifier' && target.name !== undefined && resolve(target.name) === aliasVariable;
+  });
+}
+
 const noPointlessReassignment: Rule.RuleModule = {
   meta: {
     type: 'problem',
@@ -68,6 +110,9 @@ const noPointlessReassignment: Rule.RuleModule = {
     },
   },
   create(context) {
+    // Computed once per file rather than per declarator: every specifier/default export check in isExportedAlias resolves names against this same top-level scope.
+    const moduleScope = findTopLevelScope(context.sourceCode.getScope(context.sourceCode.ast));
+
     return {
       VariableDeclarator(node) {
         if (node.id.type !== 'Identifier' || node.init?.type !== 'Identifier' || node.id.name.startsWith('_')) return;
@@ -85,14 +130,17 @@ const noPointlessReassignment: Rule.RuleModule = {
         const originalName = node.init.name;
         // Read outside `fix` because narrowing of `node.id` to an Identifier does not survive into the nested closure.
         const aliasIsAnnotated = hasTypeAnnotation(node.id);
+        const variable = variableInScope(scope, aliasName);
+        const declaration = asVariableDeclaration(node.parent);
+
+        // An alias that is itself part of the module's exported surface is neither reported nor fixed, unlike every other bail-out below (type annotation, mutation, shorthand, shadowing), which report but decline to fix: reporting "pointless" here would itself be misleading, since the alias is doing real interface work. See isExportedAlias above for the three shapes this covers.
+        if (isExportedAlias(declaration.parent.type, context.sourceCode.ast.body, (name) => resolveFrom(moduleScope, name), variable)) return;
 
         context.report({
           node,
           messageId: 'pointlessReassignment',
           data: { name: aliasName, value: originalName },
           fix(fixer) {
-            const variable = variableInScope(scope, aliasName);
-
             // An explicit type annotation is load-bearing: `const exhaustive: never = item` is an exhaustiveness check whose entire purpose is the annotation, and narrowing/branding annotations behave the same way. Collapsing the alias deletes a compile-time guarantee the bare original does not carry, so report without offering a fix.
             if (aliasIsAnnotated) return null;
 
@@ -113,11 +161,9 @@ const noPointlessReassignment: Rule.RuleModule = {
 
             const fixes = readRefs.map((reference) => fixer.replaceText(reference.identifier, originalName));
 
-            // Remove the whole declaration only when this is the sole declarator.
-            const declaration = node.parent;
-            if (declaration.type !== 'VariableDeclaration' || declaration.declarations.length !== 1) return null;
-            // Remove the enclosing `export` statement rather than just the declaration it wraps — deleting only the VariableDeclaration out of `export const foo = bar;` leaves a bare `export` keyword behind, which does not parse.
-            fixes.push(fixer.remove(declaration.parent.type === 'ExportNamedDeclaration' ? declaration.parent : declaration));
+            // Remove the whole declaration only when this is the sole declarator. The exported form (`export const foo = bar;`) never reaches this fixer at all, since isExportedAlias above already bailed out before context.report for every exported shape, so removing only the plain VariableDeclaration is always the correct (and only reachable) removal.
+            if (declaration.declarations.length !== 1) return null;
+            fixes.push(fixer.remove(declaration));
             return fixes;
           },
         });
