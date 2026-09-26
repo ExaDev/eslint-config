@@ -286,7 +286,70 @@ describe('buildWorkspaceGraph (fabricated tree)', () => {
     expect(graph.packagesByName.get('billing-thing')?.slice).toBeUndefined();
   });
 
-  it('a matched directory outside every declared group is silently skipped', () => {
+  it('a namePrefix package resolves the LONGEST matching known slice, not merely the first one collected (a shorter candidate that is itself a prefix of a longer one must not win by insertion order alone)', () => {
+    const fs = fakeFs(
+      {
+        '/root/pnpm-workspace.yaml': "packages:\n  - 'features/*/*'\n  - 'targets/*'\n",
+        '/root/features/store/api/package.json': packageJson('store-api'),
+        '/root/features/store-admin/web/package.json': packageJson('store-admin-web'),
+        '/root/targets/store-admin-cli/package.json': packageJson('store-admin-cli'),
+      },
+      {
+        '/root': ['features', 'targets'],
+        // 'store' is listed, and so collected into knownSlices, before 'store-admin': a first-match-by-insertion-order implementation would wrongly resolve the target below to the shorter 'store' slice.
+        '/root/features': ['store', 'store-admin'],
+        '/root/features/store': ['api'],
+        '/root/features/store-admin': ['web'],
+        '/root/targets': ['store-admin-cli'],
+      },
+    );
+
+    const graph = buildWorkspaceGraph(fs, '/root', { groups });
+    expect(graph.packagesByName.get('store-admin-cli')?.slice).toBe('store-admin');
+  });
+
+  it('an already-established longest match is not overridden by a shorter matching candidate collected afterwards', () => {
+    const fs = fakeFs(
+      {
+        '/root/pnpm-workspace.yaml': "packages:\n  - 'features/*/*'\n  - 'targets/*'\n",
+        '/root/features/store-admin/web/package.json': packageJson('store-admin-web'),
+        '/root/features/store/api/package.json': packageJson('store-api'),
+        '/root/targets/store-admin-cli/package.json': packageJson('store-admin-cli'),
+      },
+      {
+        '/root': ['features', 'targets'],
+        // Reversed from the test above: 'store-admin' is collected into knownSlices first this time, so the longest-match logic's own "a later, shorter candidate must not replace it" branch is exercised, not merely its "a later, longer one must replace it" counterpart.
+        '/root/features': ['store-admin', 'store'],
+        '/root/features/store-admin': ['web'],
+        '/root/features/store': ['api'],
+        '/root/targets': ['store-admin-cli'],
+      },
+    );
+
+    const graph = buildWorkspaceGraph(fs, '/root', { groups });
+    expect(graph.packagesByName.get('store-admin-cli')?.slice).toBe('store-admin');
+  });
+
+  it("a namePrefix package's own npm scope is stripped before matching, so a scoped declared name still resolves the same slice an unscoped sibling would", () => {
+    const fs = fakeFs(
+      {
+        '/root/pnpm-workspace.yaml': "packages:\n  - 'features/*/*'\n  - 'targets/*'\n",
+        '/root/features/store/api/package.json': packageJson('store-api'),
+        '/root/targets/store-cli/package.json': packageJson('@x/store-cli'),
+      },
+      {
+        '/root': ['features', 'targets'],
+        '/root/features': ['store'],
+        '/root/features/store': ['api'],
+        '/root/targets': ['store-cli'],
+      },
+    );
+
+    const graph = buildWorkspaceGraph(fs, '/root', { groups });
+    expect(graph.packagesByName.get('@x/store-cli')?.slice).toBe('store');
+  });
+
+  it('throws for a matched directory outside every declared group, rather than silently skipping it', () => {
     const fs = fakeFs(
       {
         '/root/pnpm-workspace.yaml': "packages:\n  - 'tooling/*'\n",
@@ -295,8 +358,9 @@ describe('buildWorkspaceGraph (fabricated tree)', () => {
       { '/root': ['tooling'], '/root/tooling': ['scripts'] },
     );
 
-    const graph = buildWorkspaceGraph(fs, '/root', { groups });
-    expect(graph.packagesByName.size).toBe(0);
+    expect(() => buildWorkspaceGraph(fs, '/root', { groups })).toThrow(
+      '@exadev/eslint-config: workspace package directory "tooling/scripts"',
+    );
   });
 
   it('a matched directory with no parseable package.json name is silently skipped', () => {
