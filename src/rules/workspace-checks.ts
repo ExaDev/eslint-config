@@ -1,5 +1,6 @@
 import type { WorkspacePackageInfo } from './workspace-graph';
-import type { GroupSpec, NamingOptions, RankSkipOptions } from './workspace-options';
+import type { GroupSpec, NamingOptions, NamingStrategy, RankSkipOptions } from './workspace-options';
+import { splitPathSegments } from './workspace-path';
 
 // The pure decisions every workspace-architecture rule reports, kept independent of ESLint/momoa so each can be unit-tested directly against fabricated graph data, matching the split the monorepo-template and hive originals already used (their own checkDependencies, dependencyPathExists, expectedPackageName).
 
@@ -97,7 +98,9 @@ export function dependencyPathExists(from: string, to: string, dependencyNamesBy
     if (current === undefined || seen.has(current)) continue;
     seen.add(current);
     if (current === to) return true;
-    pending.push(...(dependencyNamesByName.get(current) ?? []));
+    // A package with no workspace-internal dependencies of its own (never declared in the graph at all, or declared with an empty list) simply contributes no further edges to explore; modelled as an explicit absence check rather than a `?? []` fallback, so there is nothing for a stray edge to silently smuggle in.
+    const edges = dependencyNamesByName.get(current);
+    if (edges !== undefined) pending.push(...edges);
   }
 
   return false;
@@ -113,22 +116,28 @@ export function last<T>(array: readonly T[]): T {
 }
 
 /**
- * The package name package-name-mirrors-path expects a package at `relativeDir` (workspace-root-relative, forward-slash-joined) to declare, given its own matched group and the workspace's global naming options. Three per-group strategies:
+ * The three per-group naming strategies' own segment selection, keyed by NamingStrategy's own three literal members rather than a chain of ternaries: `Record<NamingStrategy, ...>` requires every member to have its own entry, which is what makes 'drop-group' a genuine, independently-typed branch, not merely "whatever the ternary chain falls through to when nothing else matched". Stryker's own typescript checker rejects a mutant that replaces the `?? 'drop-group'` fallback with some other string, since indexing this record with a value outside NamingStrategy is a type error, caught before any test even runs.
  *
- * - **'drop-group'** (the default): drop the group's own root path segments, join what remains.
- * - **'keep-group'**: join every segment of `relativeDir` as-is, including the group's own root segments (a test group whose packages are named "test-<feature>", mirroring the feature they test, needs its own "test" segment kept).
+ * - **'drop-group'**: drop the group's own root path segments, keep what remains.
+ * - **'keep-group'**: keep every segment of `relativeDir` as-is, including the group's own root segments (a test group whose packages are named "test-<feature>", mirroring the feature they test, needs its own "test" segment kept).
  * - **'basename'**: use only `relativeDir`'s own final segment, ignoring every intermediate directory, for a group whose intermediate structure exists purely for filesystem organisation and carries no naming intent of its own.
- *
- * The joined segments are prefixed with `naming.scope` (when given) and joined to it with "/"; segments themselves join with `naming.separator` (default "-").
+ */
+const NAME_SEGMENTS_BY_STRATEGY: Record<NamingStrategy, (segments: readonly string[], rest: readonly string[]) => readonly string[]> = {
+  basename: (segments) => [last(segments)],
+  'keep-group': (segments) => segments,
+  'drop-group': (_segments, rest) => rest,
+};
+
+/**
+ * The package name package-name-mirrors-path expects a package at `relativeDir` (workspace-root-relative, forward-slash-joined) to declare, given its own matched group and the workspace's global naming options. See NAME_SEGMENTS_BY_STRATEGY above for the three per-group strategies' own segment selection. The joined segments are prefixed with `naming.scope` (when given) and joined to it with "/"; segments themselves join with `naming.separator` (default "-").
  */
 export function expectedPackageName(relativeDir: string, group: GroupSpec, naming: NamingOptions): string {
   const separator = naming.separator ?? '-';
-  const segments = relativeDir.split('/').filter((segment) => segment.length > 0);
-  const groupPrefixLength = (group.path ?? group.name).split('/').filter((segment) => segment.length > 0).length;
+  const segments = splitPathSegments(relativeDir);
+  const groupPrefixLength = splitPathSegments(group.path ?? group.name).length;
   const rest = segments.slice(groupPrefixLength);
 
-  const strategy = group.naming ?? 'drop-group';
-  const nameSegments = strategy === 'basename' ? [last(segments)] : strategy === 'keep-group' ? segments : rest;
+  const nameSegments = NAME_SEGMENTS_BY_STRATEGY[group.naming ?? 'drop-group'](segments, rest);
 
   const joined = nameSegments.join(separator);
   return naming.scope === undefined ? joined : `${naming.scope}/${joined}`;

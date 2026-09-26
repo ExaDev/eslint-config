@@ -35,11 +35,15 @@ function stripComment(value: string): string {
   return (hashIndex === -1 ? value : value.slice(0, hashIndex)).trimEnd();
 }
 
-function unquote(value: string): string {
+// The one place this file decides "is this value wrapped in a matching pair of quote characters": both the single- and double-quote cases share this exact logic, so it is written and tested once rather than twice over. `length >= 2` rules out a lone quote character on its own ("'" alone starts and ends with itself, but is not a quoted EMPTY string, it is an unterminated one).
+function isQuotedWith(value: string, quote: string): boolean {
+  return value.length >= 2 && value.startsWith(quote) && value.endsWith(quote);
+}
+
+/** Exported for direct testing of its own quote-stripping decision, independent of readWorkspacePackages' own block-sequence parsing. */
+export function unquote(value: string): string {
   const trimmed = stripComment(value).trim();
-  const isSingleQuoted = trimmed.startsWith("'") && trimmed.endsWith("'") && trimmed.length >= 2;
-  const isDoubleQuoted = trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.length >= 2;
-  if (isSingleQuoted || isDoubleQuoted) return trimmed.slice(1, -1);
+  if (isQuotedWith(trimmed, "'") || isQuotedWith(trimmed, '"')) return trimmed.slice(1, -1);
   return trimmed;
 }
 
