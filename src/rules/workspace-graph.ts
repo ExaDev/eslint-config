@@ -4,7 +4,7 @@ import { resolveWorkspacePackageDirs } from './workspace-glob';
 import { splitPathSegments } from './workspace-path';
 import { readWorkspacePackages } from './workspace-yaml';
 import { resolveDependencyFields, type GroupSpec, type WorkspaceArchitectureOptions } from './workspace-options';
-import { assertIsError } from './workspace-errors';
+import { assertIsError, jsonParseContext } from './workspace-errors';
 
 /**
  * One workspace package's structural facts: its declared manifest name (never assumed to equal its own directory name, the assumption that made the monorepo-template original's graph silently key packages by folder name instead), which declared group it structurally belongs to, its resolved rank, and its resolved slice (undefined for a group with no slice configuration at all, such as a cross-cutting core group).
@@ -115,7 +115,7 @@ export function readDeclaredManifest(fs: WorkspaceFs, absoluteDir: string, depen
     parsed = JSON.parse(raw);
   } catch (error) {
     // JSON.parse's own SyntaxError never names the file it was reading, only the byte offset inside whatever string it was given; wrapped here, at the one place that string comes from a real path, so a malformed manifest anywhere in a large workspace can actually be found rather than chased through a bare "Expected double-quoted property name... position 25". readFileSync above sits outside this try specifically so a read failure (EACCES, a race that removes the file after resolveWorkspacePackageDirs confirmed it) is never misreported as a JSON parse error.
-    assertIsError(error, `JSON.parse while parsing "${manifestPath}"`);
+    assertIsError(error, jsonParseContext(manifestPath));
     throw new Error(`@exadev/eslint-config: could not parse "${manifestPath}" as JSON: ${error.message}`, { cause: error });
   }
   if (!isRecord(parsed)) return undefined;
