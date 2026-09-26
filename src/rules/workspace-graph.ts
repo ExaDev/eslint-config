@@ -71,23 +71,19 @@ function sliceBySegment(relativeDir: string, group: GroupSpec, segmentIndex: num
   return rest[segmentIndex];
 }
 
-// Strips a leading npm scope ("@scope/") from a declared package name before name-prefix slice matching: a scoped workspace's own declared names ("@x/store-cli") carry a prefix that is never part of any slice value, so matching the full declared name would never find a prefix at all under a scoped naming convention.
-function stripScope(declaredName: string): string {
+// Strips a leading npm scope ("@scope/") from a declared package name before name-prefix slice matching: a scoped workspace's own declared names ("@x/store-cli") carry a prefix that is never part of any slice value, so matching the full declared name would never find a prefix at all under a scoped naming convention. Exported for direct testing of the anchor (a scope must start the name, not merely appear somewhere inside it) and the "one or more" scope-name length (a real scope is rarely a single character) independently of sliceByNamePrefix's own longest-match behaviour.
+export function stripScope(declaredName: string): string {
   const scopeMatch = /^@[^/]+\//u.exec(declaredName);
   return scopeMatch === null ? declaredName : declaredName.slice(scopeMatch[0].length);
 }
 
 /**
- * The slice value a 'namePrefix' group derives from whichever OTHER group's already-observed ('segment'-sliced) value prefixes this package's own declared name (its npm scope, if any, stripped first), mirroring the monorepo-template original's own flat-target-infers-vertical-from-name-prefix convention: `knownSlices` is the pool of every slice value any 'segment' group in this same workspace has produced. Chooses the LONGEST matching candidate, not merely the first found in Set-iteration (insertion) order: a shorter candidate that is itself a prefix of a longer one ("store" against "store-admin") would otherwise win arbitrarily by insertion order alone and silently under-slice a name that the longer, more specific candidate actually identifies.
+ * The slice value a 'namePrefix' group derives from whichever OTHER group's already-observed ('segment'-sliced) value prefixes this package's own declared name (its npm scope, if any, stripped first), mirroring the monorepo-template original's own flat-target-infers-vertical-from-name-prefix convention: `knownSlices` is the pool of every slice value any 'segment' group in this same workspace has produced. Chooses the LONGEST matching candidate, not merely the first found in Set-iteration (insertion/readdir) order: a shorter candidate that is itself a prefix of a longer one ("store" against "store-admin") would otherwise win arbitrarily by insertion order alone and silently under-slice a name that the longer, more specific candidate actually identifies. Sorted by length rather than tracked via a running "best so far" comparison: two knownSlices entries can never be equal-length AND both match the same declaredName (a Set already forbids two entries with the identical string value, and two DIFFERENT same-length strings can never both be a startsWith-before-a-hyphen prefix of the same string at position 0), so a running max would carry a genuinely unreachable, unkillable tie-breaking branch; sorting instead exercises the real, always-reachable relative-order comparison for every pair of candidates, matched or not.
  */
 function sliceByNamePrefix(declaredName: string, knownSlices: ReadonlySet<string>): string | undefined {
   const unscoped = stripScope(declaredName);
-  let best: string | undefined;
-  for (const candidate of knownSlices) {
-    if (unscoped !== candidate && !unscoped.startsWith(`${candidate}-`)) continue;
-    if (best === undefined || candidate.length > best.length) best = candidate;
-  }
-  return best;
+  const matches = [...knownSlices].filter((candidate) => unscoped === candidate || unscoped.startsWith(`${candidate}-`));
+  return matches.sort((a, b) => b.length - a.length)[0];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

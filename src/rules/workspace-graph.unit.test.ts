@@ -10,6 +10,7 @@ import {
   resetWorkspaceGraphCache,
   resolveWorkspacePackagePatterns,
   resolveWorkspaceRoot,
+  stripScope,
 } from './workspace-graph';
 import { realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
 import type { GroupSpec, WorkspaceArchitectureOptions } from './workspace-options';
@@ -31,6 +32,22 @@ function fakeFs(files: Readonly<Record<string, string>>, dirs: Readonly<Record<s
     },
   };
 }
+
+describe('stripScope', () => {
+  it('strips a leading npm scope, however many characters it holds', () => {
+    // A single-character scope ("@x/") cannot distinguish the anchor from the quantifier: both "^@[^/]+/" and a hypothetical "^@[^/]/" (exactly one character) would strip it identically. A real, multi-character scope name is what actually exercises "+" (one or more characters), not merely "exactly one".
+    expect(stripScope('@exacap/store-cli')).toBe('store-cli');
+  });
+
+  it('leaves a name with no scope at all unchanged', () => {
+    expect(stripScope('store-cli')).toBe('store-cli');
+  });
+
+  it('never strips a "@scope/"-shaped substring that does not start the name', () => {
+    // An unanchored pattern would still match "@scope/" here, just starting partway through, and (since stripScope slices by the match's own LENGTH, not its position) would wrongly cut characters off the front of the string.
+    expect(stripScope('a@scope/b')).toBe('a@scope/b');
+  });
+});
 
 describe('findOwningGroup', () => {
   const groups: readonly GroupSpec[] = [{ name: 'core' }, { name: 'features' }, { name: 'nested', path: 'core/nested' }];
