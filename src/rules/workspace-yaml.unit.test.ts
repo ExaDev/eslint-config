@@ -92,6 +92,20 @@ describe('readWorkspacePackages', () => {
     expect(readWorkspacePackages('packagesFoo: bar\n')).toEqual([]);
   });
 
+  it('reads a "packages:" key written with a double-quoted key, valid YAML pnpm itself accepts', () => {
+    const yaml = '"packages":\n  - \'core/*\'\n';
+    expect(readWorkspacePackages(yaml)).toEqual(['core/*']);
+  });
+
+  it("reads a 'packages:' key written with a single-quoted key", () => {
+    const yaml = "'packages':\n  - 'core/*'\n";
+    expect(readWorkspacePackages(yaml)).toEqual(['core/*']);
+  });
+
+  it('does not match a quoted key that merely starts with "packages" ("packagesFoo")', () => {
+    expect(readWorkspacePackages('"packagesFoo": bar\n')).toEqual([]);
+  });
+
   it('reads a simple single-quoted block sequence', () => {
     const yaml = "packages:\n  - 'core/*/*'\n  - 'features/*/*'\n";
     expect(readWorkspacePackages(yaml)).toEqual(['core/*/*', 'features/*/*']);
@@ -191,5 +205,26 @@ describe('readWorkspacePackages', () => {
 
   it('reports the exact flow-style value with trailing whitespace before a comment removed, not merely leading whitespace', () => {
     expect(() => readWorkspacePackages('packages:   foo   # comment\n')).toThrow(/\("foo"\)/);
+  });
+
+  it('never cuts a quoted item\'s own "#" character, even one preceded by whitespace, as if it opened a comment', () => {
+    const yaml = "packages:\n  - 'core/# not a comment/*'\n";
+    expect(readWorkspacePackages(yaml)).toEqual(['core/# not a comment/*']);
+  });
+
+  it('still strips a genuine trailing comment that follows a quoted item', () => {
+    const yaml = "packages:\n  - 'core/*' # a real trailing comment, with its own \"#\" too\n";
+    expect(readWorkspacePackages(yaml)).toEqual(['core/*']);
+  });
+
+  it('never treats a "#" inside an unterminated quote as a comment opener either', () => {
+    const yaml = "packages:\n  - 'core/#odd\n";
+    expect(readWorkspacePackages(yaml)).toEqual(["'core/#odd"]);
+  });
+
+  it('skips a doubled "\'\'" (a single-quoted scalar\'s own literal-quote escape) rather than reading it as the closing quote, so a "#" after it is still inside the quoted value, not read as a comment', () => {
+    // unquote() does not itself unescape a doubled "''" back to a literal single quote (this reader is deliberately minimal, not a full YAML parser); the point under test here is only that commentSearchStart keeps scanning past the doubled pair to the REAL closing quote, rather than mistaking the first half of it for one and treating everything after (the "#") as outside the quoted value.
+    const yaml = "packages:\n  - 'it''s-a-package/#not-a-comment'\n";
+    expect(readWorkspacePackages(yaml)).toEqual(["it''s-a-package/#not-a-comment"]);
   });
 });
