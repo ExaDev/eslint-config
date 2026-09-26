@@ -123,7 +123,7 @@ ruleTester.run('no-uphill-dependency', rule, {
     // isolatedGroups configured, but this pair is not one of the forbidden ones.
     {
       code: manifest('kv-adapter-memory', { 'billing-contract': 'workspace:*' }),
-      options: [{ groups: [{ name: 'core' }], isolatedGroups: [['features', 'verticals']] }],
+      options: [{ groups: [{ name: 'core' }, { name: 'features' }, { name: 'verticals' }], isolatedGroups: [['features', 'verticals']] }],
     },
     // A nested (non-top-level) object that itself looks exactly like a self-contained manifest (its own real "name" and "dependencies") must never be analysed as if it were the file's own top-level manifest: only the Object visitor's own parent.type === 'Document' check stands between "the real top level" and "any nested object anywhere in the file". If bypassed, this nested object would be read as "store-cli" (rank 3) depending on "kv-adapter-memory" (rank 1), a genuine rankSkip violation, and wrongly reported even though the top-level manifest itself declares no dependencies at all.
     {
@@ -149,13 +149,13 @@ ruleTester.run('no-uphill-dependency', rule, {
     },
     {
       code: manifest('checkout-vertical', { 'store-api-router': 'workspace:*' }),
-      options: [{ groups: [{ name: 'core' }], isolatedGroups: [['features', 'verticals']] }],
+      options: [{ groups: [{ name: 'core' }, { name: 'features' }, { name: 'verticals' }], isolatedGroups: [['features', 'verticals']] }],
       errors: [{ messageId: 'isolatedGroup' }],
     },
     // isolatedGroups matches in the reverse declared order too.
     {
       code: manifest('checkout-vertical', { 'store-api-router': 'workspace:*' }),
-      options: [{ groups: [{ name: 'core' }], isolatedGroups: [['verticals', 'features']] }],
+      options: [{ groups: [{ name: 'core' }, { name: 'features' }, { name: 'verticals' }], isolatedGroups: [['verticals', 'features']] }],
       errors: [{ messageId: 'isolatedGroup' }],
     },
     // Two violating dependencies in one manifest each get their own reported error, at their own location.
@@ -168,6 +168,16 @@ ruleTester.run('no-uphill-dependency', rule, {
     {
       code: JSON.stringify({ name: 'kv-contract', devDependencies: { 'kv-adapter-memory': 'workspace:*' } }, null, 2),
       options: [{ groups: [{ name: 'core' }], dependencyFields: ['devDependencies'] }],
+      errors: [{ messageId: 'uphillRank' }],
+    },
+    // The same dependency name declared under two configured dependencyFields is de-duplicated by name before checking: exactly one diagnostic, never two identical ones both attributed to the first field's own location.
+    {
+      code: JSON.stringify(
+        { name: 'kv-contract', dependencies: { 'kv-adapter-memory': 'workspace:*' }, devDependencies: { 'kv-adapter-memory': 'workspace:*' } },
+        null,
+        2,
+      ),
+      options: [{ groups: [{ name: 'core' }], dependencyFields: ['dependencies', 'devDependencies'] }],
       errors: [{ messageId: 'uphillRank' }],
     },
   ],
