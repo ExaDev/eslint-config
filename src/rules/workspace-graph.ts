@@ -1,4 +1,4 @@
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
 import { resolveWorkspacePackageDirs } from './workspace-glob';
 import { splitPathSegments } from './workspace-path';
@@ -93,22 +93,31 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
+/**
+ * A workspace package's own declared "name" ('undefined' for one pnpm allows to omit it entirely, never for a manifest that is not even a usable JSON object at all, which readDeclaredManifest below still reports as a wholly absent manifest).
+ */
 export interface DeclaredManifest {
-  readonly name: string;
+  readonly name: string | undefined;
   readonly dependencyNames: readonly string[];
 }
 
 /**
- * Reads a candidate package directory's own package.json directly (plain JSON.parse, not momoa): this is data collection for the graph, not a file being linted, so no AST/location information is needed. No existsSync guard here: every relativeDir this is called with came from resolveWorkspacePackageDirs, which already only returns directories that own a real package.json, so its absence here would mean that guarantee broke, not a case to handle quietly. A manifest with no usable string "name" is treated the same way regardless: nothing this graph can identify a package by.
+ * Reads a candidate package directory's own package.json directly (plain JSON.parse, not momoa): this is data collection for the graph, not a file being linted, so no AST/location information is needed. No existsSync guard here: every relativeDir this is called with came from resolveWorkspacePackageDirs, which already only returns directories that own a real package.json, so its absence here would mean that guarantee broke, not a case to handle quietly. A manifest that is not a usable JSON object at all (parses to an array, a string, null) returns undefined: nothing this graph can identify a package by, regardless of any "name" field. A manifest that IS a usable object but declares no "name" (or a non-string one) is different: pnpm allows a workspace package with no declared name at all, so its own `name` comes back as undefined rather than dropping the whole manifest, letting collectCandidates below key such a package by its directory instead of silently skipping it (and every dependency it declares along with it).
  *
  * Exported so `dependencyNames`' own exact contents (never a stray extra entry) can be asserted directly: buildWorkspaceGraph's own public output filters dependencyNamesByName down to workspace-internal names only, which would silently absorb an unexpected non-package entry before any graph-level test could ever see it.
  */
 export function readDeclaredManifest(fs: WorkspaceFs, absoluteDir: string, dependencyFields: readonly string[]): DeclaredManifest | undefined {
   const manifestPath = join(absoluteDir, 'package.json');
-  const parsed: unknown = JSON.parse(fs.readFileSync(manifestPath));
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(fs.readFileSync(manifestPath));
+  } catch (error) {
+    // JSON.parse's own SyntaxError never names the file it was reading, only the byte offset inside whatever string it was given; wrapped here, at the one place that string comes from a real path, so a malformed manifest anywhere in a large workspace can actually be found rather than chased through a bare "Expected double-quoted property name... position 25".
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`@exadev/eslint-config: could not parse "${manifestPath}" as JSON: ${reason}`, { cause: error });
+  }
   if (!isRecord(parsed)) return undefined;
   const name = parsed['name'];
-  if (typeof name !== 'string') return undefined;
 
   const dependencyNames: string[] = [];
   for (const field of dependencyFields) {
@@ -116,7 +125,7 @@ export function readDeclaredManifest(fs: WorkspaceFs, absoluteDir: string, depen
     if (isRecord(value)) dependencyNames.push(...Object.keys(value));
   }
 
-  return { name, dependencyNames };
+  return { name: typeof name === 'string' ? name : undefined, dependencyNames };
 }
 
 /**
@@ -136,6 +145,13 @@ export function resolveWorkspaceRoot(fs: WorkspaceFs, filename: string, rootOpti
     }
     dir = parent;
   }
+}
+
+/**
+ * The workspace-root-relative, forward-slash-joined directory the manifest at `filename` (context.filename, the file ESLint is currently linting) sits in: computed directly from the filesystem, never trusted from a declared "name" field. Every workspace-architecture rule uses this to confirm the manifest it is linting is genuinely the SAME package.json buildWorkspaceGraph resolved for whatever graph entry it is about to check, since a name is only ever unique within the graph's own build (buildWorkspaceGraph's own duplicate-name throw enforces that), never across a stale or duplicated copy of a manifest sitting elsewhere in the tree outside the workspace's own package globs (a build output directory that copies its source package's package.json verbatim, say). A rule that skipped this check would check that copy under the real package's own graph entry: reporting edges the real package never declared, or letting a single real violation double-report once per copy.
+ */
+export function manifestRelativeDir(root: string, filename: string): string {
+  return relative(root, dirname(resolve(filename))).split(sep).join('/');
 }
 
 function readPackagesFromYaml(fs: WorkspaceFs, root: string): readonly string[] {
@@ -180,7 +196,9 @@ function collectCandidates(fs: WorkspaceFs, root: string, options: WorkspaceArch
     }
     const manifest = readDeclaredManifest(fs, join(root, relativeDir), resolveDependencyFields(options));
     if (manifest === undefined) continue;
-    candidates.push({ relativeDir, group, declaredName: manifest.name, dependencyNames: manifest.dependencyNames });
+    // pnpm allows a workspace package to declare no "name" at all; nothing else can then depend on it BY NAME, but its own outgoing dependency edges still need checking, so it is keyed by its own relativeDir instead of being dropped from the graph the way a genuinely unusable manifest (readDeclaredManifest returning undefined above) is.
+    const declaredName = manifest.name ?? relativeDir;
+    candidates.push({ relativeDir, group, declaredName, dependencyNames: manifest.dependencyNames });
   }
   return candidates;
 }

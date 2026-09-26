@@ -6,6 +6,7 @@ import {
   findOwningGroup,
   getWorkspaceGraph,
   loadWorkspaceGraph,
+  manifestRelativeDir,
   readDeclaredManifest,
   resetWorkspaceGraphCache,
   resolveWorkspacePackagePatterns,
@@ -390,17 +391,19 @@ describe('buildWorkspaceGraph (fabricated tree)', () => {
     );
   });
 
-  it('a matched directory with no parseable package.json name is silently skipped', () => {
+  it('a package.json with no "name" field at all is kept in the graph, keyed by its own relativeDir rather than dropped: pnpm allows a workspace package to omit "name" entirely, and its own outgoing dependencies still need checking', () => {
     const fs = fakeFs(
       {
         '/root/pnpm-workspace.yaml': "packages:\n  - 'core/*'\n",
-        '/root/core/broken/package.json': JSON.stringify({ version: '1.0.0' }),
+        '/root/core/nameless/package.json': JSON.stringify({ version: '1.0.0', dependencies: { a: '1' } }),
       },
-      { '/root': ['core'], '/root/core': ['broken'] },
+      { '/root': ['core'], '/root/core': ['nameless'] },
     );
 
     const graph = buildWorkspaceGraph(fs, '/root', { groups });
-    expect(graph.packagesByName.size).toBe(0);
+    expect(graph.packagesByName.size).toBe(1);
+    expect(graph.packagesByName.get('core/nameless')).toEqual({ name: 'core/nameless', relativeDir: 'core/nameless', group: 'core', rank: 0, slice: undefined });
+    expect(graph.dependencyNamesByName.get('core/nameless')).toEqual([]);
   });
 
   it('a matched directory whose package.json parses to a non-object JSON value is silently skipped', () => {
@@ -508,6 +511,21 @@ describe('readDeclaredManifest', () => {
     const fs = fakeFs({ '/root/core/a/package.json': JSON.stringify({ name: 'a' }) }, {});
     expect(readDeclaredManifest(fs, '/root/core/a', ['dependencies'])).toEqual({ name: 'a', dependencyNames: [] });
   });
+
+  it('reports "name" as undefined, not the whole manifest as absent, when the manifest is a usable object with no "name" field at all: pnpm allows this', () => {
+    const fs = fakeFs({ '/root/core/a/package.json': JSON.stringify({ dependencies: { b: '1' } }) }, {});
+    expect(readDeclaredManifest(fs, '/root/core/a', ['dependencies'])).toEqual({ name: undefined, dependencyNames: ['b'] });
+  });
+
+  it('reports "name" as undefined when it is present but not a string, the same as when it is absent entirely', () => {
+    const fs = fakeFs({ '/root/core/a/package.json': JSON.stringify({ name: 123 }) }, {});
+    expect(readDeclaredManifest(fs, '/root/core/a', ['dependencies'])).toEqual({ name: undefined, dependencyNames: [] });
+  });
+
+  it('names the manifest\'s own path in the thrown error when its content is not parseable JSON at all, rather than a bare JSON.parse SyntaxError with no indication of which file', () => {
+    const fs = fakeFs({ '/root/core/broken/package.json': '{ this is not json' }, {});
+    expect(() => readDeclaredManifest(fs, '/root/core/broken', ['dependencies'])).toThrow(/\/root\/core\/broken\/package\.json/);
+  });
 });
 
 describe('getWorkspaceGraph / resetWorkspaceGraphCache', () => {
@@ -555,6 +573,21 @@ describe('getWorkspaceGraph / resetWorkspaceGraphCache', () => {
     const second = getWorkspaceGraph(fs, '/cache-d', options);
     expect(second).not.toBe(first);
     expect(second).toEqual(first);
+  });
+});
+
+describe('manifestRelativeDir', () => {
+  it('gives the forward-slash-joined directory, relative to root, that the manifest file sits in', () => {
+    expect(manifestRelativeDir('/root', join('/root', 'core/kv/package.json'))).toBe('core/kv');
+  });
+
+  it('gives an empty string for a manifest that sits directly at the workspace root', () => {
+    expect(manifestRelativeDir('/root', join('/root', 'package.json'))).toBe('');
+  });
+
+  it('resolves a relative filename against the current working directory first, the same way resolveWorkspaceRoot does', () => {
+    // A rule's own context.filename is always an absolute path in a real lint run, but this still confirms the function's own contract rather than trusting it: relative() alone, given two paths that are not both already absolute, would compute something neither caller here intends.
+    expect(manifestRelativeDir(FIXTURE_ROOT, join(FIXTURE_ROOT, 'targets/store-cli/package.json'))).toBe('targets/store-cli');
   });
 });
 
