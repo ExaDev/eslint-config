@@ -70,6 +70,41 @@ describe('expandGlob', () => {
     });
     expect([...expandGlob(fs, '/root', 'core/**')].sort()).toEqual(['core', 'core/clock', 'core/clock/contract', 'core/clock/system']);
   });
+
+  it("'**' never descends into a 'node_modules' directory, matching pnpm's own unconditional exclusion", () => {
+    const fs = fakeFs({
+      '/root': ['packages'],
+      '/root/packages': ['a'],
+      '/root/packages/a': ['node_modules'],
+      '/root/packages/a/node_modules': ['lodash'],
+    });
+    expect([...expandGlob(fs, '/root', 'packages/**')].sort()).toEqual(['packages', 'packages/a']);
+  });
+
+  it("a single '*' segment never matches a literal 'node_modules' directory name either", () => {
+    const fs = fakeFs({ '/root': ['packages'], '/root/packages': ['a', 'node_modules'] });
+    expect(expandGlob(fs, '/root', 'packages/*')).toEqual(['packages/a']);
+  });
+
+  it("matches a partial, in-segment wildcard ('app-*'), pnpm's own supported dialect beyond a whole-segment '*'", () => {
+    const fs = fakeFs({ '/root': ['features'], '/root/features': ['app-store', 'app-billing', 'other'] });
+    expect([...expandGlob(fs, '/root', 'features/app-*')].sort()).toEqual(['features/app-billing', 'features/app-store']);
+  });
+
+  it("matches a partial, in-segment wildcard at the START of the segment ('*-web')", () => {
+    const fs = fakeFs({ '/root': ['apps'], '/root/apps': ['store-web', 'store-api', 'admin-web'] });
+    expect([...expandGlob(fs, '/root', 'apps/*-web')].sort()).toEqual(['apps/admin-web', 'apps/store-web']);
+  });
+
+  it("matches '?' as exactly one character", () => {
+    const fs = fakeFs({ '/root': ['targets'], '/root/targets': ['v1', 'v22', 'vX'] });
+    expect([...expandGlob(fs, '/root', 'targets/v?')].sort()).toEqual(['targets/v1', 'targets/vX']);
+  });
+
+  it('a partial pattern with a regex-special character in its literal portion matches only that exact literal, not an unintended regex meta-match', () => {
+    const fs = fakeFs({ '/root': ['packages'], '/root/packages': ['a.b', 'aXb'] });
+    expect(expandGlob(fs, '/root', 'packages/a.b')).toEqual(['packages/a.b']);
+  });
 });
 
 describe('resolveWorkspacePackageDirs', () => {

@@ -2,7 +2,19 @@ import { join } from 'node:path';
 import { listSubdirectories, type WorkspaceFs } from './workspace-fs';
 import { splitPathSegments } from './workspace-path';
 
-// pnpm-workspace.yaml's own glob dialect, reimplemented directly against the real directory tree rather than via Node's fs.globSync: that API only stabilised in Node 22, below this package's own >=20 engines floor. Every "packages:" glob is a directory glob (it names where a package's own directory lives, never a file), so this matcher only ever walks real subdirectories: '*' matches exactly one path segment, '**' matches zero or more segments, and a literal segment matches only itself.
+// pnpm-workspace.yaml's own glob dialect, reimplemented directly against the real directory tree rather than via Node's fs.globSync: that API only stabilised in Node 22, below this package's own >=20 engines floor. Every "packages:" glob is a directory glob (it names where a package's own directory lives, never a file), so this matcher only ever walks real subdirectories: '**' matches zero or more whole path segments; every other segment (a bare '*', a literal name, or a partial pattern mixing literal text with '*'/'?' such as 'app-*' or '*-web') is matched against one real directory name at a time via segmentToRegExp below. node_modules is never descended into or matched, mirroring pnpm's own unconditional "**/node_modules/**" exclusion: a hoisted or npm-nested node_modules is real content in the tree, never a workspace package.
+
+// Builds the one-segment matcher behind every non-'**' pattern segment: '*' becomes zero-or-more characters, '?' becomes exactly one, and every other character is escaped so a literal segment (no wildcard at all) matches only its own exact name, same as before this function existed.
+function segmentToRegExp(segment: string): RegExp {
+  const escaped = segment.replace(/[.+^${}()|[\]\\]/gu, '\\$&');
+  const withWildcards = escaped.replace(/\*/gu, '.*').replace(/\?/gu, '.');
+  return new RegExp(`^${withWildcards}$`, 'u');
+}
+
+// listSubdirectories filtered to exclude node_modules, used at every point this file lists real directory children so a dependency's own nested node_modules can never itself be mistaken for a workspace member, regardless of which pattern segment is doing the matching.
+function listRealSubdirectories(fs: WorkspaceFs, dir: string): readonly string[] {
+  return listSubdirectories(fs, dir).filter((name) => name !== 'node_modules');
+}
 
 function walkPattern(fs: WorkspaceFs, root: string, segments: readonly string[], matchedSoFar: readonly string[]): string[] {
   const [segment, ...rest] = segments;
@@ -13,13 +25,14 @@ function walkPattern(fs: WorkspaceFs, root: string, segments: readonly string[],
   if (segment === '**') {
     // Consuming zero segments of '**' tries the rest of the pattern from here; consuming one real directory level and trying '**' again from there covers every deeper match, exactly the recursive-doublestar shape a glob's own "zero or more" semantics require.
     const results = walkPattern(fs, root, rest, matchedSoFar);
-    for (const child of listSubdirectories(fs, currentDir)) {
+    for (const child of listRealSubdirectories(fs, currentDir)) {
       results.push(...walkPattern(fs, root, segments, [...matchedSoFar, child]));
     }
     return results;
   }
 
-  const candidates = segment === '*' ? listSubdirectories(fs, currentDir) : listSubdirectories(fs, currentDir).filter((name) => name === segment);
+  const pattern = segmentToRegExp(segment);
+  const candidates = listRealSubdirectories(fs, currentDir).filter((name) => pattern.test(name));
   const results: string[] = [];
   for (const candidate of candidates) {
     results.push(...walkPattern(fs, root, rest, [...matchedSoFar, candidate]));
