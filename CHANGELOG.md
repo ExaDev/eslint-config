@@ -1,3 +1,18 @@
+## [2.21.1](https://github.com/ExaDev/eslint-config/compare/v2.21.0...v2.21.1) (2026-09-26)
+
+
+### Bug Fixes
+
+* **package-name-mirrors-path:** throw instead of silently skipping an unresolvable group ([71b4c17](https://github.com/ExaDev/eslint-config/commit/71b4c172af963224475a3f35cdbeb19171459b9c))
+* **workspace-checks:** resolve isolatedGroups explicitly; drop an unused parameter ([162a5c2](https://github.com/ExaDev/eslint-config/commit/162a5c23b3448d767923978bbce4e4d677685e7d))
+* **workspace-glob:** escape a literal "]" and eliminate equivalent boundary mutants ([774037c](https://github.com/ExaDev/eslint-config/commit/774037c6360e45e6d73269d1fd3ded8cc257c861))
+* **workspace-glob:** honour pnpm's brace expansion, character classes and dot-exclusion ([8540d45](https://github.com/ExaDev/eslint-config/commit/8540d45edabbd189e877ea3a02d1d96bc5d51233))
+* **workspace-graph:** throw on an empty resolved packages list; resolve nameRanks explicitly ([9e739b2](https://github.com/ExaDev/eslint-config/commit/9e739b2d609b3474529910bd39d422eea9eb7549))
+* **workspace-options:** reject duplicate group names and a malformed slice ([47fb724](https://github.com/ExaDev/eslint-config/commit/47fb724ffb99e17564476ba76d0549b131b4f6b4))
+* **workspace-yaml:** accept a quoted "packages" key and protect a quoted glob's own "#" ([a519843](https://github.com/ExaDev/eslint-config/commit/a519843e981081f1eb64d337491557ce326afafa))
+* **workspace-yaml:** correct the double-quote doubling-escape test's own input ([101e318](https://github.com/ExaDev/eslint-config/commit/101e318be80b44271fdc580a4a05fe2766ce4af5))
+* **workspace-yaml:** eliminate equivalent boundary mutants; export helpers for direct testing ([cd50839](https://github.com/ExaDev/eslint-config/commit/cd508394cfe71b7c362d9e64a81fd4c161648de7))
+
 # [2.21.0](https://github.com/ExaDev/eslint-config/compare/v2.20.2...v2.21.0) (2026-09-26)
 
 
