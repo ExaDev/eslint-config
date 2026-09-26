@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { readWorkspacePackages, requireCapture, requireLine, requireMatch, unquote } from './workspace-yaml';
+import {
+  commentSearchStart,
+  findMatchingQuoteEnd,
+  quoteCharAt,
+  readWorkspacePackages,
+  requireCapture,
+  requireChar,
+  requireLine,
+  requireMatch,
+  stripComment,
+  unquote,
+} from './workspace-yaml';
 
 describe('requireLine', () => {
   it('returns the line at a genuinely in-bounds index', () => {
@@ -34,6 +45,79 @@ describe('requireMatch', () => {
 
   it('throws when the pattern does not match, a shape neither real call site (which only ever re-execs a pattern a prior .test() just confirmed) can produce', () => {
     expect(() => requireMatch(/^a$/u, 'b')).toThrow(/Unreachable/);
+  });
+});
+
+describe('requireChar', () => {
+  it('returns the character at a genuinely in-bounds index', () => {
+    expect(requireChar('abc', 1)).toBe('b');
+  });
+
+  it('throws for an out-of-bounds index, a shape no real call site (each bounded by its own loop\'s "index < length" condition) can produce', () => {
+    const outOfBoundsIndex = 3;
+    expect(() => requireChar('abc', outOfBoundsIndex)).toThrow(/Unreachable/);
+  });
+});
+
+describe('quoteCharAt', () => {
+  it('returns the single-quote character at the given index, not merely a boolean, and reads it AT that index rather than the whole string', () => {
+    // "ab'cd" is not itself a lone "'", so a mutant reading the whole string instead of value[index] would find no match here at all.
+    expect(quoteCharAt("ab'cd", 2)).toBe("'");
+  });
+
+  it('returns the double-quote character at the given index too, distinguishing the second disjunct from a forced-false one', () => {
+    expect(quoteCharAt('ab"cd', 2)).toBe('"');
+  });
+
+  it('returns undefined for a non-quote character', () => {
+    expect(quoteCharAt('abc', 0)).toBeUndefined();
+  });
+});
+
+describe('findMatchingQuoteEnd', () => {
+  it('finds the first unescaped closing quote after openIndex', () => {
+    expect(findMatchingQuoteEnd("ab'c", 0, "'")).toBe(2);
+  });
+
+  it('starts searching strictly AFTER openIndex, never at or before it: a quote character sitting immediately before the opening one must never be mistaken for its own close', () => {
+    const realClosingQuoteIndex = 4;
+    expect(findMatchingQuoteEnd("x'ab'y", 1, "'")).toBe(realClosingQuoteIndex);
+  });
+
+  it('skips a doubled "\'\'" (a literal-quote escape) advancing past BOTH characters, rather than re-examining the same pair forever', () => {
+    // No unescaped closing quote follows the doubled pair at all, so the correct answer is -1; a wrong "index -= 1" style bug here re-examines the same doubled pair without end.
+    expect(findMatchingQuoteEnd("a''b", 0, "'")).toBe(-1);
+  });
+});
+
+describe('commentSearchStart', () => {
+  it('skips past a leading quoted scalar to just after its own closing quote, not merely to the string\'s own end', () => {
+    const value = "  'abc' # comment";
+    const justPastTheClosingQuote = 7;
+    expect(commentSearchStart(value)).toBe(justPastTheClosingQuote);
+  });
+
+  it('returns the whole string\'s length for an unterminated leading quote, never a position derived from the "not found" sentinel itself', () => {
+    const value = "  'abc";
+    expect(commentSearchStart(value)).toBe(value.length);
+  });
+});
+
+describe('stripComment', () => {
+  it('leaves a "#" not preceded by whitespace untouched, as a literal part of the value', () => {
+    expect(stripComment('core/#tag')).toBe('core/#tag');
+  });
+
+  it('strips from a "#" that IS preceded by a space, checking the character strictly BEFORE it, not after', () => {
+    expect(stripComment('ab #cd')).toBe('ab');
+  });
+
+  it('strips from a "#" preceded by a tab specifically, a case no test before this one exercised at all', () => {
+    expect(stripComment('a\t#b')).toBe('a');
+  });
+
+  it('trims trailing whitespace from the end of a value with no comment at all, not leading whitespace', () => {
+    expect(stripComment('abc   ')).toBe('abc');
   });
 });
 
