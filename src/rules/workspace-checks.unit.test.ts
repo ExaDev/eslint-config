@@ -103,6 +103,18 @@ describe('checkDependencies', () => {
     expect(checkDependencies('kv-adapter-memory', adapter, ['store-api-contract'], { graph, isolatedGroups: [['features', 'verticals']] })).toEqual([]);
   });
 
+  it('isolatedGroup is reported when only ONE of several configured pairs matches, not only when every pair does', () => {
+    // Two configured pairs, only the second of which involves this dependency's own groups: distinguishes isIsolatedPair's real "some pair matches" semantics from a wrongly-inverted "every pair matches", which this same input would satisfy vacuously if the array happened to be empty but must genuinely fail here since the first, unrelated pair does not match at all.
+    const isolatedGroups: readonly (readonly [string, string])[] = [
+      ['pair-a', 'pair-b'],
+      ['features', 'verticals'],
+    ];
+    const violations = checkDependencies('checkout-vertical', vertical, ['store-api-contract'], { graph, isolatedGroups });
+    expect(violations).toEqual([
+      { dependencyName: 'store-api-contract', messageId: 'isolatedGroup', data: { self: 'checkout-vertical', selfGroup: 'verticals', dependency: 'store-api-contract', dependencyGroup: 'features' } },
+    ]);
+  });
+
   it('isolatedGroup is checked ahead of uphillRank: reported even when the dependency also outranks self', () => {
     const higherRankVertical = pkg({ name: 'checkout-vertical-router', rank: 5, group: 'verticals', slice: 'checkout' });
     const graphWithHigher = new Map(graph).set(higherRankVertical.name, higherRankVertical);
