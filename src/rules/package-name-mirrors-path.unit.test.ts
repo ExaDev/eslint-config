@@ -4,10 +4,14 @@ import { describe, expect, it } from 'vitest';
 import { createPackageNameMirrorsPathRule, findGroupSpec } from './package-name-mirrors-path';
 import type { WorkspaceGraph, WorkspacePackageInfo } from './workspace-graph';
 import type { GroupSpec } from './workspace-options';
+import type { WorkspaceFs } from './workspace-fs';
 
 function pkg(name: string, relativeDir: string, group: string): WorkspacePackageInfo {
   return { name, relativeDir, group, rank: 0, slice: undefined };
 }
+
+// A workspace package with no declared "name" at all (pnpm allows this): keyed by its own relativeDir, exactly as buildWorkspaceGraph's own collectCandidates does for a real one (workspace-graph.ts).
+const NAMELESS_RELATIVE_DIR = 'core/nameless';
 
 const FIXED_GRAPH: WorkspaceGraph = {
   root: '/fixture',
@@ -16,9 +20,24 @@ const FIXED_GRAPH: WorkspaceGraph = {
       pkg('@acme/clock-contract', 'core/clock/contract', 'core'),
       pkg('clock-system', 'core/clock/system', 'core'),
       pkg('@acme/test-database', 'test/database', 'test'),
+      pkg(NAMELESS_RELATIVE_DIR, NAMELESS_RELATIVE_DIR, 'core'),
     ].map((entry) => [entry.name, entry]),
   ),
   dependencyNamesByName: new Map(),
+};
+
+// FIXED_GRAPH's own root and every filename built from it (filenameFor below) are fabricated paths, never real directories: manifestRelativeDir's own realpath resolution (workspace-graph.ts) is exercised directly by its own unit tests, so this rule's tests only need a WorkspaceFs whose realpathSync passes every path through unchanged, the same as node:fs's own realpathSync would for a path with no symlink anywhere along it.
+const identityFs: WorkspaceFs = {
+  existsSync: () => {
+    throw new Error('not used: this rule never calls existsSync/readFileSync/readdirSync itself, only realpathSync via manifestRelativeDir.');
+  },
+  readFileSync: () => {
+    throw new Error('not used: this rule never calls existsSync/readFileSync/readdirSync itself, only realpathSync via manifestRelativeDir.');
+  },
+  readdirSync: () => {
+    throw new Error('not used: this rule never calls existsSync/readFileSync/readdirSync itself, only realpathSync via manifestRelativeDir.');
+  },
+  realpathSync: (path) => path,
 };
 
 describe('findGroupSpec', () => {
@@ -33,14 +52,14 @@ describe('findGroupSpec', () => {
   });
 });
 
-const rule = createPackageNameMirrorsPathRule(() => FIXED_GRAPH);
+const rule = createPackageNameMirrorsPathRule({ loadGraph: () => FIXED_GRAPH, fs: identityFs });
 const ruleTester = new RuleTester({ language: 'json/json', plugins: { json } });
 
 const GROUPS_AND_NAMING = { groups: [{ name: 'core' }, { name: 'test', naming: 'keep-group' as const }], naming: { scope: '@acme' } };
 
 describe('createPackageNameMirrorsPathRule meta', () => {
-  it('declares its own single message id', () => {
-    expect(Object.keys(rule.meta?.messages ?? {})).toEqual(['mismatch']);
+  it('declares its own two message ids', () => {
+    expect(Object.keys(rule.meta?.messages ?? {}).sort()).toEqual(['mismatch', 'missingName']);
   });
 
   it('carries the exact docs/languages content the rule is documented to have', () => {
@@ -51,6 +70,7 @@ describe('createPackageNameMirrorsPathRule meta', () => {
     expect(meta.docs?.description).toBe("Require a workspace package to declare the name its path derives, under the configured naming scope/separator.");
     expect(meta.docs?.url).toBe('https://github.com/ExaDev/eslint-config/blob/main/src/rules/package-name-mirrors-path.ts');
     expect(meta.messages?.mismatch).toBe('Package at "{{dir}}" declares "{{actual}}" but its path derives "{{expected}}".');
+    expect(meta.messages?.missingName).toBe('Package at "{{dir}}" declares no name at all, but its path derives "{{expected}}".');
   });
 });
 
@@ -86,6 +106,20 @@ ruleTester.run('package-name-mirrors-path', rule, {
       filename: filenameFor('core/clock/system'),
       options: [GROUPS_AND_NAMING],
       errors: [{ messageId: 'mismatch', data: { dir: 'core/clock/system', actual: 'clock-system', expected: '@acme/clock-system' } }],
+    },
+    // A package that declares no "name" at all is reported too: it plainly cannot mirror its path when it names nothing.
+    {
+      code: JSON.stringify({ version: '1.0.0' }),
+      filename: filenameFor(NAMELESS_RELATIVE_DIR),
+      options: [GROUPS_AND_NAMING],
+      errors: [{ messageId: 'missingName', data: { dir: NAMELESS_RELATIVE_DIR, expected: '@acme/nameless' } }],
+    },
+    // A NESTED object with no "name" of its own must never be analysed as if it were the file's own top-level manifest either, even though (unlike the "nested real-name" valid case above) its relativeDir-fallback identity resolves to the exact SAME graph entry as the genuine top-level manifest, since relativeDir is derived purely from context.filename, never from which node within the file is being visited: exactly ONE missingName violation is expected here, at the TOP-level object's own location, never two. If the top-level parent.type === 'Document' guard were ever bypassed, the nested object (also nameless, resolving to the identical graph entry) would be visited too and wrongly reported a second time.
+    {
+      code: JSON.stringify({ nested: { version: '1.0.0' } }),
+      filename: filenameFor(NAMELESS_RELATIVE_DIR),
+      options: [GROUPS_AND_NAMING],
+      errors: [{ messageId: 'missingName', data: { dir: NAMELESS_RELATIVE_DIR, expected: '@acme/nameless' } }],
     },
   ],
 });

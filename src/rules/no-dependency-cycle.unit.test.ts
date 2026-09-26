@@ -3,6 +3,21 @@ import { RuleTester } from 'eslint';
 import { describe, expect, it } from 'vitest';
 import { createNoDependencyCycleRule } from './no-dependency-cycle';
 import type { WorkspaceGraph, WorkspacePackageInfo } from './workspace-graph';
+import type { WorkspaceFs } from './workspace-fs';
+
+// FIXED_GRAPH's own root and every filename built from it (selfFilename below) are fabricated paths, never real directories: manifestRelativeDir's own realpath resolution (workspace-graph.ts) is exercised directly by its own unit tests, so this rule's tests only need a WorkspaceFs whose realpathSync passes every path through unchanged, the same as node:fs's own realpathSync would for a path with no symlink anywhere along it.
+const identityFs: WorkspaceFs = {
+  existsSync: () => {
+    throw new Error('not used: this rule never calls existsSync/readFileSync/readdirSync itself, only realpathSync via manifestRelativeDir.');
+  },
+  readFileSync: () => {
+    throw new Error('not used: this rule never calls existsSync/readFileSync/readdirSync itself, only realpathSync via manifestRelativeDir.');
+  },
+  readdirSync: () => {
+    throw new Error('not used: this rule never calls existsSync/readFileSync/readdirSync itself, only realpathSync via manifestRelativeDir.');
+  },
+  realpathSync: (path) => path,
+};
 
 function pkg(name: string): WorkspacePackageInfo {
   return { name, relativeDir: `unused/${name}`, group: 'core', rank: 0, slice: undefined };
@@ -30,7 +45,7 @@ const FIXED_GRAPH: WorkspaceGraph = {
   ]),
 };
 
-const rule = createNoDependencyCycleRule(() => FIXED_GRAPH);
+const rule = createNoDependencyCycleRule({ loadGraph: () => FIXED_GRAPH, fs: identityFs });
 const ruleTester = new RuleTester({ language: 'json/json', plugins: { json } });
 
 function manifest(name: string, dependencies: Readonly<Record<string, string>> = {}): string {
@@ -81,6 +96,12 @@ ruleTester.run('no-dependency-cycle', rule, {
     {
       code: manifest('cyclic-a', { 'cyclic-b': 'workspace:*' }),
       filename: `${FIXED_GRAPH.root}/dist/cyclic-a/package.json`,
+      options: [{ groups: [{ name: 'core' }] }],
+    },
+    // A NESTED object with no "name" of its own must never be analysed as if it were the file's own top-level manifest either, even though (unlike the "nested real-name" case above) its relativeDir-fallback identity resolves to the exact SAME graph entry as the genuine top-level manifest, since relativeDir is derived purely from context.filename, never from which node within the file is being visited. The linted package here (NAMELESS_RELATIVE_DIR) declares no top-level "dependencies" at all, only a nested object that does; if the top-level parent.type === 'Document' guard were ever bypassed, that nested object's own dependency on "a" (which the fabricated graph already records as depending back on this same nameless package) would be wrongly checked and reported as a genuine cycle.
+    {
+      code: JSON.stringify({ nested: { dependencies: { a: 'workspace:*' } } }),
+      filename: `${FIXED_GRAPH.root}/${NAMELESS_RELATIVE_DIR}/package.json`,
       options: [{ groups: [{ name: 'core' }] }],
     },
   ],

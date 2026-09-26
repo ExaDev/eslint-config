@@ -1,9 +1,10 @@
 import type { JSONRuleDefinition, JSONRuleVisitor } from '@eslint/json';
 import type { ObjectNode } from '@humanwhocodes/momoa';
-import { loadWorkspaceGraph, manifestRelativeDir, type LoadWorkspaceGraphFn } from './workspace-graph';
+import { loadWorkspaceGraph, manifestRelativeDir, type WorkspaceRuleDeps } from './workspace-graph';
 import { readWorkspaceArchitectureOptions, resolveDependencyFields, workspaceArchitectureOptionsSchema, type WorkspaceArchitectureOptions } from './workspace-options';
 import { checkDependencies } from './workspace-checks';
 import { collectTopLevelDependencies, readDeclaredName, type NamedDependency } from './workspace-json-helpers';
+import { realWorkspaceFs } from './workspace-fs';
 
 /**
  * The dependency entry checkDependencies' own violation refers to by name, looked back up so context.report has a real node to attach the diagnostic to. Every violation's dependencyName is provably one of the names collected into `dependencies` two lines above the only call site below (checkDependencies never invents a name of its own), so the throw here is unreachable through that call site; it is exported specifically so this file's own unit tests can exercise it directly with a deliberately mismatched name, the same "Unreachable, tested directly rather than trusted on a comment" shape package-json-key-order.ts's own `at()` helper establishes.
@@ -26,7 +27,8 @@ export type NoUphillDependencyRuleDefinition = JSONRuleDefinition<{
 /**
  * Enforces the configured workspace's own rank, rank-skip, slice and group-isolation boundaries on every `package.json`'s declared dependencies (see workspace-checks.ts's checkDependencies for the exact rules, and the package README's "Workspace architecture" section for the option shape). A factory, not a plain object, so a test can inject a stubbed LoadWorkspaceGraphFn returning a fabricated graph directly, exercising this rule's own reporting logic (which violation, which message, which location) with zero real filesystem I/O, the same "injectable in tests, defaulted in production" shape createBarrelPolicyRule already establishes.
  */
-export function createNoUphillDependencyRule(loadGraph: LoadWorkspaceGraphFn = loadWorkspaceGraph): NoUphillDependencyRuleDefinition {
+export function createNoUphillDependencyRule(deps: WorkspaceRuleDeps = {}): NoUphillDependencyRuleDefinition {
+  const { loadGraph = loadWorkspaceGraph, fs = realWorkspaceFs } = deps;
   return {
     meta: {
       type: 'problem',
@@ -57,7 +59,7 @@ export function createNoUphillDependencyRule(loadGraph: LoadWorkspaceGraphFn = l
           if (parent?.type !== 'Document') return;
 
           // Self-identified by the manifest's own declared name when it has one, or by its own directory when it does not: pnpm allows a workspace package to declare no "name" at all, and buildWorkspaceGraph keys such a package by its relativeDir for exactly this reason (see workspace-graph.ts), so its own outgoing dependencies still get checked rather than silently skipped.
-          const relativeDir = manifestRelativeDir(graph.root, context.filename);
+          const relativeDir = manifestRelativeDir(fs, graph.root, context.filename);
           const declared = readDeclaredName(node);
           const self = graph.packagesByName.get(declared?.name ?? relativeDir);
           if (self === undefined) return;
