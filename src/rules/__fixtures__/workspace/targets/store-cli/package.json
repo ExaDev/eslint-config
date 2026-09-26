@@ -1,0 +1,8 @@
+{
+  "name": "store-cli",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "store-application-context": "workspace:*"
+  }
+}

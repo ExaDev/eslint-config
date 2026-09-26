@@ -1,0 +1,8 @@
+{
+  "name": "store-application-context",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "store-api-router": "workspace:*"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "kv-adapter-memory",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "kv-contract": "workspace:*"
+  }
+}
