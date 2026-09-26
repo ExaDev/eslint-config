@@ -71,14 +71,23 @@ function sliceBySegment(relativeDir: string, group: GroupSpec, segmentIndex: num
   return rest[segmentIndex];
 }
 
+// Strips a leading npm scope ("@scope/") from a declared package name before name-prefix slice matching: a scoped workspace's own declared names ("@x/store-cli") carry a prefix that is never part of any slice value, so matching the full declared name would never find a prefix at all under a scoped naming convention.
+function stripScope(declaredName: string): string {
+  const scopeMatch = /^@[^/]+\//u.exec(declaredName);
+  return scopeMatch === null ? declaredName : declaredName.slice(scopeMatch[0].length);
+}
+
 /**
- * The slice value a 'namePrefix' group derives from whichever OTHER group's already-observed ('segment'-sliced) value prefixes this package's own declared name, mirroring the monorepo-template original's own flat-target-infers-vertical-from-name-prefix convention: `knownSlices` is the pool of every slice value any 'segment' group in this same workspace has produced.
+ * The slice value a 'namePrefix' group derives from whichever OTHER group's already-observed ('segment'-sliced) value prefixes this package's own declared name (its npm scope, if any, stripped first), mirroring the monorepo-template original's own flat-target-infers-vertical-from-name-prefix convention: `knownSlices` is the pool of every slice value any 'segment' group in this same workspace has produced. Chooses the LONGEST matching candidate, not merely the first found in Set-iteration (insertion) order: a shorter candidate that is itself a prefix of a longer one ("store" against "store-admin") would otherwise win arbitrarily by insertion order alone and silently under-slice a name that the longer, more specific candidate actually identifies.
  */
 function sliceByNamePrefix(declaredName: string, knownSlices: ReadonlySet<string>): string | undefined {
+  const unscoped = stripScope(declaredName);
+  let best: string | undefined;
   for (const candidate of knownSlices) {
-    if (declaredName === candidate || declaredName.startsWith(`${candidate}-`)) return candidate;
+    if (unscoped !== candidate && !unscoped.startsWith(`${candidate}-`)) continue;
+    if (best === undefined || candidate.length > best.length) best = candidate;
   }
-  return undefined;
+  return best;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -157,7 +166,11 @@ function collectCandidates(fs: WorkspaceFs, root: string, options: WorkspaceArch
   const candidates: Candidate[] = [];
   for (const relativeDir of relativeDirs) {
     const group = findOwningGroup(relativeDir, options.groups);
-    if (group === undefined) continue;
+    if (group === undefined) {
+      throw new Error(
+        `@exadev/eslint-config: workspace package directory "${relativeDir}" (matched by the "packages" globs) is not covered by any configured group's own "path". Add a "groups" entry whose path prefixes it, or narrow "packages" to exclude it: an uncovered package would otherwise be silently skipped by every workspace-architecture check.`,
+      );
+    }
     const manifest = readDeclaredManifest(fs, join(root, relativeDir), resolveDependencyFields(options));
     if (manifest === undefined) continue;
     candidates.push({ relativeDir, group, declaredName: manifest.name, dependencyNames: manifest.dependencyNames });
