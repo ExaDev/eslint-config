@@ -102,6 +102,11 @@ describe('readWorkspacePackages', () => {
     expect(readWorkspacePackages(yaml)).toEqual(['core/*/*', 'targets/*']);
   });
 
+  it("reads a block sequence written at the key's own zero indentation (no leading whitespace before the dash)", () => {
+    const yaml = "packages:\n- 'core/*/*'\n- 'targets/*'\n";
+    expect(readWorkspacePackages(yaml)).toEqual(['core/*/*', 'targets/*']);
+  });
+
   it('reads a bare (unquoted) block sequence', () => {
     const yaml = 'packages:\n  - core/*/*\n  - targets/*\n';
     expect(readWorkspacePackages(yaml)).toEqual(['core/*/*', 'targets/*']);
@@ -144,6 +149,11 @@ describe('readWorkspacePackages', () => {
 
   it('throws for a bare scalar on the "packages:" line', () => {
     expect(() => readWorkspacePackages('packages: core\n')).toThrow(/flow style/);
+  });
+
+  it('throws, rather than silently returning an empty list, when "packages:" is present but its first real line is neither blank/comment nor a sequence item at all (a block mapping, say)', () => {
+    expect(() => readWorkspacePackages('packages:\n  foo: bar\n')).toThrow(/is not a block-sequence item/);
+    expect(() => readWorkspacePackages('packages:\n  foo: bar\n')).toThrow(/"packages" rule option/);
   });
 
   it('does not throw when the flow-style line only carries a trailing comment', () => {
