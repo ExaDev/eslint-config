@@ -376,8 +376,8 @@ export default defineConfig(
   ...workspaceArchitectureConfig({
     groups: [
       { name: 'core', rank: 0 },
-      { name: 'features', rank: 1, slice: { segment: 0 } },
-      { name: 'product', rank: 2, slice: { segment: 0 } },
+      { name: 'features', rank: 1 },
+      { name: 'product', rank: 2 },
       { name: 'targets', rank: 3 },
       { name: 'test', rank: 4, naming: 'keep-group' },
     ],
@@ -398,8 +398,8 @@ export default exadevConfig({
   workspaceArchitecture: {
     groups: [
       { name: 'core', path: 'packages/core' },
-      { name: 'features', path: 'packages/features' },
-      { name: 'product', path: 'packages/product' },
+      { name: 'features', path: 'packages/features', slice: { segment: 0 } },
+      { name: 'product', path: 'packages/product', slice: { segment: 0 } },
       { name: 'targets', path: 'packages/targets', slice: { namePrefix: true } },
     ],
     nameRanks: [
@@ -415,7 +415,7 @@ export default exadevConfig({
 
 ### Example: exchange-platform
 
-`features` and `verticals` sit at the same rank, so `isolatedGroups` is what actually keeps them from depending on each other; both slice on their own first path segment, so a feature and a vertical for the same conceptual area (`store`, say) are not, by that alone, considered related:
+`features` and `verticals` sit at the same rank, and both slice on their own first path segment, so a feature and a vertical for the same conceptual area (`store`, say) share a slice value and would otherwise pass the `crossSlice` check as though related; `isolatedGroups` is what actually keeps them from depending on each other, entirely independently of slice:
 
 ```ts
 // eslint.shared.ts
