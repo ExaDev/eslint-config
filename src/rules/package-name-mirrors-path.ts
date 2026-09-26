@@ -1,9 +1,20 @@
 import type { JSONRuleDefinition, JSONRuleVisitor } from '@eslint/json';
 import type { ObjectNode } from '@humanwhocodes/momoa';
 import { loadWorkspaceGraph, type LoadWorkspaceGraphFn } from './workspace-graph';
-import { readWorkspaceArchitectureOptions, workspaceArchitectureOptionsSchema, type WorkspaceArchitectureOptions } from './workspace-options';
+import { readWorkspaceArchitectureOptions, workspaceArchitectureOptionsSchema, type GroupSpec, type WorkspaceArchitectureOptions } from './workspace-options';
 import { expectedPackageName } from './workspace-checks';
 import { readDeclaredName } from './workspace-json-helpers';
+
+/**
+ * The GroupSpec this rule's own resolved `groupName` always identifies, looked up by name in `groups`. A real `groupName` (`self.group` in the visitor below) is set only by buildWorkspaceGraph itself (workspace-graph.ts), directly from `candidate.group.name`, where `candidate.group` in turn only ever comes from `findOwningGroup(relativeDir, options.groups)`, one of that SAME `options.groups` array the visitor passes back in here as `groups`. So a real graph's group name is provably one of `groups`' own names whenever both come from the identical options object, which loadGraph(context.filename, options) and this lookup always do; failing to find it here means the graph was built from a different options object than the one now inspecting it, not a legitimate absence to skip past. Exported so this throw (unreachable through the real call site below) can be tested directly, the same "Unreachable, tested directly rather than trusted on a comment" shape package-json-key-order.ts's own `at()` helper establishes.
+ */
+export function findGroupSpec(groups: readonly GroupSpec[], groupName: string): GroupSpec {
+  const group = groups.find((candidate) => candidate.name === groupName);
+  if (group === undefined) {
+    throw new Error(`Unreachable: the workspace graph resolved group "${groupName}", which is not among this same rule invocation's own "groups" option.`);
+  }
+  return group;
+}
 
 export type PackageNameMirrorsPathMessageIds = 'mismatch';
 
@@ -47,8 +58,7 @@ export function createPackageNameMirrorsPathRule(loadGraph: LoadWorkspaceGraphFn
           if (declared === undefined) return;
           const self = graph.packagesByName.get(declared.name);
           if (self === undefined) return;
-          const group = options.groups.find((candidate) => candidate.name === self.group);
-          if (group === undefined) return;
+          const group = findGroupSpec(options.groups, self.group);
 
           const expected = expectedPackageName(self.relativeDir, group, naming);
           if (expected === declared.name) return;
