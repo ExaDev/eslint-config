@@ -219,6 +219,16 @@ describe('expectedPackageName', () => {
     expect(expectedPackageName('packages/test/e2e', nestedTestGroup, { scope: '@x' })).toBe('@x/test-e2e');
   });
 
+  it("'keep-group' uses the group's own NAME, not its path's last segment, when path nests only one directory deep", () => {
+    const singleSegmentPathGroup: GroupSpec = { name: 'test', path: 'tests', naming: 'keep-group' };
+    expect(expectedPackageName('tests/e2e', singleSegmentPathGroup, { scope: '@x' })).toBe('@x/test-e2e');
+  });
+
+  it("'keep-group' ignores the group's own name in favour of its nested path's last segment once that path is more than one directory deep", () => {
+    const nameDiffersFromNestedPathGroup: GroupSpec = { name: 'e2e', path: 'packages/test', naming: 'keep-group' };
+    expect(expectedPackageName('packages/test/e2e', nameDiffersFromNestedPathGroup, { scope: '@x' })).toBe('@x/test-e2e');
+  });
+
   it("'basename' uses only the final path segment", () => {
     const basenameGroup: GroupSpec = { name: 'core', naming: 'basename' };
     expect(expectedPackageName('core/domain/models/user', basenameGroup, { scope: '@acme' })).toBe('@acme/user');
