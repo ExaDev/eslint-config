@@ -54,27 +54,36 @@ describe('createPackageNameMirrorsPathRule meta', () => {
   });
 });
 
+// The manifest path buildWorkspaceGraph would have resolved this same package FROM, matching FIXED_GRAPH's own pkg() calls above: the rule now also confirms context.filename's own directory is the matched graph entry's relativeDir (see manifestRelativeDir, workspace-graph.ts), so a realistic filename is required for it to ever reach its reporting logic at all.
+function filenameFor(relativeDir: string): string {
+  return `${FIXED_GRAPH.root}/${relativeDir}/package.json`;
+}
+
 ruleTester.run('package-name-mirrors-path', rule, {
   valid: [
     // A correctly scoped, drop-group-derived name.
-    { code: JSON.stringify({ name: '@acme/clock-contract' }), options: [GROUPS_AND_NAMING] },
+    { code: JSON.stringify({ name: '@acme/clock-contract' }), filename: filenameFor('core/clock/contract'), options: [GROUPS_AND_NAMING] },
     // A nested (non-top-level) object that itself looks exactly like a self-contained manifest (a real graph package's own declared name, mismatched) must never be analysed as if it were the file's own top-level manifest: only the Object visitor's own parent.type === 'Document' check stands between "the real top level" and "any nested object anywhere in the file". If bypassed, this nested object would be read as declaring "clock-system", whose expected name is "@acme/clock-system", and wrongly reported as a mismatch even though the top-level manifest itself is correctly named.
     {
       code: JSON.stringify({ name: '@acme/clock-contract', nested: { name: 'clock-system' } }),
+      filename: filenameFor('core/clock/contract'),
       options: [GROUPS_AND_NAMING],
     },
     // A correctly scoped, keep-group-derived name.
-    { code: JSON.stringify({ name: '@acme/test-database' }), options: [GROUPS_AND_NAMING] },
+    { code: JSON.stringify({ name: '@acme/test-database' }), filename: filenameFor('test/database'), options: [GROUPS_AND_NAMING] },
     // A manifest whose declared name is not a workspace member at all is skipped.
     { code: JSON.stringify({ name: 'not-a-workspace-package' }), options: [GROUPS_AND_NAMING] },
     // A manifest with no "name" field at all is skipped.
     { code: JSON.stringify({ version: '1.0.0' }), options: [GROUPS_AND_NAMING] },
     // Opt-in: with the shared "naming" option omitted entirely, the rule is a no-op even for a name that would otherwise mismatch.
-    { code: JSON.stringify({ name: 'clock-system' }), options: [{ groups: [{ name: 'core' }] }] },
+    { code: JSON.stringify({ name: 'clock-system' }), filename: filenameFor('core/clock/system'), options: [{ groups: [{ name: 'core' }] }] },
+    // A manifest declaring a real graph member's name, but linted from a DIFFERENT directory than that member's own relativeDir (a stale or duplicated copy sitting elsewhere), is skipped rather than checking the copy's OWN path against the real package's expected name.
+    { code: JSON.stringify({ name: 'clock-system' }), filename: filenameFor('dist/clock-system'), options: [GROUPS_AND_NAMING] },
   ],
   invalid: [
     {
       code: JSON.stringify({ name: 'clock-system' }),
+      filename: filenameFor('core/clock/system'),
       options: [GROUPS_AND_NAMING],
       errors: [{ messageId: 'mismatch', data: { dir: 'core/clock/system', actual: 'clock-system', expected: '@acme/clock-system' } }],
     },

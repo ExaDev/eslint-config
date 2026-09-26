@@ -1,6 +1,6 @@
 import type { JSONRuleDefinition, JSONRuleVisitor } from '@eslint/json';
 import type { ObjectNode } from '@humanwhocodes/momoa';
-import { loadWorkspaceGraph, type LoadWorkspaceGraphFn } from './workspace-graph';
+import { loadWorkspaceGraph, manifestRelativeDir, type LoadWorkspaceGraphFn } from './workspace-graph';
 import { readWorkspaceArchitectureOptions, resolveDependencyFields, workspaceArchitectureOptionsSchema, type WorkspaceArchitectureOptions } from './workspace-options';
 import { checkDependencies } from './workspace-checks';
 import { collectTopLevelDependencies, readDeclaredName, type NamedDependency } from './workspace-json-helpers';
@@ -56,16 +56,19 @@ export function createNoUphillDependencyRule(loadGraph: LoadWorkspaceGraphFn = l
         Object(node: ObjectNode, parent) {
           if (parent?.type !== 'Document') return;
 
+          // Self-identified by the manifest's own declared name when it has one, or by its own directory when it does not: pnpm allows a workspace package to declare no "name" at all, and buildWorkspaceGraph keys such a package by its relativeDir for exactly this reason (see workspace-graph.ts), so its own outgoing dependencies still get checked rather than silently skipped.
+          const relativeDir = manifestRelativeDir(graph.root, context.filename);
           const declared = readDeclaredName(node);
-          if (declared === undefined) return;
-          const self = graph.packagesByName.get(declared.name);
+          const self = graph.packagesByName.get(declared?.name ?? relativeDir);
           if (self === undefined) return;
+          // The manifest currently being linted must be the SAME file buildWorkspaceGraph resolved this graph entry from, not a stale or duplicated copy sharing its declared name elsewhere in the tree (a build output directory that copies its source package.json verbatim, say): checking a copy under the real package's own entry would report edges the real package never declared.
+          if (self.relativeDir !== relativeDir) return;
 
           const dependencies = collectTopLevelDependencies(node, resolveDependencyFields(options));
           // De-duplicated by name: checkDependencies works from names alone, and a name declared under more than one configured dependencyField (dependencies and devDependencies, say) would otherwise be checked, and reported, once per field. findDependencyEntry below always resolves the FIRST such entry, so without de-duplication here two identical violations would both land on that same first location, a duplicate diagnostic rather than two genuinely distinct ones.
           const dependencyNames = [...new Set(dependencies.map((dependency) => dependency.name))];
           const violations = checkDependencies(
-            declared.name,
+            self.name,
             self,
             dependencyNames,
             {
