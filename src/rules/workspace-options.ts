@@ -122,7 +122,8 @@ export const workspaceArchitectureOptionsSchema = {
   additionalProperties: false,
 } as const;
 
-const MISCONFIGURATION_MESSAGE =
+// Exported so a test can assert the EXACT message (not a loose substring pattern that a genuinely different, accidental crash elsewhere in this function could also satisfy, an unrelated "Cannot read properties of null" TypeError included, since both happen to mention a property named "groups").
+export const MISCONFIGURATION_MESSAGE =
   'exadev workspace architecture rules require options: { groups: [{ name }, ...], ... }. See the @exadev/eslint-config README\'s "Workspace architecture" section.';
 
 function fail(): never {

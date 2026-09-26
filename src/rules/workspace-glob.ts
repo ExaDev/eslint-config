@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { listSubdirectories, type WorkspaceFs } from './workspace-fs';
+import { splitPathSegments } from './workspace-path';
 
 // pnpm-workspace.yaml's own glob dialect, reimplemented directly against the real directory tree rather than via Node's fs.globSync: that API only stabilised in Node 22, below this package's own >=20 engines floor. Every "packages:" glob is a directory glob (it names where a package's own directory lives, never a file), so this matcher only ever walks real subdirectories: '*' matches exactly one path segment, '**' matches zero or more segments, and a literal segment matches only itself.
 
@@ -30,16 +31,20 @@ function walkPattern(fs: WorkspaceFs, root: string, segments: readonly string[],
  * Expands one pnpm-workspace.yaml glob pattern against the real directory tree rooted at `root`, returning every matching directory as a path relative to `root` (forward-slash-joined, no leading "./"). A pattern with a leading "!" is not itself special here: negation is a list-level concern (see resolveWorkspacePackageDirs below), so a caller wanting an exclude pattern's own matches strips the "!" before calling this.
  */
 export function expandGlob(fs: WorkspaceFs, root: string, pattern: string): readonly string[] {
-  const segments = pattern.split('/').filter((segment) => segment.length > 0);
-  return walkPattern(fs, root, segments, []);
+  return walkPattern(fs, root, splitPathSegments(pattern), []);
+}
+
+/** Whether `pattern` is an exclude entry in pnpm-workspace.yaml's own glob list: a leading "!", never a trailing one. Exported so this exact asymmetry (as opposed to, say, "ends with '!'") is tested directly, independent of resolveWorkspacePackageDirs' own real-filesystem scenarios below. */
+export function isExcludePattern(pattern: string): boolean {
+  return pattern.startsWith('!');
 }
 
 /**
  * Resolves pnpm-workspace.yaml's own package glob list (positive patterns plus "!"-prefixed excludes) against the real directory tree, returning every matching directory (relative to `root`) that also owns a real package.json. A glob match with no package.json of its own is silently not a package (an empty scaffold directory, a stray folder left behind by a rename), matching pnpm's own behaviour rather than treating it as a workspace member.
  */
 export function resolveWorkspacePackageDirs(fs: WorkspaceFs, root: string, patterns: readonly string[]): readonly string[] {
-  const includePatterns = patterns.filter((pattern) => !pattern.startsWith('!'));
-  const excludePatterns = patterns.filter((pattern) => pattern.startsWith('!')).map((pattern) => pattern.slice(1));
+  const includePatterns = patterns.filter((pattern) => !isExcludePattern(pattern));
+  const excludePatterns = patterns.filter(isExcludePattern).map((pattern) => pattern.slice(1));
 
   const included = new Set<string>();
   for (const pattern of includePatterns) {

@@ -1,6 +1,7 @@
 import { dirname, join, resolve } from 'node:path';
 import { realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
 import { resolveWorkspacePackageDirs } from './workspace-glob';
+import { splitPathSegments } from './workspace-path';
 import { readWorkspacePackages } from './workspace-yaml';
 import { resolveDependencyFields, type GroupSpec, type WorkspaceArchitectureOptions } from './workspace-options';
 
@@ -22,25 +23,23 @@ export interface WorkspaceGraph {
   readonly dependencyNamesByName: ReadonlyMap<string, readonly string[]>;
 }
 
-function splitSegments(relativeDir: string): readonly string[] {
-  return relativeDir.split('/').filter((segment) => segment.length > 0);
-}
-
 function groupPrefixSegments(group: GroupSpec): readonly string[] {
-  return splitSegments(group.path ?? group.name);
+  return splitPathSegments(group.path ?? group.name);
 }
 
 /**
- * The group whose own root path is the longest matching prefix of a package's relative directory. Longest-prefix rather than first-match: a group's own `path` can nest under another group's own path in principle (unusual, but nothing in the options shape forbids it), and the more specific match is always the intended owner.
+ * The group whose own root path is the longest matching prefix of a package's relative directory. Longest-prefix rather than first-match: a group's own `path` can nest under another group's own path in principle (unusual, but nothing in the options shape forbids it), and the more specific match is always the intended owner. Ties (two groups whose own paths resolve to the identical length) keep whichever was declared first, matching `Array.prototype.find`-style "first wins" precedent elsewhere in this package.
+ *
+ * `matches` deliberately has no separate `prefixSegments.length <= dirSegments.length` guard of its own: `.every()` already reads `dirSegments[index]` for every index in `prefixSegments`, and comparing a real segment string against `undefined` (what an out-of-bounds index reads) can never be `true`, so an over-long prefix already fails `.every()` on its own terms. A guard here would only ever agree with what `.every()` already decides.
  */
 export function findOwningGroup(relativeDir: string, groups: readonly GroupSpec[]): GroupSpec | undefined {
-  const dirSegments = splitSegments(relativeDir);
+  const dirSegments = splitPathSegments(relativeDir);
   let best: GroupSpec | undefined;
   let bestLength = -1;
 
   for (const group of groups) {
     const prefixSegments = groupPrefixSegments(group);
-    const matches = prefixSegments.length <= dirSegments.length && prefixSegments.every((segment, index) => dirSegments[index] === segment);
+    const matches = prefixSegments.every((segment, index) => dirSegments[index] === segment);
     if (matches && prefixSegments.length > bestLength) {
       best = group;
       bestLength = prefixSegments.length;
@@ -68,7 +67,7 @@ export function deriveRank(declaredName: string, group: GroupSpec, options: Work
  * The slice value a 'segment' group derives directly from its own package's path: the Nth path segment counting from the group's own root, not from the workspace root, so a group's own internal restructure never shifts every other group's slice numbering.
  */
 function sliceBySegment(relativeDir: string, group: GroupSpec, segmentIndex: number): string | undefined {
-  const rest = splitSegments(relativeDir).slice(groupPrefixSegments(group).length);
+  const rest = splitPathSegments(relativeDir).slice(groupPrefixSegments(group).length);
   return rest[segmentIndex];
 }
 
@@ -86,15 +85,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-interface DeclaredManifest {
+export interface DeclaredManifest {
   readonly name: string;
   readonly dependencyNames: readonly string[];
 }
 
 /**
  * Reads a candidate package directory's own package.json directly (plain JSON.parse, not momoa): this is data collection for the graph, not a file being linted, so no AST/location information is needed. No existsSync guard here: every relativeDir this is called with came from resolveWorkspacePackageDirs, which already only returns directories that own a real package.json, so its absence here would mean that guarantee broke, not a case to handle quietly. A manifest with no usable string "name" is treated the same way regardless: nothing this graph can identify a package by.
+ *
+ * Exported so `dependencyNames`' own exact contents (never a stray extra entry) can be asserted directly: buildWorkspaceGraph's own public output filters dependencyNamesByName down to workspace-internal names only, which would silently absorb an unexpected non-package entry before any graph-level test could ever see it.
  */
-function readDeclaredManifest(fs: WorkspaceFs, absoluteDir: string, dependencyFields: readonly string[]): DeclaredManifest | undefined {
+export function readDeclaredManifest(fs: WorkspaceFs, absoluteDir: string, dependencyFields: readonly string[]): DeclaredManifest | undefined {
   const manifestPath = join(absoluteDir, 'package.json');
   const parsed: unknown = JSON.parse(fs.readFileSync(manifestPath));
   if (!isRecord(parsed)) return undefined;
