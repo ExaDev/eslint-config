@@ -156,6 +156,10 @@ describe('readWorkspacePackages', () => {
     expect(() => readWorkspacePackages('packages:\n  foo: bar\n')).toThrow(/"packages" rule option/);
   });
 
+  it("reports the offending line's own content trimmed of its surrounding whitespace, not the raw padded line", () => {
+    expect(() => readWorkspacePackages('packages:\n   foo: bar   \n')).toThrow('("foo: bar")');
+  });
+
   it('does not throw when the flow-style line only carries a trailing comment', () => {
     expect(readWorkspacePackages('packages: # configured below\n  - core\n')).toEqual(['core']);
   });
