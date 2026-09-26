@@ -1,6 +1,6 @@
 // The one options shape shared by all three workspace-architecture rules (no-uphill-dependency, no-dependency-cycle, package-name-mirrors-path), so a consumer configures the workspace once and passes the identical object to each rule (or once to workspaceArchitectureConfig(), which wires all three). See the package README's own workspace architecture section for the option-by-option reasoning; this file is the schema and the runtime reader, not the policy.
 
-import { assertIsError } from './workspace-errors';
+import { assertIsError, regExpConstructorContext } from './workspace-errors';
 
 export interface SliceBySegment {
   readonly segment: number;
@@ -231,7 +231,7 @@ function validateRankRulePatterns(rankRules: readonly RankRule[]): void {
       // The compiled RegExp itself is discarded: this call exists purely for the SyntaxError an invalid pattern throws, checked once up front rather than only when deriveRank in workspace-graph.ts later compiles its own copy per check.
       void new RegExp(rule.pattern, 'u');
     } catch (error) {
-      assertIsError(error, `the RegExp constructor while compiling "nameRanks" pattern "${rule.pattern}"`);
+      assertIsError(error, regExpConstructorContext(rule.pattern));
       throw new Error(`@exadev/eslint-config: "nameRanks" pattern "${rule.pattern}" is not a valid regular expression: ${error.message}`, { cause: error });
     }
   }
