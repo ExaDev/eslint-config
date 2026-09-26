@@ -125,6 +125,11 @@ describe('readWorkspaceArchitectureOptions', () => {
     expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'core', rank: '0' }] })).toThrow(MISCONFIGURATION_MESSAGE);
   });
 
+  it('throws for a group whose "rank" is a non-integer number', () => {
+    const fractionalRank = 1.5;
+    expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'core', rank: fractionalRank }] })).toThrow(MISCONFIGURATION_MESSAGE);
+  });
+
   it('throws for a group whose "slice" is neither shape', () => {
     expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'core', slice: {} }] })).toThrow(MISCONFIGURATION_MESSAGE);
     expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'core', slice: 'segment-0' }] })).toThrow(MISCONFIGURATION_MESSAGE);
@@ -197,6 +202,21 @@ describe('readWorkspaceArchitectureOptions', () => {
     expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, nameRanks: [{ pattern: 'x', rank: 0, weight: 1 }] })).toThrow(MISCONFIGURATION_MESSAGE);
   });
 
+  it('throws for a "nameRanks" entry whose "rank" is a non-integer number', () => {
+    const fractionalRank = 0.5;
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, nameRanks: [{ pattern: 'x', rank: fractionalRank }] })).toThrow(MISCONFIGURATION_MESSAGE);
+  });
+
+  it('throws, naming both the option and the offending pattern, for a "nameRanks" pattern that is not a valid regular expression, rather than surfacing a bare "Invalid regular expression" later from deriveRank with no indication of which option produced it', () => {
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, nameRanks: [{ pattern: '(', rank: 0 }] })).toThrow(/"nameRanks" pattern "\("/);
+  });
+
+  it('checks every "nameRanks" pattern, not merely the first: a later invalid one still throws', () => {
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, nameRanks: [{ pattern: 'valid', rank: 0 }, { pattern: '(', rank: 1 }] })).toThrow(
+      /"nameRanks" pattern "\("/,
+    );
+  });
+
   it('passes through a valid "defaultRank"', () => {
     const rank = 3;
     expect(readWorkspaceArchitectureOptions({ ...MINIMAL, defaultRank: rank }).defaultRank).toBe(rank);
@@ -204,6 +224,11 @@ describe('readWorkspaceArchitectureOptions', () => {
 
   it('throws for a non-number "defaultRank"', () => {
     expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, defaultRank: '3' })).toThrow(MISCONFIGURATION_MESSAGE);
+  });
+
+  it('throws for a "defaultRank" that is a non-integer number', () => {
+    const fractionalRank = 2.5;
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, defaultRank: fractionalRank })).toThrow(MISCONFIGURATION_MESSAGE);
   });
 
   it('passes through valid "rankSkip"', () => {
@@ -221,6 +246,32 @@ describe('readWorkspaceArchitectureOptions', () => {
 
   it('throws for a "rankSkip" whose "exemptRanks" contains a non-number', () => {
     expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, rankSkip: { maxDistance: 1, exemptRanks: ['0'] } })).toThrow(MISCONFIGURATION_MESSAGE);
+  });
+
+  it('throws for a "rankSkip" whose "exemptRanks" contains a non-integer number', () => {
+    const fractionalRank = 0.5;
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, rankSkip: { maxDistance: 1, exemptRanks: [fractionalRank] } })).toThrow(
+      MISCONFIGURATION_MESSAGE,
+    );
+  });
+
+  it('throws for a negative "rankSkip.maxDistance": unconstrained, it would flag every same-rank dependency as a rankSkip violation (self.rank - dependency.rank > maxDistance is true even at distance zero once maxDistance is negative)', () => {
+    const negativeDistance = -1;
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, rankSkip: { maxDistance: negativeDistance, exemptRanks: [] } })).toThrow(
+      MISCONFIGURATION_MESSAGE,
+    );
+  });
+
+  it('throws for a non-integer "rankSkip.maxDistance"', () => {
+    const fractionalDistance = 1.5;
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, rankSkip: { maxDistance: fractionalDistance, exemptRanks: [] } })).toThrow(
+      MISCONFIGURATION_MESSAGE,
+    );
+  });
+
+  it('accepts a "rankSkip.maxDistance" of exactly zero', () => {
+    const rankSkip = { maxDistance: 0, exemptRanks: [] };
+    expect(readWorkspaceArchitectureOptions({ ...MINIMAL, rankSkip }).rankSkip).toEqual(rankSkip);
   });
 
   it('throws when only SOME "rankSkip.exemptRanks" entries are numbers', () => {
@@ -246,6 +297,12 @@ describe('readWorkspaceArchitectureOptions', () => {
   it('throws for an "isolatedGroups" pair naming a group not declared in "groups"', () => {
     expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, isolatedGroups: [['features', 'verticals']] })).toThrow(
       '"isolatedGroups" names a group not declared in "groups"',
+    );
+  });
+
+  it('throws for an "isolatedGroups" pair naming the same group twice: unconstrained, it would turn every intra-group dependency into a false isolatedGroup violation', () => {
+    expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'core' }], isolatedGroups: [['core', 'core']] })).toThrow(
+      '"isolatedGroups" pair ["core", "core"] names the same group twice',
     );
   });
 
@@ -345,5 +402,20 @@ describe('workspaceArchitectureOptionsSchema', () => {
   it('constrains a group\'s "slice.segment" to a non-negative integer, matching the reader\'s own isNonNegativeInteger check', () => {
     const [segmentSchema] = workspaceArchitectureOptionsSchema.properties.groups.items.properties.slice.oneOf;
     expect(segmentSchema.properties.segment).toEqual({ type: 'integer', minimum: 0 });
+  });
+
+  it('constrains "rankSkip.maxDistance" to a non-negative integer, matching the reader\'s own isNonNegativeInteger check', () => {
+    expect(workspaceArchitectureOptionsSchema.properties.rankSkip.properties.maxDistance).toEqual({ type: 'integer', minimum: 0 });
+  });
+
+  it('constrains every rank-bearing field ("groups[].rank", "nameRanks[].rank", "defaultRank", "rankSkip.exemptRanks[]") to an integer', () => {
+    expect(workspaceArchitectureOptionsSchema.properties.groups.items.properties.rank).toEqual({ type: 'integer' });
+    expect(workspaceArchitectureOptionsSchema.properties.nameRanks.items.properties.rank).toEqual({ type: 'integer' });
+    expect(workspaceArchitectureOptionsSchema.properties.defaultRank).toEqual({ type: 'integer' });
+    expect(workspaceArchitectureOptionsSchema.properties.rankSkip.properties.exemptRanks.items).toEqual({ type: 'integer' });
+  });
+
+  it('requires every "isolatedGroups" pair\'s two members to be unique, rejecting a group paired with itself', () => {
+    expect(workspaceArchitectureOptionsSchema.properties.isolatedGroups.items.uniqueItems).toBe(true);
   });
 });

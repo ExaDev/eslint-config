@@ -76,7 +76,7 @@ export const workspaceArchitectureOptionsSchema = {
         properties: {
           name: { type: 'string' },
           path: { type: 'string' },
-          rank: { type: 'number' },
+          rank: { type: 'integer' },
           slice: {
             oneOf: [
               { type: 'object', properties: { segment: { type: 'integer', minimum: 0 } }, required: ['segment'], additionalProperties: false },
@@ -93,24 +93,25 @@ export const workspaceArchitectureOptionsSchema = {
       type: 'array',
       items: {
         type: 'object',
-        properties: { pattern: { type: 'string' }, rank: { type: 'number' } },
+        properties: { pattern: { type: 'string' }, rank: { type: 'integer' } },
         required: ['pattern', 'rank'],
         additionalProperties: false,
       },
     },
-    defaultRank: { type: 'number' },
+    defaultRank: { type: 'integer' },
     rankSkip: {
       type: 'object',
       properties: {
-        maxDistance: { type: 'number' },
-        exemptRanks: { type: 'array', items: { type: 'number' } },
+        maxDistance: { type: 'integer', minimum: 0 },
+        exemptRanks: { type: 'array', items: { type: 'integer' } },
       },
       required: ['maxDistance', 'exemptRanks'],
       additionalProperties: false,
     },
     isolatedGroups: {
+      // uniqueItems on the pair itself rejects ['core', 'core']: a group can never be declared isolated from its own self, and a pair whose two members are identical would otherwise turn every intra-group dependency into a false isolatedGroup violation.
       type: 'array',
-      items: { type: 'array', items: { type: 'string' }, minItems: 2, maxItems: 2 },
+      items: { type: 'array', items: { type: 'string' }, minItems: 2, maxItems: 2, uniqueItems: true },
     },
     naming: {
       type: 'object',
@@ -151,9 +152,14 @@ function asOptionalString(value: unknown): string | undefined {
   return value;
 }
 
-function asOptionalNumber(value: unknown): number | undefined {
+// A plain integer check, not a non-negative one: a rank is a position in a total order (name-role or group-rank), and nothing about that ordering itself requires every rank to start at or above zero, only that each one be a genuine whole step rather than a fraction that could sit between two configured ranks with no dependency ever actually landing on it.
+function isInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value);
+}
+
+function asOptionalInteger(value: unknown): number | undefined {
   if (value === undefined) return undefined;
-  if (typeof value !== 'number') fail();
+  if (!isInteger(value)) fail();
   return value;
 }
 
@@ -189,7 +195,7 @@ function isGroupSpec(value: unknown): value is GroupSpec {
   if (typeof value['name'] !== 'string') return false;
   const { path, rank, slice, naming } = value;
   if (path !== undefined && typeof path !== 'string') return false;
-  if (rank !== undefined && typeof rank !== 'number') return false;
+  if (rank !== undefined && !isInteger(rank)) return false;
   if (slice !== undefined && !isSliceSpec(slice)) return false;
   if (naming !== undefined && !isNamingStrategy(naming)) return false;
   return true;
@@ -213,21 +219,35 @@ export function findDuplicateGroupName(groups: readonly GroupSpec[]): string | u
 }
 
 function isRankRule(value: unknown): value is RankRule {
-  return isRecord(value) && hasOnlyKeys(value, RANK_RULE_KEYS) && typeof value['pattern'] === 'string' && typeof value['rank'] === 'number';
+  return isRecord(value) && hasOnlyKeys(value, RANK_RULE_KEYS) && typeof value['pattern'] === 'string' && isInteger(value['rank']);
+}
+
+// Compiling every nameRanks pattern here, immediately, rather than leaving the first bad one to surface later from deriveRank as a bare "Invalid regular expression: /(/u" with no mention of which option, or which pattern, produced it: this is the one place that has both the pattern's own text and the "nameRanks" option name still in scope to name in the error.
+function validateRankRulePatterns(rankRules: readonly RankRule[]): void {
+  for (const rule of rankRules) {
+    try {
+      // The compiled RegExp itself is discarded: this call exists purely for the SyntaxError an invalid pattern throws, checked once up front rather than only when deriveRank in workspace-graph.ts later compiles its own copy per check.
+      void new RegExp(rule.pattern, 'u');
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new Error(`@exadev/eslint-config: "nameRanks" pattern "${rule.pattern}" is not a valid regular expression: ${reason}`, { cause: error });
+    }
+  }
 }
 
 function asOptionalRankRuleArray(value: unknown): readonly RankRule[] | undefined {
   if (value === undefined) return undefined;
   if (!Array.isArray(value) || !value.every(isRankRule)) fail();
+  validateRankRulePatterns(value);
   return value;
 }
 
 function isRankSkipOptions(value: unknown): value is RankSkipOptions {
   if (!isRecord(value)) return false;
   if (!hasOnlyKeys(value, RANK_SKIP_KEYS)) return false;
-  if (typeof value['maxDistance'] !== 'number') return false;
+  if (!isNonNegativeInteger(value['maxDistance'])) return false;
   const { exemptRanks } = value;
-  return Array.isArray(exemptRanks) && exemptRanks.every((rank) => typeof rank === 'number');
+  return Array.isArray(exemptRanks) && exemptRanks.every(isInteger);
 }
 
 function asOptionalRankSkip(value: unknown): RankSkipOptions | undefined {
@@ -278,7 +298,7 @@ export function readWorkspaceArchitectureOptions(options: unknown): WorkspaceArc
   const packages = asOptionalStringArray(options['packages']);
   const dependencyFields = asOptionalStringArray(options['dependencyFields']);
   const nameRanks = asOptionalRankRuleArray(options['nameRanks']);
-  const defaultRank = asOptionalNumber(options['defaultRank']);
+  const defaultRank = asOptionalInteger(options['defaultRank']);
   const rankSkip = asOptionalRankSkip(options['rankSkip']);
   const isolatedGroups = asOptionalIsolatedGroups(options['isolatedGroups']);
   const naming = asOptionalNaming(options['naming']);
@@ -290,6 +310,10 @@ export function readWorkspaceArchitectureOptions(options: unknown): WorkspaceArc
         throw new Error(
           `@exadev/eslint-config: "isolatedGroups" names a group not declared in "groups" (["${first}", "${second}"]). Every isolatedGroups pair must name two of this workspace's own declared groups.`,
         );
+      }
+      // A group can never be declared isolated from its own self: turned into isolatedGroup violations, every dependency between two packages in that SAME group would be reported, since isIsolatedPair (workspace-checks.ts) matches a pair in either order.
+      if (first === second) {
+        throw new Error(`@exadev/eslint-config: "isolatedGroups" pair ["${first}", "${second}"] names the same group twice. A group cannot be isolated from itself.`);
       }
     }
   }
