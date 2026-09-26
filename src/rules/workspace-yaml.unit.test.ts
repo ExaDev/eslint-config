@@ -1,0 +1,110 @@
+import { describe, expect, it } from 'vitest';
+import { readWorkspacePackages, requireCapture, requireLine, requireMatch } from './workspace-yaml';
+
+describe('requireLine', () => {
+  it('returns the line at a genuinely in-bounds index', () => {
+    expect(requireLine(['a', 'b'], 1)).toBe('b');
+  });
+
+  it('throws for an out-of-bounds index, a shape neither real call site (a findIndex result or a bounded loop) can produce', () => {
+    const outOfBoundsIndex = 5;
+    expect(() => requireLine(['a'], outOfBoundsIndex)).toThrow(/Unreachable/);
+  });
+});
+
+describe('requireCapture', () => {
+  it('returns a captured group, even an empty-string one', () => {
+    // A real, deliberately-optional group left uncaptured by an empty match, exercising the ONE genuine "no capture" case this file's own two patterns never produce (neither has an optional group).
+    const nonEmptyMatch = /(a)/u.exec('a');
+    if (nonEmptyMatch === null) throw new Error('Unreachable: this fixture always matches.');
+    expect(requireCapture(nonEmptyMatch, 1)).toBe('a');
+  });
+
+  it('throws when the group did not capture, a shape neither of this file\'s own two patterns (both plain, non-optional groups) can produce', () => {
+    const optionalGroupMatch = /(a)?/u.exec('');
+    if (optionalGroupMatch === null) throw new Error('Unreachable: this fixture always matches (the whole pattern is optional).');
+    expect(() => requireCapture(optionalGroupMatch, 1)).toThrow(/Unreachable/);
+  });
+});
+
+describe('requireMatch', () => {
+  it('returns the match when the pattern matches the text', () => {
+    expect(requireMatch(/^a$/u, 'a')[0]).toBe('a');
+  });
+
+  it('throws when the pattern does not match, a shape neither real call site (which only ever re-execs a pattern a prior .test() just confirmed) can produce', () => {
+    expect(() => requireMatch(/^a$/u, 'b')).toThrow(/Unreachable/);
+  });
+});
+
+describe('readWorkspacePackages', () => {
+  it('returns an empty array when the file has no "packages:" key at all', () => {
+    expect(readWorkspacePackages('onlyIgnores:\n  - "**/dist"\n')).toEqual([]);
+  });
+
+  it('does not match a "packages:" key that is indented (not a genuine top-level key)', () => {
+    expect(readWorkspacePackages('config:\n  packages:\n    - "a"\n')).toEqual([]);
+  });
+
+  it('does not match a different key that merely starts with "packages"', () => {
+    expect(readWorkspacePackages('packagesFoo: bar\n')).toEqual([]);
+  });
+
+  it('reads a simple single-quoted block sequence', () => {
+    const yaml = "packages:\n  - 'core/*/*'\n  - 'features/*/*'\n";
+    expect(readWorkspacePackages(yaml)).toEqual(['core/*/*', 'features/*/*']);
+  });
+
+  it('reads a double-quoted block sequence', () => {
+    const yaml = 'packages:\n  - "core/*/*"\n  - "targets/*"\n';
+    expect(readWorkspacePackages(yaml)).toEqual(['core/*/*', 'targets/*']);
+  });
+
+  it('reads a bare (unquoted) block sequence', () => {
+    const yaml = 'packages:\n  - core/*/*\n  - targets/*\n';
+    expect(readWorkspacePackages(yaml)).toEqual(['core/*/*', 'targets/*']);
+  });
+
+  it('reads an exclude pattern alongside includes', () => {
+    const yaml = "packages:\n  - 'core/*/*'\n  - '!**/test/**'\n";
+    expect(readWorkspacePackages(yaml)).toEqual(['core/*/*', '!**/test/**']);
+  });
+
+  it('skips blank lines and comment lines inside the sequence', () => {
+    const yaml = "packages:\n  - 'core/*/*'\n\n  # a comment on its own line\n  - 'features/*/*'\n";
+    expect(readWorkspacePackages(yaml)).toEqual(['core/*/*', 'features/*/*']);
+  });
+
+  it('strips a trailing comment from an item', () => {
+    const yaml = "packages:\n  - 'core/*/*' # core packages\n";
+    expect(readWorkspacePackages(yaml)).toEqual(['core/*/*']);
+  });
+
+  it('stops the sequence at the first line that is not a same-indent item (a dedent back to the next top-level key)', () => {
+    const yaml = "packages:\n  - 'core/*/*'\nignoredPaths:\n  - 'dist'\n";
+    expect(readWorkspacePackages(yaml)).toEqual(['core/*/*']);
+  });
+
+  it('stops the sequence at an item whose own indent differs from the first item', () => {
+    const yaml = "packages:\n  - 'core/*/*'\n    - 'features/*/*'\n";
+    expect(readWorkspacePackages(yaml)).toEqual(['core/*/*']);
+  });
+
+  it('ignores a blank item value (a "- " with nothing after it)', () => {
+    const yaml = "packages:\n  - 'core/*/*'\n  -   \n  - 'targets/*'\n";
+    expect(readWorkspacePackages(yaml)).toEqual(['core/*/*', 'targets/*']);
+  });
+
+  it('throws for flow-style array syntax, naming the "packages" option as the escape hatch', () => {
+    expect(() => readWorkspacePackages("packages: ['core/*/*', 'targets/*']\n")).toThrow(/flow style/);
+    expect(() => readWorkspacePackages("packages: ['core/*/*', 'targets/*']\n")).toThrow(/"packages" rule option/);
+  });
+
+  it('throws for a bare scalar on the "packages:" line', () => {
+    expect(() => readWorkspacePackages('packages: core\n')).toThrow(/flow style/);
+  });
+
+  it('does not throw when the flow-style line only carries a trailing comment', () => {
+    expect(readWorkspacePackages('packages: # configured below\n  - core\n')).toEqual(['core']);
+  });
+});
