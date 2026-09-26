@@ -62,10 +62,12 @@ export function createNoUphillDependencyRule(loadGraph: LoadWorkspaceGraphFn = l
           if (self === undefined) return;
 
           const dependencies = collectTopLevelDependencies(node, resolveDependencyFields(options));
+          // De-duplicated by name: checkDependencies works from names alone, and a name declared under more than one configured dependencyField (dependencies and devDependencies, say) would otherwise be checked, and reported, once per field. findDependencyEntry below always resolves the FIRST such entry, so without de-duplication here two identical violations would both land on that same first location, a duplicate diagnostic rather than two genuinely distinct ones.
+          const dependencyNames = [...new Set(dependencies.map((dependency) => dependency.name))];
           const violations = checkDependencies(
             declared.name,
             self,
-            dependencies.map((dependency) => dependency.name),
+            dependencyNames,
             {
               graph: graph.packagesByName,
               ...(options.rankSkip !== undefined && { rankSkip: options.rankSkip }),

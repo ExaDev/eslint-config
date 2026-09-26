@@ -23,7 +23,7 @@ export interface NamedDependency {
 }
 
 /**
- * Every dependency declared directly under one of `dependencyFields` (default just "dependencies"), each field itself read directly off a confirmed-top-level Object node. A dependency name appearing under more than one configured field is included once per field it appears under; no rule in this package currently configures more than one field that could realistically overlap in practice, so de-duplicating is not worth the extra complexity here.
+ * Every dependency declared directly under one of `dependencyFields` (default just "dependencies"), each field itself read directly off a confirmed-top-level Object node. A dependency name appearing under more than one configured field (`dependencyFields: ['dependencies', 'devDependencies']`, say) is included once per field it appears under, deliberately: no-dependency-cycle reports at each occurrence's own node, since a genuinely different field's own line is worth its own diagnostic location. A caller that instead checks by name alone, not by field (no-uphill-dependency, via checkDependencies), de-duplicates this list itself before checking, so a name shared across fields is not double-reported at whichever occurrence happens to resolve first.
  */
 export function collectTopLevelDependencies(rootObject: ObjectNode, dependencyFields: readonly string[]): readonly NamedDependency[] {
   const fields = new Set(dependencyFields);
