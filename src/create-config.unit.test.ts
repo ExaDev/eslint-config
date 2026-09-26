@@ -30,6 +30,18 @@ describe('exadevConfig', () => {
     );
   });
 
+  it('workspaceArchitecture, when given, wires in workspaceArchitectureConfig\'s own single block', () => {
+    const WORKSPACE_ARCHITECTURE_BLOCK_COUNT = 1;
+    const result = exadevConfig({
+      react: false,
+      nextjs: false,
+      packageJsonKeyOrder: false,
+      gitignore: false,
+      workspaceArchitecture: { groups: [{ name: 'core', rank: 0 }] },
+    });
+    expect(result).toHaveLength(recommendedTypeChecked.length + jsdocAndTsdoc.length + jsonCanonicalConfig.length + WORKSPACE_ARCHITECTURE_BLOCK_COUNT);
+  });
+
   it('appends trailing user configs, in order, after everything else', () => {
     const extraA: TSESLint.FlatConfig.Config = { rules: { 'no-console': 'warn' } };
     const extraB: TSESLint.FlatConfig.Config = { files: ['**/*.spec.ts'] };

@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ConfigArrayValue } from './config-types';
+import { resolveJsonPlugin } from './json-plugin';
 import { tryRequire, type RequireFn } from './optional-plugin';
 import plugin from './plugin';
 import type { PackageJsonKeyOrderOptions } from './rules/package-json-key-order';
@@ -40,23 +41,6 @@ function packageJsonHasSyncpackKey(cwd: string): boolean {
 /** Auto-detection signal for the `enabled: undefined` case: does this project already have syncpack configured? Mirrors the role `tryRequire`'s peer-package resolution plays for `react.ts`/`nextjs.ts`, but for a tool detected by config presence rather than by an installed package, since syncpack's own output is what this rule is emulating, not a peer this rule depends on. */
 export function hasSyncpackConfig(cwd: string): boolean {
   return SYNCPACK_CONFIG_FILENAMES.some((filename) => existsSync(join(cwd, filename))) || packageJsonHasSyncpackKey(cwd);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-// A real check (the candidate's own `languages.json` entry exists) rather than an assertion — matches optional-plugin.ts's own isFlatConfig precedent. Deliberately doesn't validate the whole shape (rules/configs/etc): enough evidence this is genuinely @eslint/json's plugin object, not a hand-typed re-implementation of its full public surface.
-function isJsonLanguagePlugin(value: unknown): value is Record<string, unknown> {
-  if (!isRecord(value)) return false;
-  const languages = value['languages'];
-  return isRecord(languages) && 'json' in languages;
-}
-
-// Node's synchronous require() of a genuine ES module (which @eslint/json is) returns the module's own namespace object — every named export at the top level, PLUS the default export nested under `.default` — not the default export directly the way requiring a CJS/dual-published package would. Confirmed directly: `require('@eslint/json')` here returns `{ JSONLanguage, JSONSourceCode, __esModule: true, default: <the real plugin> }`. Checking `.default` first is what actually matches this package's own real shape; falling back to the value itself keeps this working unchanged for any other language plugin that IS its own default export directly (a CJS-native or dual-published one).
-function resolveJsonPlugin(value: unknown): Record<string, unknown> | undefined {
-  if (isRecord(value) && isJsonLanguagePlugin(value['default'])) return value['default'];
-  return isJsonLanguagePlugin(value) ? value : undefined;
 }
 
 export function buildPackageJsonKeyOrderConfig(options: PackageJsonKeyOrderConfigOptions = {}): ConfigArrayValue {
