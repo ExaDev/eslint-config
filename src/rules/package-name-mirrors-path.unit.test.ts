@@ -1,8 +1,9 @@
 import json from '@eslint/json';
 import { RuleTester } from 'eslint';
 import { describe, expect, it } from 'vitest';
-import { createPackageNameMirrorsPathRule } from './package-name-mirrors-path';
+import { createPackageNameMirrorsPathRule, findGroupSpec } from './package-name-mirrors-path';
 import type { WorkspaceGraph, WorkspacePackageInfo } from './workspace-graph';
+import type { GroupSpec } from './workspace-options';
 
 function pkg(name: string, relativeDir: string, group: string): WorkspacePackageInfo {
   return { name, relativeDir, group, rank: 0, slice: undefined };
@@ -15,11 +16,22 @@ const FIXED_GRAPH: WorkspaceGraph = {
       pkg('@acme/clock-contract', 'core/clock/contract', 'core'),
       pkg('clock-system', 'core/clock/system', 'core'),
       pkg('@acme/test-database', 'test/database', 'test'),
-      pkg('orphan-package', 'orphan/one', 'orphan-group'),
     ].map((entry) => [entry.name, entry]),
   ),
   dependencyNamesByName: new Map(),
 };
+
+describe('findGroupSpec', () => {
+  const groups: readonly GroupSpec[] = [{ name: 'core' }, { name: 'test', naming: 'keep-group' }];
+
+  it('returns the matching group', () => {
+    expect(findGroupSpec(groups, 'test')).toBe(groups[1]);
+  });
+
+  it('throws for a group name not present among the given groups, a shape no real call site (which only ever looks up a name the same options object\'s own graph just resolved) produces', () => {
+    expect(() => findGroupSpec(groups, 'missing')).toThrow(/Unreachable/);
+  });
+});
 
 const rule = createPackageNameMirrorsPathRule(() => FIXED_GRAPH);
 const ruleTester = new RuleTester({ language: 'json/json', plugins: { json } });
@@ -57,8 +69,6 @@ ruleTester.run('package-name-mirrors-path', rule, {
     { code: JSON.stringify({ name: 'not-a-workspace-package' }), options: [GROUPS_AND_NAMING] },
     // A manifest with no "name" field at all is skipped.
     { code: JSON.stringify({ version: '1.0.0' }), options: [GROUPS_AND_NAMING] },
-    // A workspace member whose own group is not one of the configured groups (an option/graph mismatch) is skipped rather than crashing.
-    { code: JSON.stringify({ name: 'orphan-package' }), options: [GROUPS_AND_NAMING] },
     // Opt-in: with the shared "naming" option omitted entirely, the rule is a no-op even for a name that would otherwise mismatch.
     { code: JSON.stringify({ name: 'clock-system' }), options: [{ groups: [{ name: 'core' }] }] },
   ],

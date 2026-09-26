@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { expandGlob, isExcludePattern, resolveWorkspacePackageDirs, segmentToRegExp } from './workspace-glob';
+import { expandBraces, expandGlob, isExcludePattern, resolveWorkspacePackageDirs, segmentToRegExp } from './workspace-glob';
 import type { WorkspaceFs } from './workspace-fs';
 
 // An in-memory tree keyed by absolute-ish path, mapping each directory to its own subdirectory names, plus a set of paths that own a real package.json.
@@ -22,6 +22,70 @@ describe('segmentToRegExp', () => {
   it("builds its RegExp with the 'u' flag", () => {
     // Asserted directly on .flags rather than through any particular directory name: every real match this module makes goes through code points, not UTF-16 code units, and no fixture of plain ASCII directory names would ever observe the difference behaviourally.
     expect(segmentToRegExp('anything').flags).toBe('u');
+  });
+
+  it('builds a character class from a balanced "[...]"', () => {
+    const pattern = segmentToRegExp('[ab]');
+    expect(pattern.test('a')).toBe(true);
+    expect(pattern.test('b')).toBe(true);
+    expect(pattern.test('c')).toBe(false);
+  });
+
+  it('negates a character class written with a leading "!", the glob convention', () => {
+    const pattern = segmentToRegExp('[!ab]');
+    expect(pattern.test('a')).toBe(false);
+    expect(pattern.test('c')).toBe(true);
+  });
+
+  it('negates a character class written with a leading "^", the same as a plain regex class', () => {
+    const pattern = segmentToRegExp('[^ab]');
+    expect(pattern.test('a')).toBe(false);
+    expect(pattern.test('c')).toBe(true);
+  });
+
+  it('supports a "-" range inside a character class', () => {
+    const pattern = segmentToRegExp('[a-c]');
+    expect(pattern.test('b')).toBe(true);
+    expect(pattern.test('d')).toBe(false);
+  });
+
+  it('matches a character class mixed with literal text either side, such as "app-[ab]"', () => {
+    const pattern = segmentToRegExp('app-[ab]');
+    expect(pattern.test('app-a')).toBe(true);
+    expect(pattern.test('app-c')).toBe(false);
+  });
+
+  it('treats an unmatched "[" as a literal character, not an unterminated class', () => {
+    const pattern = segmentToRegExp('a[b');
+    expect(pattern.test('a[b')).toBe(true);
+    expect(pattern.test('ab')).toBe(false);
+  });
+});
+
+describe('expandBraces', () => {
+  it('expands to itself, unchanged, for a pattern with no brace group', () => {
+    expect(expandBraces('core/*')).toEqual(['core/*']);
+  });
+
+  it('expands a single brace group into one pattern per comma-separated alternative', () => {
+    expect(expandBraces('{core,lib}/*')).toEqual(['core/*', 'lib/*']);
+  });
+
+  it('expands a brace group in the middle of the pattern, keeping the surrounding text on both sides', () => {
+    expect(expandBraces('packages/{a,b}/src')).toEqual(['packages/a/src', 'packages/b/src']);
+  });
+
+  it('expands two separate brace groups into the cross product of their alternatives', () => {
+    expect(expandBraces('{core,lib}/{a,b}')).toEqual(['core/a', 'core/b', 'lib/a', 'lib/b']);
+  });
+
+  it('expands a nested brace group', () => {
+    expect(expandBraces('{a,{b,c}}/*')).toEqual(['a/*', 'b/*', 'c/*']);
+  });
+
+  it('throws for an unmatched "{", naming the "packages" option as the escape hatch', () => {
+    expect(() => expandBraces('{core,lib/*')).toThrow(/unmatched "\{"/);
+    expect(() => expandBraces('{core,lib/*')).toThrow(/"packages" rule option/);
   });
 });
 
@@ -112,6 +176,35 @@ describe('expandGlob', () => {
     const fs = fakeFs({ '/root': ['packages'], '/root/packages': ['a.b', 'aXb'] });
     expect(expandGlob(fs, '/root', 'packages/a.b')).toEqual(['packages/a.b']);
   });
+
+  it('matches a "[...]" character class segment', () => {
+    const fs = fakeFs({ '/root': ['lib'], '/root/lib': ['a', 'b', 'c'] });
+    expect([...expandGlob(fs, '/root', 'lib/[ab]')].sort()).toEqual(['lib/a', 'lib/b']);
+  });
+
+  it('expands a "{core,lib}" brace group into the union of both branches\' own matches, deduplicated', () => {
+    const fs = fakeFs({ '/root': ['core', 'lib'], '/root/core': ['x'], '/root/lib': ['b'] });
+    expect([...expandGlob(fs, '/root', '{core,lib}/*')].sort()).toEqual(['core/x', 'lib/b']);
+  });
+
+  it("a bare '*' never matches a dot-prefixed directory name, matching pnpm's own documented behaviour", () => {
+    const fs = fakeFs({ '/root': ['core'], '/root/core': ['.hidden', 'kv'] });
+    expect(expandGlob(fs, '/root', 'core/*')).toEqual(['core/kv']);
+  });
+
+  it("'**' never descends into, or itself matches, a dot-prefixed directory", () => {
+    const fs = fakeFs({
+      '/root': ['core'],
+      '/root/core': ['x', '.dot'],
+      '/root/core/.dot': ['p'],
+    });
+    expect([...expandGlob(fs, '/root', 'core/**')].sort()).toEqual(['core', 'core/x']);
+  });
+
+  it('a segment that ITSELF starts with a literal dot still matches, since that is an explicit request rather than a wildcard\'s own sweep', () => {
+    const fs = fakeFs({ '/root': ['core'], '/root/core': ['.hidden', 'kv'] });
+    expect(expandGlob(fs, '/root', 'core/.hidden')).toEqual(['core/.hidden']);
+  });
 });
 
 describe('resolveWorkspacePackageDirs', () => {
@@ -141,6 +234,11 @@ describe('resolveWorkspacePackageDirs', () => {
   it('a glob match with no package.json of its own is silently dropped', () => {
     const fs = fakeFs({ '/root': ['core'], '/root/core': ['kv', 'empty-scaffold'] }, ['/root/core/kv']);
     expect(resolveWorkspacePackageDirs(fs, '/root', ['core/*'])).toEqual(['core/kv']);
+  });
+
+  it('resolves a brace-expanded "{core,lib}/*" pattern to real packages in both branches', () => {
+    const fs = fakeFs({ '/root': ['core', 'lib'], '/root/core': ['a'], '/root/lib': ['b'] }, ['/root/core/a', '/root/lib/b']);
+    expect([...resolveWorkspacePackageDirs(fs, '/root', ['{core,lib}/*'])].sort()).toEqual(['core/a', 'lib/b']);
   });
 
   it('deduplicates a directory matched by more than one include pattern', () => {

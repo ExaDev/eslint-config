@@ -348,7 +348,7 @@ Both entry points need `@eslint/json` resolvable (`pnpm add -D @eslint/json`), t
 | Field | Meaning |
 | --- | --- |
 | `root` | The workspace root directory. Defaults to the nearest ancestor of the linted file that owns a `pnpm-workspace.yaml`. |
-| `packages` | Workspace package globs (`pnpm-workspace.yaml` dialect: `*`, `**`, `!`-prefixed excludes). Defaults to that file's own top-level `packages:` block sequence. |
+| `packages` | Workspace package globs, matching pnpm's own `pnpm-workspace.yaml` glob support (`*`, `**`, `[...]` character classes, `{...}` brace expansion, `!`-prefixed excludes; a wildcard segment never matches a name starting with "."). Defaults to that file's own top-level `packages:` block sequence, quoted or bare. |
 | `dependencyFields` | `package.json` fields read as a package's declared dependencies. Defaults to `['dependencies']`. |
 | `groups` | The workspace's own directory taxonomy: `{ name, path?, rank?, slice?, naming? }`. `path` defaults to `name` (a group rooted at a directory of the same name). |
 | `nameRanks` | The name-role rank model: `{ pattern, rank }[]`, a package's declared name checked against each `pattern` in order, first match wins, ahead of its own group's `rank`. Omit entirely for a pure group-rank model. |
@@ -499,6 +499,7 @@ pnpm build
 - [Husky](https://github.com/typicode/husky) hooks: `pre-commit` runs [lint-staged](https://github.com/lint-staged/lint-staged#readme) (`eslint --fix` on staged `*.ts`), `commit-msg` runs commitlint, `pre-push` runs typecheck + test + build.
 - The CI release job sets `HUSKY=0` (commit-msg hook skips the automated release commit) and blanks `NPM_TOKEN`/`NODE_AUTH_TOKEN` explicitly so an inherited token can't win over [OIDC trusted publishing](https://docs.npmjs.com/trusted-publishers).
 - A consumer who already has `eslint-plugin-react`/`@next/eslint-plugin-next` resolvable for unrelated reasons (e.g. hoisted in a monorepo) and writes `.jsx`/`.tsx` files may see new rule activity the moment they upgrade to a version of this package that ships React/Next.js support — with zero action on their part. See the compatibility note under [Optional React and Next.js support](#optional-react-and-nextjs-support).
+- [Workspace architecture](#workspace-architecture)'s dependency graph is cached for the life of the process, keyed by workspace root plus the resolved options, with no invalidation of its own. A long-running ESLint process (an editor's language server, most notably) that renames a package or edits its declared dependencies after that root/options combination's first lint keeps serving the stale graph built before the edit, until the process restarts. Both prior local implementations this feature replaced (Novus hive's and the monorepo-template's own workspace rule sets) carried the identical limitation.
 
 ### Contributing
 

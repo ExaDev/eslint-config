@@ -79,7 +79,7 @@ export const workspaceArchitectureOptionsSchema = {
           rank: { type: 'number' },
           slice: {
             oneOf: [
-              { type: 'object', properties: { segment: { type: 'number' } }, required: ['segment'], additionalProperties: false },
+              { type: 'object', properties: { segment: { type: 'integer', minimum: 0 } }, required: ['segment'], additionalProperties: false },
               { type: 'object', properties: { namePrefix: { const: true } }, required: ['namePrefix'], additionalProperties: false },
             ],
           },
@@ -163,10 +163,20 @@ function asOptionalStringArray(value: unknown): readonly string[] | undefined {
   return value;
 }
 
+const SLICE_BY_SEGMENT_KEYS = ['segment'] as const;
+const SLICE_BY_NAME_PREFIX_KEYS = ['namePrefix'] as const;
+
+// A non-negative integer: SliceBySegment's own "segment" is always used as an array index (the Nth path segment after a group's own root, sliceBySegment in workspace-graph.ts), where a negative or fractional value can never be a real index at all. Both the schema above and this reader enforce the identical bound, so a malformed segment fails loudly here or through ESLint's own schema validation, whichever sees it first, rather than silently resolving to "no slice at all" (an index expression that can never match a real array position simply reads undefined, disabling crossSlice for that whole group without saying why).
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
+}
+
 function isSliceSpec(value: unknown): value is SliceSpec {
   if (!isRecord(value)) return false;
-  if (typeof value['segment'] === 'number') return true;
-  return value['namePrefix'] === true;
+  // Each branch's own hasOnlyKeys check is what rejects a slice carrying BOTH "segment" and "namePrefix", or either alongside some other unknown property: without it, `{ segment: 0, namePrefix: true }` reads as a valid SliceBySegment, silently dropping the extra key exactly as readWorkspaceArchitectureOptions' own module doc comment says this whole reader is meant never to do at any level it validates.
+  if ('segment' in value) return hasOnlyKeys(value, SLICE_BY_SEGMENT_KEYS) && isNonNegativeInteger(value['segment']);
+  if ('namePrefix' in value) return hasOnlyKeys(value, SLICE_BY_NAME_PREFIX_KEYS) && value['namePrefix'] === true;
+  return false;
 }
 
 function isNamingStrategy(value: unknown): value is NamingStrategy {
@@ -188,6 +198,18 @@ function isGroupSpec(value: unknown): value is GroupSpec {
 function asGroupSpecArray(value: unknown): readonly GroupSpec[] {
   if (!Array.isArray(value) || !value.every(isGroupSpec)) fail();
   return value;
+}
+
+/**
+ * The first group name declared more than once in `groups`, or undefined when every name is unique. Every one of this package's own by-name lookups (package-name-mirrors-path's own `options.groups.find`, isolatedGroups' own membership check just below, deriveRank's own `group.rank` read via findOwningGroup) assumes a group name identifies exactly one GroupSpec; a duplicate silently lets whichever entry `Array.prototype.find` happens to return first win, checking a package against the WRONG group's own path prefix or naming strategy without either group's author ever being told the name collided. Exported for direct testing independent of readWorkspaceArchitectureOptions' own full validation pipeline.
+ */
+export function findDuplicateGroupName(groups: readonly GroupSpec[]): string | undefined {
+  const seen = new Set<string>();
+  for (const group of groups) {
+    if (seen.has(group.name)) return group.name;
+    seen.add(group.name);
+  }
+  return undefined;
 }
 
 function isRankRule(value: unknown): value is RankRule {
@@ -239,13 +261,19 @@ function asOptionalNaming(value: unknown): NamingOptions | undefined {
 }
 
 /**
- * The runtime safety net behind workspaceArchitectureOptionsSchema above: ESLint's own schema validation does run whenever the config is used in a real lint (rejecting malformed rule options there too, the same division of labour barrel-policy.ts's readMode establishes for its own, much smaller options shape), but workspaceArchitectureConfig() (src/workspace-architecture.ts) builds its rule options by calling this reader on the caller's raw object BEFORE that validation ever inspects it, and previously reconstructed a whitelisted object that silently dropped any unknown or misspelled top-level key rather than rejecting it, leaving ESLint's own schema nothing left to catch. This reader now rejects an unknown key at every level it validates (top level, group, rankSkip, naming, nameRanks entries) itself, so a genuinely malformed options object still fails loudly and specifically here, whichever entry point it arrives through, rather than crashing later with a confusing TypeError deep inside graph construction or being silently ignored.
+ * The runtime safety net behind workspaceArchitectureOptionsSchema above: ESLint's own schema validation does run whenever the config is used in a real lint (rejecting malformed rule options there too, the same division of labour barrel-policy.ts's readMode establishes for its own, much smaller options shape), but workspaceArchitectureConfig() (src/workspace-architecture.ts) builds its rule options by calling this reader on the caller's raw object BEFORE that validation ever inspects it, and previously reconstructed a whitelisted object that silently dropped any unknown or misspelled top-level key rather than rejecting it, leaving ESLint's own schema nothing left to catch. This reader now rejects an unknown key at every level it validates (top level, group, slice, rankSkip, naming, nameRanks entries) itself, so a genuinely malformed options object still fails loudly and specifically here, whichever entry point it arrives through, rather than crashing later with a confusing TypeError deep inside graph construction or being silently ignored.
  */
 export function readWorkspaceArchitectureOptions(options: unknown): WorkspaceArchitectureOptions {
   if (!isRecord(options)) fail();
   if (!hasOnlyKeys(options, TOP_LEVEL_KEYS)) fail();
 
   const groups = asGroupSpecArray(options['groups']);
+  const duplicateGroupName = findDuplicateGroupName(groups);
+  if (duplicateGroupName !== undefined) {
+    throw new Error(
+      `@exadev/eslint-config: "groups" declares more than one group named "${duplicateGroupName}". Every group name must be unique: package-name-mirrors-path and isolatedGroups both resolve a group by name, and a duplicate would silently pick whichever entry is declared first.`,
+    );
+  }
   const root = asOptionalString(options['root']);
   const packages = asOptionalStringArray(options['packages']);
   const dependencyFields = asOptionalStringArray(options['dependencyFields']);
