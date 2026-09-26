@@ -442,7 +442,7 @@ export default exadevConfig({
 ### Build, test, and lint
 
 ```sh
-pnpm install    # requires Node >=20 and pnpm 11.6.0 (pinned via packageManager)
+pnpm install    # requires Node >=20 and the pnpm version pinned in package.json's packageManager field
 pnpm lint
 pnpm typecheck
 pnpm test
