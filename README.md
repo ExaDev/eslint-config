@@ -4,7 +4,7 @@
 
 > A real ESLint plugin (not a shareable config) exposing custom rules shared across ExaDev projects. Also published under the unscoped alias `exadev-eslint-config`.
 
-**Contents:** [Why](#why) · [Getting started](#getting-started) · [The lighter option](#the-lighter-option-the-plugin-named-export) · [Optional features](#optional-features) · [Rules](#rules) · [Barrel policy](#barrel-policy) · [Development](#development) · [License](#license)
+**Contents:** [Why](#why) · [Getting started](#getting-started) · [The lighter option](#the-lighter-option-the-plugin-named-export) · [Optional features](#optional-features) · [Rules](#rules) · [Barrel policy](#barrel-policy) · [Workspace architecture](#workspace-architecture) · [Development](#development) · [License](#license)
 
 ## Why
 
@@ -163,6 +163,7 @@ export default tseslint.config(
 | [Gitignore-derived ignores](#gitignore-derived-ignores) | On if the project has a `.gitignore` | `exadevConfig({ gitignore })` |
 | [RFC 8785 canonical JSON formatting](#rfc-8785-canonical-json-formatting) | Always on | Not optional |
 | [package.json key ordering](#optional-packagejson-key-ordering) | On, unless the project already has a syncpack config | `exadevConfig({ packageJsonKeyOrder })` |
+| [Workspace architecture rules](#workspace-architecture) | Off unless given (no sensible default for `groups`) | `exadevConfig({ workspaceArchitecture })` / `workspaceArchitectureConfig(options)` |
 
 Every tri-state option above (`true`/`false`/`undefined`) is passed through the named `exadevConfig(options, ...userConfigs)` factory export:
 
@@ -286,6 +287,9 @@ Bundled into `exadevConfig()`'s default output the same way React/Next.js auto-d
 | `prefer-numeric-sort-compare` | suggestion | **`.sort()` on a number array sorts lexicographically by default.** A deliberately narrow addition alongside [`@typescript-eslint/require-array-sort-compare`](https://typescript-eslint.io/rules/require-array-sort-compare/) (which already flags any bare `.sort()`/`.toSorted()` except on a plain string array, with no fix): when the array's element type is definitively `number`, a suggestion offers an ascending compare function (`(a, b) => a - b`), since the default comparator sorts lexicographically (`[1, 2, 10].sort()` becomes `[1, 10, 2]`). Not a full autofix — descending order is a real, if less common, alternative intent. Requires type information — only in the default (type-checked) export, not `plugin.configs.recommended`, since it needs the checker to confirm the array's element type. |
 | `prefer-options-object-param` | suggestion | **A run of 2+ trailing optional parameters (`?`-marked or default-valued) should be bundled into one destructured `options` parameter.** Without this, a caller needing only the last optional parameter must still pass `undefined` for every optional parameter before it (the motivating case: a 10-parameter constructor with 8 trailing optional ones). The threshold is configurable (`{ minTrailingOptional }`, default `2`). A suggestion (not a full autofix) rewrites the parameter list and inserts a `const { ... } = options ?? {};` destructure as the body's first statement; call sites are never rewritten, since the signature edit alone turns every stale positional call site into a real compile error. Still reported, but with no suggestion offered, whenever collapsing the run would not be safe/mechanical: a parameter property in the run, a parameter with no simple resolvable name and explicit type of its own (including a destructured parameter, or one typed only through a separately-declared function-type alias), a decorated parameter, a rest parameter anywhere in the full parameter list, no `BlockStatement` body at all (an arrow's expression body, or any declaration-only signature — including an ambient `.d.ts` function, an interface method/construct signature, or an abstract/ambient class method), a `@param` JSDoc tag naming a parameter in the run, or a parameter/function-scope-local variable already named `options`. Complements `max-params` (see "Individual rule tuning" above), which catches the different shape (excessive REQUIRED parameters) this rule is deliberately blind to. Requires no type information — registered in both `plugin.configs.recommended` and the default (type-checked) export, like `prefer-readonly-array-param` above; unlike its own `prefer-readonly-object-param`/`prefer-numeric-sort-compare` siblings, which genuinely need the checker and so cannot be offered outside the default export at all. |
 | `package-json-key-order` | ✓ | **Requires `package.json`'s keys to match `syncpack format`'s order.** See [Optional package.json key ordering](#optional-packagejson-key-ordering) — opt-in via `exadevConfig({ packageJsonKeyOrder: true })`, not part of `recommended`/`barrel`. A JSON-language rule (`@eslint/json`'s `json/json`), not a TSESLint one — needs no type information and doesn't apply to any `.ts`/`.js` file. |
+| `no-uphill-dependency` | | **Enforces a configured workspace's rank, rank-skip, slice and group-isolation boundaries** on every `package.json`'s declared dependencies. See [Workspace architecture](#workspace-architecture). Opt-in via `exadevConfig({ workspaceArchitecture })` or the standalone `workspaceArchitectureConfig()`, not part of `recommended`/`barrel`. A JSON-language rule, needs no type information. |
+| `no-dependency-cycle` | | **Disallows a workspace dependency that can reach back to the package declaring it.** A same-rank or same-slice dependency passes `no-uphill-dependency` while still forming a cycle, which this rule catches instead. See [Workspace architecture](#workspace-architecture). |
+| `package-name-mirrors-path` | | **Requires a workspace package's declared name to match the name its own path derives**, under the configured naming scope and separator. Itself opt-in within workspace architecture: a no-op unless the shared `naming` option is given. See [Workspace architecture](#workspace-architecture). |
 | `test-file-kind` | | **A test file's name must declare its own test kind.** A filename suffix immediately before `.test`/`.spec` (e.g. `foo.unit.test.ts`), one of a configurable `{ kinds }` set (default: `unit`, `integration`, `e2e`). A naming-discipline rule, not a content classifier — it checks only the filename, never what the file actually tests. Self-scoped to real test/spec files (`context.filename`), so it never misfires when applied unscoped and never relies on a consumer's own `files` config. Requires no type information. |
 
 ## Barrel policy
@@ -309,6 +313,129 @@ Notes on `'auto'`:
 - `private: true` in `package.json` is not consulted by the detection: a pnpm workspace package is routinely both `private` and a genuine import target for sibling packages via `exports`, so `private` says nothing about whether a barrel is warranted.
 
 In every mode, re-exports are banned outside a permitted barrel, and a permitted barrel may contain only re-export statements. The umbrella composes the identical predicates the standalone rules use (shared in [`src/rules/barrel-helpers.ts`](src/rules/barrel-helpers.ts)). It is non-fixable — the autofix lives on `no-non-barrel-reexport`.
+
+## Workspace architecture
+
+Three rules (`no-uphill-dependency`, `no-dependency-cycle`, `package-name-mirrors-path`) share one options object, `WorkspaceArchitectureOptions`, describing a pnpm workspace's own dependency-direction rules: which package is allowed to depend on which other, checked directly against every `package.json`'s declared `dependencies`. Off by default, since `groups` has no sensible default; enable it either through `exadevConfig({ workspaceArchitecture })` (the full bundle) or the standalone `workspaceArchitectureConfig(options)` export (for a consumer building its own config from the lighter `plugin` export, e.g. one that isn't using `exadevConfig()` at all):
+
+```ts
+// eslint.config.ts
+import { defineConfig } from 'eslint/config';
+import { exadevConfig } from '@exadev/eslint-config';
+
+export default defineConfig(
+  {
+    languageOptions: {
+      parserOptions: { project: './tsconfig.json', tsconfigRootDir: import.meta.dirname },
+    },
+  },
+  ...exadevConfig({
+    workspaceArchitecture: {
+      groups: [
+        { name: 'core', rank: 0 },
+        { name: 'features', rank: 1 },
+        { name: 'targets', rank: 2 },
+      ],
+    },
+  }),
+);
+```
+
+Both entry points need `@eslint/json` resolvable (`pnpm add -D @eslint/json`), the same optional peer [package.json key ordering](#optional-packagejson-key-ordering) uses; unlike that feature, workspace architecture has no tri-state auto-detection at all, since there is nothing to detect it against, only whether the option was given.
+
+### Options
+
+| Field | Meaning |
+| --- | --- |
+| `root` | The workspace root directory. Defaults to the nearest ancestor of the linted file that owns a `pnpm-workspace.yaml`. |
+| `packages` | Workspace package globs (`pnpm-workspace.yaml` dialect: `*`, `**`, `!`-prefixed excludes). Defaults to that file's own top-level `packages:` block sequence. |
+| `dependencyFields` | `package.json` fields read as a package's declared dependencies. Defaults to `['dependencies']`. |
+| `groups` | The workspace's own directory taxonomy: `{ name, path?, rank?, slice?, naming? }`. `path` defaults to `name` (a group rooted at a directory of the same name). |
+| `nameRanks` | The name-role rank model: `{ pattern, rank }[]`, a package's declared name checked against each `pattern` in order, first match wins, ahead of its own group's `rank`. Omit entirely for a pure group-rank model. |
+| `defaultRank` | The rank a package gets when neither `nameRanks` nor its own group resolves one. |
+| `rankSkip` | `{ maxDistance, exemptRanks }`. A dependency more than `maxDistance` ranks below its dependant, and not itself one of `exemptRanks` (typically a foundational rank 0), is a `rankSkip` violation. Omitted entirely, that check never runs. |
+| `isolatedGroups` | `[groupName, groupName][]` pairs forbidden from depending on each other in either direction, on top of the rank/slice checks (for two groups that share a rank but must still stay separate). |
+| `naming` | `{ scope?, separator? }`. Enables `package-name-mirrors-path`; omitted entirely, that rule is a no-op. |
+
+A group's own `slice` (`{ segment: N }` or `{ namePrefix: true }`) partitions it further: two packages in the same or a differently-ranked group but a different slice (two feature verticals, say) are still isolated from each other, checked by the `crossSlice` violation. `{ segment: N }` reads the slice value directly from the package's own path (the Nth segment after the group's own root); `{ namePrefix: true }` is for a group with no such structure of its own (a flat `targets/` directory, say), whose packages instead take their slice from whichever other group's already-observed segment-derived value prefixes their own declared name.
+
+### Example: a group-ranked repo
+
+Every group states its own `rank` directly; `test` keeps its own path segment in the derived name (`@novus/test-database`, not `@novus/database`), which every other group drops:
+
+```ts
+// eslint.config.ts
+import { defineConfig } from 'eslint/config';
+import { plugin, workspaceArchitectureConfig } from '@exadev/eslint-config';
+
+export default defineConfig(
+  // ...your own config...
+  {
+    plugins: { exadev: plugin },
+  },
+  ...workspaceArchitectureConfig({
+    groups: [
+      { name: 'core', rank: 0 },
+      { name: 'features', rank: 1, slice: { segment: 0 } },
+      { name: 'product', rank: 2, slice: { segment: 0 } },
+      { name: 'targets', rank: 3 },
+      { name: 'test', rank: 4, naming: 'keep-group' },
+    ],
+    naming: { scope: '@novus' },
+  }),
+);
+```
+
+### Example: a name-ranked repo
+
+Rank comes from a package's own declared name, not its directory; `packages/targets` infers its slice from whichever feature/product vertical its own name is prefixed with, and `rankSkip` lets a target reach a rank-0 contract directly while still blocking it from skipping straight past `store-application-context` to an adapter:
+
+```ts
+// eslint.shared.ts
+import { exadevConfig } from '@exadev/eslint-config';
+
+export default exadevConfig({
+  workspaceArchitecture: {
+    groups: [
+      { name: 'core', path: 'packages/core' },
+      { name: 'features', path: 'packages/features' },
+      { name: 'product', path: 'packages/product' },
+      { name: 'targets', path: 'packages/targets', slice: { namePrefix: true } },
+    ],
+    nameRanks: [
+      { pattern: '-contract$', rank: 0 },
+      { pattern: '-adapter-|-schema$|^store-api-router$', rank: 1 },
+      { pattern: '^store-application-context$', rank: 2 },
+    ],
+    defaultRank: 3,
+    rankSkip: { maxDistance: 1, exemptRanks: [0] },
+  },
+});
+```
+
+### Example: exchange-platform
+
+`features` and `verticals` sit at the same rank, so `isolatedGroups` is what actually keeps them from depending on each other; both slice on their own first path segment, so a feature and a vertical for the same conceptual area (`store`, say) are not, by that alone, considered related:
+
+```ts
+// eslint.shared.ts
+import { exadevConfig } from '@exadev/eslint-config';
+
+export default exadevConfig({
+  workspaceArchitecture: {
+    groups: [
+      { name: 'core', rank: 0 },
+      { name: 'features', rank: 1, slice: { segment: 0 } },
+      { name: 'verticals', rank: 1, slice: { segment: 0 } },
+      { name: 'product', rank: 2 },
+      { name: 'targets', rank: 3 },
+      { name: 'test', rank: 4, naming: 'keep-group' },
+    ],
+    isolatedGroups: [['features', 'verticals']],
+    naming: { scope: '@exacap' },
+  },
+});
+```
 
 ## Development
 
