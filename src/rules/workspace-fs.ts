@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 
 // The injectable filesystem seam for every workspace-architecture module (workspace-yaml, workspace-glob, workspace-graph): pure decision logic never touches node:fs directly, only this interface, so a unit test can fabricate an in-memory tree with a plain object instead of writing real files to disk. Mirrors the ReadPackageJsonFn seam barrel-auto-detect.ts already establishes for the same "injectable in tests, defaulted in production" problem, generalised to the handful of fs operations workspace discovery needs (existence checks, reading a manifest/yaml file, and listing a directory's own entries).
 export interface DirEntry {
@@ -10,6 +10,8 @@ export interface WorkspaceFs {
   readonly existsSync: (path: string) => boolean;
   readonly readFileSync: (path: string) => string;
   readonly readdirSync: (path: string) => readonly DirEntry[];
+  // Resolves a path through every symlink along it to its one canonical spelling, exactly as node:fs's own realpathSync does. manifestRelativeDir (workspace-graph.ts) is the one caller: two lexically different paths (a workspace root given by realpath, ESLint's own context.filename reached through a symlinked cwd, a macOS /tmp vs /private/tmp being the recurring real case) can name the identical real directory, and only realpath resolution can tell the two spellings apart from a genuinely different directory.
+  readonly realpathSync: (path: string) => string;
 }
 
 // The real, filesystem-backed WorkspaceFs, threaded through as the default everywhere a WorkspaceFs parameter is accepted, exactly as findNearestPackageJson is the default ReadPackageJsonFn in barrel-auto-detect.ts.
@@ -17,6 +19,7 @@ export const realWorkspaceFs: WorkspaceFs = {
   existsSync,
   readFileSync: (path) => readFileSync(path, 'utf8'),
   readdirSync: (path) => readdirSync(path, { withFileTypes: true }),
+  realpathSync: (path) => realpathSync(path),
 };
 
 // A directory that does not exist yet (a group whose glob pattern has no matches at this level, or a workspace mid-restructure) lists as empty rather than throwing, the same "missing input is nothing to report, not an error" stance listDirs takes in the monorepo-template original this module supersedes.

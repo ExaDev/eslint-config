@@ -18,7 +18,12 @@ import type { GroupSpec, WorkspaceArchitectureOptions } from './workspace-option
 
 const FIXTURE_ROOT = join(import.meta.dirname, '__fixtures__/workspace');
 
-function fakeFs(files: Readonly<Record<string, string>>, dirs: Readonly<Record<string, readonly string[]>>): WorkspaceFs {
+// `realpaths` maps a lexical path to the canonical path it should resolve to (a symlinked spelling standing in for a real directory tree); a path with no entry resolves to itself, exactly as node:fs's own realpathSync does for a path with no symlink anywhere along it.
+function fakeFs(
+  files: Readonly<Record<string, string>>,
+  dirs: Readonly<Record<string, readonly string[]>>,
+  realpaths: Readonly<Record<string, string>> = {},
+): WorkspaceFs {
   return {
     existsSync: (path) => path in files || path in dirs,
     readFileSync: (path) => {
@@ -31,6 +36,7 @@ function fakeFs(files: Readonly<Record<string, string>>, dirs: Readonly<Record<s
       if (entries === undefined) return [];
       return entries.map((name) => ({ name, isDirectory: () => !name.includes('.') }));
     },
+    realpathSync: (path) => realpaths[path] ?? path,
   };
 }
 
@@ -128,6 +134,24 @@ describe('deriveRank', () => {
     // '\\p{L}' (a Unicode letter) is only recognised as a property escape under the 'u' flag; without it, most engines treat '\\p' as a plain identity escape matching a literal "p" instead, which "𝔘" (a single astral-plane letter, two UTF-16 code units) is not. This also exercises the 'u' flag's own "." matches one whole codepoint, not one UTF-16 unit" behaviour: '^.$' only matches this two-code-unit string as a single character under 'u'.
     const options: WorkspaceArchitectureOptions = { groups: [group], nameRanks: [{ pattern: '^\\p{L}$', rank: CONTRACT_NAME_RANK }] };
     expect(deriveRank('𝔘', group, options)).toBe(CONTRACT_NAME_RANK);
+  });
+
+  it('skips nameRanks entirely for a nameless package (undefined), even when a pattern would otherwise match its group\'s own directory-derived identity key, falling straight through to group.rank', () => {
+    // A pattern deliberately shaped to match nothing about a real declared name, only ever an identity key that happens to be a directory path (the shape collectCandidates falls back to for a nameless package): if deriveRank were still matching nameRanks against that fallback, this would wrongly return CONTRACT_NAME_RANK instead of the group's own rank (0).
+    const options: WorkspaceArchitectureOptions = { groups: [group], nameRanks: [{ pattern: '/', rank: CONTRACT_NAME_RANK }] };
+    expect(deriveRank(undefined, group, options)).toBe(0);
+  });
+
+  it('falls through undefined to defaultRank when the group itself has no rank either', () => {
+    const rankless: GroupSpec = { name: 'targets' };
+    const options: WorkspaceArchitectureOptions = { groups: [rankless], defaultRank: TARGETS_DEFAULT_RANK };
+    expect(deriveRank(undefined, rankless, options)).toBe(TARGETS_DEFAULT_RANK);
+  });
+
+  it('names the package as having no declared name in the thrown message when undefined resolves nothing at all', () => {
+    const rankless: GroupSpec = { name: 'targets' };
+    const options: WorkspaceArchitectureOptions = { groups: [rankless] };
+    expect(() => deriveRank(undefined, rankless, options)).toThrow(/\(no declared name\)/);
   });
 });
 
@@ -292,6 +316,26 @@ describe('buildWorkspaceGraph (fabricated tree)', () => {
 
     const graph = buildWorkspaceGraph(fs, '/root', { groups });
     expect(graph.packagesByName.get('lonely-tool')?.slice).toBeUndefined();
+  });
+
+  it('a namePrefix package with no declared name at all (pnpm allows this) resolves to an undefined slice too, never matching a known slice against its own directory-derived identity key', () => {
+    // knownSlices here is genuinely non-empty ('store', from the features group), so this proves the nameless package is skipped entirely (no name to prefix-match at all), not merely that an empty knownSlices set happened to match nothing.
+    const fs = fakeFs(
+      {
+        '/root/pnpm-workspace.yaml': "packages:\n  - 'features/*/*'\n  - 'targets/*'\n",
+        '/root/features/store/api/package.json': packageJson('store-api'),
+        '/root/targets/nameless/package.json': JSON.stringify({ dependencies: {} }),
+      },
+      {
+        '/root': ['features', 'targets'],
+        '/root/features': ['store'],
+        '/root/features/store': ['api'],
+        '/root/targets': ['nameless'],
+      },
+    );
+
+    const graph = buildWorkspaceGraph(fs, '/root', { groups });
+    expect(graph.packagesByName.get('targets/nameless')?.slice).toBeUndefined();
   });
 
   it('a namePrefix package whose name genuinely does not match any real, non-empty known slice resolves to an undefined slice', () => {
@@ -526,6 +570,31 @@ describe('readDeclaredManifest', () => {
     const fs = fakeFs({ '/root/core/broken/package.json': '{ this is not json' }, {});
     expect(() => readDeclaredManifest(fs, '/root/core/broken', ['dependencies'])).toThrow(/\/root\/core\/broken\/package\.json/);
   });
+
+  it('attaches the original SyntaxError as the thrown error\'s own "cause", not merely folded into its message', () => {
+    // expect.assertions confirms the catch block genuinely ran: with no throw at all, this test would otherwise pass vacuously having asserted nothing.
+    expect.assertions(2);
+    const fs = fakeFs({ '/root/core/broken/package.json': '{ this is not json' }, {});
+    try {
+      readDeclaredManifest(fs, '/root/core/broken', ['dependencies']);
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).cause).toBeInstanceOf(Error);
+    }
+  });
+
+  it('lets a real read failure (EACCES, a race that removes the file after resolveWorkspacePackageDirs confirmed it) propagate unchanged, never misreported as a JSON parse error: only JSON.parse itself sits inside the try', () => {
+    const readError = new Error('EACCES: permission denied');
+    const fs: WorkspaceFs = {
+      existsSync: () => true,
+      readFileSync: () => {
+        throw readError;
+      },
+      readdirSync: () => [],
+      realpathSync: (path) => path,
+    };
+    expect(() => readDeclaredManifest(fs, '/root/core/unreadable', ['dependencies'])).toThrow(readError);
+  });
 });
 
 describe('getWorkspaceGraph / resetWorkspaceGraphCache', () => {
@@ -578,16 +647,35 @@ describe('getWorkspaceGraph / resetWorkspaceGraphCache', () => {
 
 describe('manifestRelativeDir', () => {
   it('gives the forward-slash-joined directory, relative to root, that the manifest file sits in', () => {
-    expect(manifestRelativeDir('/root', join('/root', 'core/kv/package.json'))).toBe('core/kv');
+    const fs = fakeFs({}, {});
+    expect(manifestRelativeDir(fs, '/root', join('/root', 'core/kv/package.json'))).toBe('core/kv');
   });
 
   it('gives an empty string for a manifest that sits directly at the workspace root', () => {
-    expect(manifestRelativeDir('/root', join('/root', 'package.json'))).toBe('');
+    const fs = fakeFs({}, {});
+    expect(manifestRelativeDir(fs, '/root', join('/root', 'package.json'))).toBe('');
   });
 
   it('resolves a relative filename against the current working directory first, the same way resolveWorkspaceRoot does', () => {
     // A rule's own context.filename is always an absolute path in a real lint run, but this still confirms the function's own contract rather than trusting it: relative() alone, given two paths that are not both already absolute, would compute something neither caller here intends.
-    expect(manifestRelativeDir(FIXTURE_ROOT, join(FIXTURE_ROOT, 'targets/store-cli/package.json'))).toBe('targets/store-cli');
+    const fs = fakeFs({}, {});
+    expect(manifestRelativeDir(fs, FIXTURE_ROOT, join(FIXTURE_ROOT, 'targets/store-cli/package.json'))).toBe('targets/store-cli');
+  });
+
+  it('resolves root and the manifest directory through realpath before comparing, so a symlinked spelling of either still yields the real relative directory', () => {
+    // "/root" is the explicit "root" option's own (canonical) spelling; the manifest is reached through "/tmp-link", a different lexical path that resolves to the identical real directory tree (macOS's own /tmp -> /private/tmp being the recurring real case). A purely lexical relative() between "/root" and "/tmp-link/core/kv" would compute something nowhere near "core/kv".
+    const fs = fakeFs({}, {}, { '/tmp-link/core/kv': '/root/core/kv' });
+    expect(manifestRelativeDir(fs, '/root', join('/tmp-link', 'core/kv/package.json'))).toBe('core/kv');
+  });
+
+  it('still resolves correctly when it is the root option, not the filename, that carries the symlinked spelling', () => {
+    const fs = fakeFs({}, {}, { '/tmp-link': '/root' });
+    expect(manifestRelativeDir(fs, '/tmp-link', join('/root', 'core/kv/package.json'))).toBe('core/kv');
+  });
+
+  it('a manifest genuinely outside root, not merely a differently-spelled symlink of it, still resolves to a real ".." relative path rather than being masked by realpath resolution', () => {
+    const fs = fakeFs({}, {});
+    expect(manifestRelativeDir(fs, '/root/core', join('/root', 'other/package.json'))).toBe('../other');
   });
 });
 

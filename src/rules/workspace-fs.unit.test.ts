@@ -1,5 +1,6 @@
+import { realpathSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { listSubdirectories, type WorkspaceFs } from './workspace-fs';
+import { listSubdirectories, realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
 
 function fakeFs(tree: Record<string, readonly string[]>): WorkspaceFs {
   return {
@@ -12,8 +13,17 @@ function fakeFs(tree: Record<string, readonly string[]>): WorkspaceFs {
       if (entries === undefined) throw new Error(`ENOENT: ${path}`);
       return entries.map((name) => ({ name, isDirectory: () => !name.includes('.') }));
     },
+    realpathSync: () => {
+      throw new Error('not used in these tests');
+    },
   };
 }
+
+describe('realWorkspaceFs.realpathSync', () => {
+  it('delegates directly to node:fs\'s own realpathSync, resolving a real directory to its own canonical path', () => {
+    expect(realWorkspaceFs.realpathSync(import.meta.dirname)).toBe(realpathSync(import.meta.dirname));
+  });
+});
 
 describe('listSubdirectories', () => {
   it('returns an empty array for a directory that does not exist', () => {
