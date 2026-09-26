@@ -1,6 +1,6 @@
 import type { JSONRuleDefinition, JSONRuleVisitor } from '@eslint/json';
 import type { ObjectNode } from '@humanwhocodes/momoa';
-import { loadWorkspaceGraph, type LoadWorkspaceGraphFn } from './workspace-graph';
+import { loadWorkspaceGraph, manifestRelativeDir, type LoadWorkspaceGraphFn } from './workspace-graph';
 import { readWorkspaceArchitectureOptions, workspaceArchitectureOptionsSchema, type GroupSpec, type WorkspaceArchitectureOptions } from './workspace-options';
 import { expectedPackageName } from './workspace-checks';
 import { readDeclaredName } from './workspace-json-helpers';
@@ -26,7 +26,7 @@ export type PackageNameMirrorsPathRuleDefinition = JSONRuleDefinition<{
 /**
  * Reports a workspace package whose declared name does not mirror its path, per its own group's naming strategy and the workspace's global scope/separator (see expectedPackageName in workspace-checks.ts for the exact derivation). Opt-in: entirely a no-op whenever the shared `naming` option is omitted, exactly as the option's own doc comment (workspace-options.ts) states, since a workspace with its own established naming convention this rule cannot express should not be forced to adopt one that fits.
  *
- * Deliberately not derived from `context.filename`'s own directory the way the hive original was: this rule instead looks its own package up in the already-built graph by its DECLARED name (the same self-identification every other workspace-architecture rule uses), which is what lets `expectedPackageName` be checked against the graph's own recorded relativeDir/group rather than re-deriving them from a path assumed to equal the folder a file happens to be linted from.
+ * Self-identified by its DECLARED name (the same self-identification every other workspace-architecture rule uses), not derived from `context.filename`'s own directory the way the hive original was: this is what lets `expectedPackageName` be checked against the graph's own recorded relativeDir/group rather than re-deriving them from a path assumed to equal the folder a file happens to be linted from. `context.filename`'s own directory is still consulted, but only afterwards, as a confirmation: it must equal the resolved graph entry's own relativeDir, or the manifest being linted is a stale or duplicated copy of a real package's package.json sitting somewhere else in the tree (a build output directory that copied it verbatim, say), not the genuine article this graph entry was built from.
  */
 export function createPackageNameMirrorsPathRule(loadGraph: LoadWorkspaceGraphFn = loadWorkspaceGraph): PackageNameMirrorsPathRuleDefinition {
   return {
@@ -58,6 +58,8 @@ export function createPackageNameMirrorsPathRule(loadGraph: LoadWorkspaceGraphFn
           if (declared === undefined) return;
           const self = graph.packagesByName.get(declared.name);
           if (self === undefined) return;
+          // The manifest currently being linted must be the SAME file buildWorkspaceGraph resolved this graph entry from, not a stale or duplicated copy declaring the identical name elsewhere in the tree (a build output directory that copies its source package.json verbatim, say): checking a copy under the real package's own entry would check ITS path against the real package's expected name.
+          if (self.relativeDir !== manifestRelativeDir(graph.root, context.filename)) return;
           const group = findGroupSpec(options.groups, self.group);
 
           const expected = expectedPackageName(self.relativeDir, group, naming);

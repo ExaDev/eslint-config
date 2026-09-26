@@ -23,6 +23,9 @@ function pkg(name: string, group: string, rank: number, slice: string | undefine
 const PRODUCT_RANK = 2;
 const TARGETS_RANK = 3;
 
+// A workspace package with no declared "name" at all (pnpm allows this): keyed by its own relativeDir, exactly as buildWorkspaceGraph's own collectCandidates does for a real one (workspace-graph.ts), so its dependency on the rank-3 "store-cli" below is still checked as an uphill violation rather than silently skipped.
+const NAMELESS_RELATIVE_DIR = 'core/nameless';
+
 const FIXED_GRAPH: WorkspaceGraph = {
   root: '/fixture',
   packagesByName: new Map(
@@ -34,6 +37,7 @@ const FIXED_GRAPH: WorkspaceGraph = {
       pkg('store-application-context', 'product', PRODUCT_RANK, 'store'),
       pkg('store-cli', 'targets', TARGETS_RANK, 'store'),
       pkg('checkout-vertical', 'verticals', 1, 'checkout'),
+      { name: NAMELESS_RELATIVE_DIR, relativeDir: NAMELESS_RELATIVE_DIR, group: 'core', rank: 0, slice: undefined },
     ].map((entry) => [entry.name, entry]),
   ),
   dependencyNamesByName: new Map(),
@@ -45,6 +49,11 @@ const ruleTester = new RuleTester({ language: 'json/json', plugins: { json } });
 
 function manifest(name: string, dependencies: Readonly<Record<string, string>> = {}): string {
   return JSON.stringify({ name, dependencies }, null, 2);
+}
+
+// The manifest path buildWorkspaceGraph would have resolved this same package FROM, matching each pkg() entry's own `relativeDir` above: every test case below identifies "self" by declared name, and the rule now also confirms context.filename's own directory is that same graph entry's relativeDir (see manifestRelativeDir, workspace-graph.ts), so a realistic filename is required for the rule to ever reach its reporting logic at all, not merely to exercise the new guard itself.
+function selfFilename(name: string): string {
+  return `${FIXED_GRAPH.root}/unused/${name}/package.json`;
 }
 
 describe('createNoUphillDependencyRule meta', () => {
@@ -97,76 +106,94 @@ ruleTester.run('no-uphill-dependency', rule, {
   valid: [
     // A manifest whose declared name is not in the graph at all (not a workspace member this rule knows about) is silently skipped.
     { code: manifest('not-a-workspace-package', { anything: '1' }), options: [{ groups: [{ name: 'core' }] }] },
-    // A manifest with no "name" field at all (readDeclaredName returns undefined) is silently skipped, never treated as any particular workspace package.
+    // A manifest with no "name" field at all, linted from a file whose own directory is not a known package directory either (the default RuleTester filename resolves nowhere near "/fixture"): neither a declared name nor a directory fallback identifies it in the graph, so it is skipped, not treated as any particular workspace package.
     { code: JSON.stringify({ dependencies: { 'kv-adapter-memory': 'workspace:*' } }), options: [{ groups: [{ name: 'core' }] }] },
     // Same rank, permitted regardless of rankSkip configuration.
-    { code: manifest('kv-adapter-memory', { 'kv-contract': 'workspace:*' }), options: [{ groups: [{ name: 'core' }] }] },
+    { code: manifest('kv-adapter-memory', { 'kv-contract': 'workspace:*' }), filename: selfFilename('kv-adapter-memory'), options: [{ groups: [{ name: 'core' }] }] },
     // Exactly one rank below, within maxDistance.
     {
       code: manifest('store-cli', { 'store-application-context': 'workspace:*' }),
+      filename: selfFilename('store-cli'),
       options: [{ groups: [{ name: 'core' }], rankSkip: { maxDistance: 1, exemptRanks: [0] } }],
     },
     // A rank-0 (exempt) dependency reached from any distance is permitted even under rankSkip.
     {
       code: manifest('store-cli', { 'kv-contract': 'workspace:*' }),
+      filename: selfFilename('store-cli'),
       options: [{ groups: [{ name: 'core' }], rankSkip: { maxDistance: 1, exemptRanks: [0] } }],
     },
     // rankSkip entirely unconfigured: a deep, otherwise-skip-shaped dependency is not checked at all.
-    { code: manifest('store-cli', { 'kv-adapter-memory': 'workspace:*' }), options: [{ groups: [{ name: 'core' }] }] },
+    { code: manifest('store-cli', { 'kv-adapter-memory': 'workspace:*' }), filename: selfFilename('store-cli'), options: [{ groups: [{ name: 'core' }] }] },
     // Same slice, permitted.
     {
       code: manifest('store-application-context', { 'store-api-router': 'workspace:*' }),
+      filename: selfFilename('store-application-context'),
       options: [{ groups: [{ name: 'core' }] }],
     },
     // An unknown (non-workspace, third-party) dependency name is ignored.
-    { code: manifest('kv-contract', { zod: '^3' }), options: [{ groups: [{ name: 'core' }] }] },
+    { code: manifest('kv-contract', { zod: '^3' }), filename: selfFilename('kv-contract'), options: [{ groups: [{ name: 'core' }] }] },
     // isolatedGroups configured, but this pair is not one of the forbidden ones.
     {
       code: manifest('kv-adapter-memory', { 'billing-contract': 'workspace:*' }),
+      filename: selfFilename('kv-adapter-memory'),
       options: [{ groups: [{ name: 'core' }, { name: 'features' }, { name: 'verticals' }], isolatedGroups: [['features', 'verticals']] }],
     },
     // A nested (non-top-level) object that itself looks exactly like a self-contained manifest (its own real "name" and "dependencies") must never be analysed as if it were the file's own top-level manifest: only the Object visitor's own parent.type === 'Document' check stands between "the real top level" and "any nested object anywhere in the file". If bypassed, this nested object would be read as "store-cli" (rank 3) depending on "kv-adapter-memory" (rank 1), a genuine rankSkip violation, and wrongly reported even though the top-level manifest itself declares no dependencies at all.
     {
       code: JSON.stringify({ name: 'kv-contract', nested: { name: 'store-cli', dependencies: { 'kv-adapter-memory': 'workspace:*' } } }),
+      filename: selfFilename('kv-contract'),
       options: [{ groups: [{ name: 'core' }], rankSkip: { maxDistance: 1, exemptRanks: [0] } }],
+    },
+    // A manifest declaring a real graph member's name, but linted from a DIFFERENT directory than that member's own relativeDir (a stale or duplicated copy of the same package.json sitting elsewhere, a build output directory that copied its source verbatim, say), is skipped rather than checked under the real package's own graph entry: this genuinely uphill dependency would otherwise be reported against the copy too.
+    {
+      code: manifest('kv-contract', { 'kv-adapter-memory': 'workspace:*' }),
+      filename: `${FIXED_GRAPH.root}/dist/kv-contract/package.json`,
+      options: [{ groups: [{ name: 'core' }] }],
     },
   ],
   invalid: [
     {
       code: manifest('kv-contract', { 'kv-adapter-memory': 'workspace:*' }),
+      filename: selfFilename('kv-contract'),
       options: [{ groups: [{ name: 'core' }] }],
       errors: [{ messageId: 'uphillRank' }],
     },
     {
       code: manifest('store-cli', { 'kv-adapter-memory': 'workspace:*' }),
+      filename: selfFilename('store-cli'),
       options: [{ groups: [{ name: 'core' }], rankSkip: { maxDistance: 1, exemptRanks: [0] } }],
       errors: [{ messageId: 'rankSkip' }],
     },
     {
       code: manifest('store-application-context', { 'billing-contract': 'workspace:*' }),
+      filename: selfFilename('store-application-context'),
       options: [{ groups: [{ name: 'core' }], rankSkip: { maxDistance: 1, exemptRanks: [0] } }],
       errors: [{ messageId: 'crossSlice' }],
     },
     {
       code: manifest('checkout-vertical', { 'store-api-router': 'workspace:*' }),
+      filename: selfFilename('checkout-vertical'),
       options: [{ groups: [{ name: 'core' }, { name: 'features' }, { name: 'verticals' }], isolatedGroups: [['features', 'verticals']] }],
       errors: [{ messageId: 'isolatedGroup' }],
     },
     // isolatedGroups matches in the reverse declared order too.
     {
       code: manifest('checkout-vertical', { 'store-api-router': 'workspace:*' }),
+      filename: selfFilename('checkout-vertical'),
       options: [{ groups: [{ name: 'core' }, { name: 'features' }, { name: 'verticals' }], isolatedGroups: [['verticals', 'features']] }],
       errors: [{ messageId: 'isolatedGroup' }],
     },
     // Two violating dependencies in one manifest each get their own reported error, at their own location.
     {
       code: manifest('kv-contract', { 'kv-adapter-memory': 'workspace:*', 'store-cli': 'workspace:*' }),
+      filename: selfFilename('kv-contract'),
       options: [{ groups: [{ name: 'core' }] }],
       errors: [{ messageId: 'uphillRank' }, { messageId: 'uphillRank' }],
     },
     // Reading a non-default dependency field.
     {
       code: JSON.stringify({ name: 'kv-contract', devDependencies: { 'kv-adapter-memory': 'workspace:*' } }, null, 2),
+      filename: selfFilename('kv-contract'),
       options: [{ groups: [{ name: 'core' }], dependencyFields: ['devDependencies'] }],
       errors: [{ messageId: 'uphillRank' }],
     },
@@ -177,7 +204,15 @@ ruleTester.run('no-uphill-dependency', rule, {
         null,
         2,
       ),
+      filename: selfFilename('kv-contract'),
       options: [{ groups: [{ name: 'core' }], dependencyFields: ['dependencies', 'devDependencies'] }],
+      errors: [{ messageId: 'uphillRank' }],
+    },
+    // A workspace package with no declared "name" at all, keyed in the graph by its own relativeDir: its dependency on the rank-3 "store-cli" is still checked (and reported) as an uphill violation, proving it is no longer dropped from the graph without a word.
+    {
+      code: JSON.stringify({ dependencies: { 'store-cli': 'workspace:*' } }),
+      filename: `${FIXED_GRAPH.root}/${NAMELESS_RELATIVE_DIR}/package.json`,
+      options: [{ groups: [{ name: 'core' }] }],
       errors: [{ messageId: 'uphillRank' }],
     },
   ],
