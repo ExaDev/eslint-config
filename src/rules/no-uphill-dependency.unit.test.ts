@@ -51,12 +51,41 @@ describe('createNoUphillDependencyRule meta', () => {
   it('declares the four message ids the rule can report', () => {
     expect(Object.keys(rule.meta?.messages ?? {}).sort()).toEqual(['crossSlice', 'isolatedGroup', 'rankSkip', 'uphillRank']);
   });
+
+  it('carries the exact docs/languages content the rule is documented to have', () => {
+    const { meta } = rule;
+    if (meta === undefined) throw new Error('Unreachable: createNoUphillDependencyRule always defines its own meta object literal.');
+    expect(meta.languages).toEqual(['json/json', 'json/jsonc']);
+    expect(meta.docs?.recommended).toBe(false);
+    expect(meta.docs?.description).toBe(
+      'Disallow a workspace package depending on another package ranked strictly above it, on a non-exempt-rank package more than the configured distance below it, on a package in a different slice of the same or another group, or on a package in a group this workspace declares isolated from its own.',
+    );
+    expect(meta.docs?.url).toBe('https://github.com/ExaDev/eslint-config/blob/main/src/rules/no-uphill-dependency.ts');
+    expect(meta.messages?.uphillRank).toBe(
+      'Illegal dependency: "{{self}}" (rank {{selfRank}}) depends on "{{dependency}}" (rank {{dependencyRank}}), which is ranked above it. A package may only depend on its own rank or lower.',
+    );
+    expect(meta.messages?.rankSkip).toBe(
+      'Illegal dependency: "{{self}}" (rank {{selfRank}}) depends directly on "{{dependency}}" (rank {{dependencyRank}}), skipping too many ranks in between.',
+    );
+    expect(meta.messages?.crossSlice).toBe(
+      'Illegal dependency: "{{self}}" (slice "{{selfSlice}}") depends on "{{dependency}}" (slice "{{dependencySlice}}"). A package may depend on another in the same slice, but not a different one.',
+    );
+    expect(meta.messages?.isolatedGroup).toBe(
+      'Illegal dependency: "{{self}}" (group "{{selfGroup}}") depends on "{{dependency}}" (group "{{dependencyGroup}}"), and this workspace declares these two groups isolated from each other.',
+    );
+  });
 });
 
 describe('findDependencyEntry', () => {
   it('returns the matching entry', () => {
     const entry = namedDependency('a');
     expect(findDependencyEntry([entry], 'a')).toBe(entry);
+  });
+
+  it('returns the matching entry by name even when it is not the first in the list', () => {
+    const first = namedDependency('a');
+    const second = namedDependency('b');
+    expect(findDependencyEntry([first, second], 'b')).toBe(second);
   });
 
   it('throws for a name with no matching entry, a shape no real call site (which only ever asks for a name it just collected) produces', () => {
@@ -95,6 +124,11 @@ ruleTester.run('no-uphill-dependency', rule, {
     {
       code: manifest('kv-adapter-memory', { 'billing-contract': 'workspace:*' }),
       options: [{ groups: [{ name: 'core' }], isolatedGroups: [['features', 'verticals']] }],
+    },
+    // A nested (non-top-level) object that itself looks exactly like a self-contained manifest (its own real "name" and "dependencies") must never be analysed as if it were the file's own top-level manifest: only the Object visitor's own parent.type === 'Document' check stands between "the real top level" and "any nested object anywhere in the file". If bypassed, this nested object would be read as "store-cli" (rank 3) depending on "kv-adapter-memory" (rank 1), a genuine rankSkip violation, and wrongly reported even though the top-level manifest itself declares no dependencies at all.
+    {
+      code: JSON.stringify({ name: 'kv-contract', nested: { name: 'store-cli', dependencies: { 'kv-adapter-memory': 'workspace:*' } } }),
+      options: [{ groups: [{ name: 'core' }], rankSkip: { maxDistance: 1, exemptRanks: [0] } }],
     },
   ],
   invalid: [

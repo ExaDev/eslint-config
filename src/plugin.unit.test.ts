@@ -22,6 +22,8 @@ describe('plugin.configs.recommended', () => {
       expect(config?.rules?.['exadev/no-pointless-reassignment']).toBe('error');
       expect(config?.rules?.['exadev/prefer-options-object-param']).toBe('error');
       expect(config?.rules?.['exadev/prefer-readonly-array-param']).toBe('error');
+      expect(config?.rules?.['exadev/test-file-kind']).toBe('error');
+      expect(config?.rules?.['max-params']).toStrictEqual(['error', { max: 4 }]);
     }
   });
 });

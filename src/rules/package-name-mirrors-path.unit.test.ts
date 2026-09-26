@@ -30,12 +30,27 @@ describe('createPackageNameMirrorsPathRule meta', () => {
   it('declares its own single message id', () => {
     expect(Object.keys(rule.meta?.messages ?? {})).toEqual(['mismatch']);
   });
+
+  it('carries the exact docs/languages content the rule is documented to have', () => {
+    const { meta } = rule;
+    if (meta === undefined) throw new Error('Unreachable: createPackageNameMirrorsPathRule always defines its own meta object literal.');
+    expect(meta.languages).toEqual(['json/json', 'json/jsonc']);
+    expect(meta.docs?.recommended).toBe(false);
+    expect(meta.docs?.description).toBe("Require a workspace package to declare the name its path derives, under the configured naming scope/separator.");
+    expect(meta.docs?.url).toBe('https://github.com/ExaDev/eslint-config/blob/main/src/rules/package-name-mirrors-path.ts');
+    expect(meta.messages?.mismatch).toBe('Package at "{{dir}}" declares "{{actual}}" but its path derives "{{expected}}".');
+  });
 });
 
 ruleTester.run('package-name-mirrors-path', rule, {
   valid: [
-    // A correctly scoped, drop-group-derived name. Also carries a nested object (an empty "dependencies") so the Object visitor fires a second time for a genuinely non-top-level object, exercising the parent.type !== 'Document' early return, not just the top-level Document case every other fixture here only ever reaches.
-    { code: JSON.stringify({ name: '@acme/clock-contract', dependencies: {} }), options: [GROUPS_AND_NAMING] },
+    // A correctly scoped, drop-group-derived name.
+    { code: JSON.stringify({ name: '@acme/clock-contract' }), options: [GROUPS_AND_NAMING] },
+    // A nested (non-top-level) object that itself looks exactly like a self-contained manifest (a real graph package's own declared name, mismatched) must never be analysed as if it were the file's own top-level manifest: only the Object visitor's own parent.type === 'Document' check stands between "the real top level" and "any nested object anywhere in the file". If bypassed, this nested object would be read as declaring "clock-system", whose expected name is "@acme/clock-system", and wrongly reported as a mismatch even though the top-level manifest itself is correctly named.
+    {
+      code: JSON.stringify({ name: '@acme/clock-contract', nested: { name: 'clock-system' } }),
+      options: [GROUPS_AND_NAMING],
+    },
     // A correctly scoped, keep-group-derived name.
     { code: JSON.stringify({ name: '@acme/test-database' }), options: [GROUPS_AND_NAMING] },
     // A manifest whose declared name is not a workspace member at all is skipped.

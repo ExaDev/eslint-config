@@ -1,33 +1,38 @@
 import { describe, expect, it } from 'vitest';
-import { readWorkspaceArchitectureOptions, resolveDependencyFields, workspaceArchitectureOptionsSchema } from './workspace-options';
+import { MISCONFIGURATION_MESSAGE, readWorkspaceArchitectureOptions, resolveDependencyFields, workspaceArchitectureOptionsSchema } from './workspace-options';
 
 const MINIMAL = { groups: [{ name: 'core' }] };
 
 describe('readWorkspaceArchitectureOptions', () => {
   it('throws for undefined options: there is no sensible default for "groups"', () => {
-    expect(() => readWorkspaceArchitectureOptions(undefined)).toThrow(/groups/);
+    expect(() => readWorkspaceArchitectureOptions(undefined)).toThrow(MISCONFIGURATION_MESSAGE);
   });
 
   it('throws for a non-object options value', () => {
-    expect(() => readWorkspaceArchitectureOptions('nonsense')).toThrow(/groups/);
-    expect(() => readWorkspaceArchitectureOptions(null)).toThrow(/groups/);
-    expect(() => readWorkspaceArchitectureOptions(['array'])).toThrow(/groups/);
+    expect(() => readWorkspaceArchitectureOptions('nonsense')).toThrow(MISCONFIGURATION_MESSAGE);
+    // Not merely a loose message match: without the null check specifically, isRecord(null) would wrongly accept null as a record (typeof null === 'object'), and the very next line would then crash reading `null['groups']` with a native "Cannot read properties of null" TypeError instead of this function's own intended message. That is a genuinely different failure, and this exact assertion is what tells the two apart.
+    expect(() => readWorkspaceArchitectureOptions(null)).toThrow(MISCONFIGURATION_MESSAGE);
+    expect(() => readWorkspaceArchitectureOptions(['array'])).toThrow(MISCONFIGURATION_MESSAGE);
   });
 
   it('throws when "groups" is missing', () => {
-    expect(() => readWorkspaceArchitectureOptions({})).toThrow(/groups/);
+    expect(() => readWorkspaceArchitectureOptions({})).toThrow(MISCONFIGURATION_MESSAGE);
   });
 
   it('throws when "groups" is not an array', () => {
-    expect(() => readWorkspaceArchitectureOptions({ groups: 'core' })).toThrow(/groups/);
+    expect(() => readWorkspaceArchitectureOptions({ groups: 'core' })).toThrow(MISCONFIGURATION_MESSAGE);
   });
 
   it('throws when a group has no "name"', () => {
-    expect(() => readWorkspaceArchitectureOptions({ groups: [{ rank: 0 }] })).toThrow(/groups/);
+    expect(() => readWorkspaceArchitectureOptions({ groups: [{ rank: 0 }] })).toThrow(MISCONFIGURATION_MESSAGE);
   });
 
   it('throws when a "groups" element is not an object at all', () => {
-    expect(() => readWorkspaceArchitectureOptions({ groups: ['core'] })).toThrow(/groups/);
+    expect(() => readWorkspaceArchitectureOptions({ groups: ['core'] })).toThrow(MISCONFIGURATION_MESSAGE);
+  });
+
+  it('throws when only SOME "groups" elements are valid: every one must satisfy isGroupSpec, not merely one of them', () => {
+    expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'core' }, { rank: 0 }] })).toThrow(MISCONFIGURATION_MESSAGE);
   });
 
   it('accepts the minimal valid shape: one group with only a name', () => {
@@ -52,7 +57,8 @@ describe('readWorkspaceArchitectureOptions', () => {
   });
 
   it('throws for a non-string "root"', () => {
-    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, root: 5 })).toThrow(/groups/);
+    const notAString = 5;
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, root: notAString })).toThrow(MISCONFIGURATION_MESSAGE);
   });
 
   it('passes through a valid "packages" string array', () => {
@@ -61,11 +67,11 @@ describe('readWorkspaceArchitectureOptions', () => {
 
   it('throws for a "packages" array containing a non-string', () => {
     const notAString = 5;
-    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, packages: ['core/*', notAString] })).toThrow(/groups/);
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, packages: ['core/*', notAString] })).toThrow(MISCONFIGURATION_MESSAGE);
   });
 
   it('throws for a non-array "packages"', () => {
-    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, packages: 'core/*' })).toThrow(/groups/);
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, packages: 'core/*' })).toThrow(MISCONFIGURATION_MESSAGE);
   });
 
   it('passes through a valid "dependencyFields" string array', () => {
@@ -76,7 +82,8 @@ describe('readWorkspaceArchitectureOptions', () => {
   });
 
   it('throws for a non-array "dependencyFields"', () => {
-    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, dependencyFields: 5 })).toThrow(/groups/);
+    const notAnArray = 5;
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, dependencyFields: notAnArray })).toThrow(MISCONFIGURATION_MESSAGE);
   });
 
   it('accepts a group with every optional field set', () => {
@@ -90,20 +97,31 @@ describe('readWorkspaceArchitectureOptions', () => {
   });
 
   it('throws for a group whose "path" is not a string', () => {
-    expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'core', path: 5 }] })).toThrow(/groups/);
+    const notAString = 5;
+    expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'core', path: notAString }] })).toThrow(MISCONFIGURATION_MESSAGE);
   });
 
   it('throws for a group whose "rank" is not a number', () => {
-    expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'core', rank: '0' }] })).toThrow(/groups/);
+    expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'core', rank: '0' }] })).toThrow(MISCONFIGURATION_MESSAGE);
   });
 
   it('throws for a group whose "slice" is neither shape', () => {
-    expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'core', slice: {} }] })).toThrow(/groups/);
-    expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'core', slice: 'segment-0' }] })).toThrow(/groups/);
+    expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'core', slice: {} }] })).toThrow(MISCONFIGURATION_MESSAGE);
+    expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'core', slice: 'segment-0' }] })).toThrow(MISCONFIGURATION_MESSAGE);
   });
 
   it('throws for a group whose "naming" is not one of the three strategies', () => {
-    expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'core', naming: 'nonsense' }] })).toThrow(/groups/);
+    expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'core', naming: 'nonsense' }] })).toThrow(MISCONFIGURATION_MESSAGE);
+  });
+
+  it("accepts a group with naming explicitly set to 'drop-group' (not merely relying on the default)", () => {
+    const groups = [{ name: 'core', naming: 'drop-group' as const }];
+    expect(readWorkspaceArchitectureOptions({ groups }).groups).toEqual(groups);
+  });
+
+  it("accepts a group with naming explicitly set to 'basename'", () => {
+    const groups = [{ name: 'core', naming: 'basename' as const }];
+    expect(readWorkspaceArchitectureOptions({ groups }).groups).toEqual(groups);
   });
 
   it('passes through valid "nameRanks"', () => {
@@ -112,8 +130,12 @@ describe('readWorkspaceArchitectureOptions', () => {
   });
 
   it('throws for a "nameRanks" entry missing "pattern" or "rank"', () => {
-    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, nameRanks: [{ rank: 0 }] })).toThrow(/groups/);
-    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, nameRanks: [{ pattern: 'x' }] })).toThrow(/groups/);
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, nameRanks: [{ rank: 0 }] })).toThrow(MISCONFIGURATION_MESSAGE);
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, nameRanks: [{ pattern: 'x' }] })).toThrow(MISCONFIGURATION_MESSAGE);
+  });
+
+  it('throws when only SOME "nameRanks" entries are valid', () => {
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, nameRanks: [{ pattern: 'x', rank: 0 }, { rank: 1 }] })).toThrow(MISCONFIGURATION_MESSAGE);
   });
 
   it('passes through a valid "defaultRank"', () => {
@@ -122,7 +144,7 @@ describe('readWorkspaceArchitectureOptions', () => {
   });
 
   it('throws for a non-number "defaultRank"', () => {
-    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, defaultRank: '3' })).toThrow(/groups/);
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, defaultRank: '3' })).toThrow(MISCONFIGURATION_MESSAGE);
   });
 
   it('passes through valid "rankSkip"', () => {
@@ -131,19 +153,23 @@ describe('readWorkspaceArchitectureOptions', () => {
   });
 
   it('throws for a "rankSkip" missing "maxDistance"', () => {
-    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, rankSkip: { exemptRanks: [0] } })).toThrow(/groups/);
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, rankSkip: { exemptRanks: [0] } })).toThrow(MISCONFIGURATION_MESSAGE);
   });
 
   it('throws for a "rankSkip" that is not an object at all', () => {
-    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, rankSkip: 'nonsense' })).toThrow(/groups/);
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, rankSkip: 'nonsense' })).toThrow(MISCONFIGURATION_MESSAGE);
   });
 
   it('throws for a "rankSkip" whose "exemptRanks" contains a non-number', () => {
-    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, rankSkip: { maxDistance: 1, exemptRanks: ['0'] } })).toThrow(/groups/);
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, rankSkip: { maxDistance: 1, exemptRanks: ['0'] } })).toThrow(MISCONFIGURATION_MESSAGE);
+  });
+
+  it('throws when only SOME "rankSkip.exemptRanks" entries are numbers', () => {
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, rankSkip: { maxDistance: 1, exemptRanks: [0, '1'] } })).toThrow(MISCONFIGURATION_MESSAGE);
   });
 
   it('throws for a "rankSkip" whose "exemptRanks" is not an array', () => {
-    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, rankSkip: { maxDistance: 1, exemptRanks: 0 } })).toThrow(/groups/);
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, rankSkip: { maxDistance: 1, exemptRanks: 0 } })).toThrow(MISCONFIGURATION_MESSAGE);
   });
 
   it('passes through valid "isolatedGroups"', () => {
@@ -151,16 +177,30 @@ describe('readWorkspaceArchitectureOptions', () => {
     expect(readWorkspaceArchitectureOptions({ ...MINIMAL, isolatedGroups }).isolatedGroups).toEqual(isolatedGroups);
   });
 
-  it('throws for an "isolatedGroups" pair of the wrong length', () => {
-    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, isolatedGroups: [['features']] })).toThrow(/groups/);
+  it('throws for an "isolatedGroups" pair that is too short', () => {
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, isolatedGroups: [['features']] })).toThrow(MISCONFIGURATION_MESSAGE);
   });
 
-  it('throws for an "isolatedGroups" pair with a non-string entry', () => {
-    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, isolatedGroups: [['features', 1]] })).toThrow(/groups/);
+  it('throws for an "isolatedGroups" pair that is too long, even though its first two entries are both genuine strings', () => {
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, isolatedGroups: [['features', 'verticals', 'extra']] })).toThrow(
+      MISCONFIGURATION_MESSAGE,
+    );
+  });
+
+  it('throws for an "isolatedGroups" pair whose second entry is not a string', () => {
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, isolatedGroups: [['features', 1]] })).toThrow(MISCONFIGURATION_MESSAGE);
+  });
+
+  it('throws for an "isolatedGroups" pair whose first entry is not a string, even though its second is', () => {
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, isolatedGroups: [[1, 'features']] })).toThrow(MISCONFIGURATION_MESSAGE);
+  });
+
+  it('throws when only SOME "isolatedGroups" pairs are valid', () => {
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, isolatedGroups: [['a', 'b'], ['only-one']] })).toThrow(MISCONFIGURATION_MESSAGE);
   });
 
   it('throws for a non-array "isolatedGroups"', () => {
-    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, isolatedGroups: 'features' })).toThrow(/groups/);
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, isolatedGroups: 'features' })).toThrow(MISCONFIGURATION_MESSAGE);
   });
 
   it('passes through valid "naming" with both fields', () => {
@@ -173,15 +213,15 @@ describe('readWorkspaceArchitectureOptions', () => {
   });
 
   it('throws for a "naming.scope" that is not a string', () => {
-    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, naming: { scope: 5 } })).toThrow(/groups/);
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, naming: { scope: 5 } })).toThrow(MISCONFIGURATION_MESSAGE);
   });
 
   it('throws for a "naming.separator" that is not a string', () => {
-    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, naming: { separator: 5 } })).toThrow(/groups/);
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, naming: { separator: 5 } })).toThrow(MISCONFIGURATION_MESSAGE);
   });
 
   it('throws for a non-object "naming"', () => {
-    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, naming: 'scoped' })).toThrow(/groups/);
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, naming: 'scoped' })).toThrow(MISCONFIGURATION_MESSAGE);
   });
 });
 

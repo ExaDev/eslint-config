@@ -6,6 +6,7 @@ import {
   findOwningGroup,
   getWorkspaceGraph,
   loadWorkspaceGraph,
+  readDeclaredManifest,
   resetWorkspaceGraphCache,
   resolveWorkspacePackagePatterns,
   resolveWorkspaceRoot,
@@ -51,6 +52,18 @@ describe('findOwningGroup', () => {
     const withCoreLike: readonly GroupSpec[] = [{ name: 'core' }, { name: 'core-extra' }];
     expect(findOwningGroup('core-extra-thing/pkg', withCoreLike)).toBeUndefined();
   });
+
+  it('matches a package that sits directly at a group\'s own root, with no further sub-segment', () => {
+    expect(findOwningGroup('core', groups)?.name).toBe('core');
+  });
+
+  it('keeps the first-declared group when two groups resolve to equal-length matching paths', () => {
+    const tiedGroups: readonly GroupSpec[] = [
+      { name: 'alpha', path: 'shared' },
+      { name: 'beta', path: 'shared' },
+    ];
+    expect(findOwningGroup('shared/pkg', tiedGroups)?.name).toBe('alpha');
+  });
 });
 
 describe('deriveRank', () => {
@@ -92,6 +105,12 @@ describe('deriveRank', () => {
     const options: WorkspaceArchitectureOptions = { groups: [rankless] };
     expect(() => deriveRank('store-cli', rankless, options)).toThrow(/no rank could be resolved/);
   });
+
+  it("matches a nameRanks pattern's unicode-property escape, which only parses under the regex's own 'u' flag", () => {
+    // '\\p{L}' (a Unicode letter) is only recognised as a property escape under the 'u' flag; without it, most engines treat '\\p' as a plain identity escape matching a literal "p" instead, which "𝔘" (a single astral-plane letter, two UTF-16 code units) is not. This also exercises the 'u' flag's own "." matches one whole codepoint, not one UTF-16 unit" behaviour: '^.$' only matches this two-code-unit string as a single character under 'u'.
+    const options: WorkspaceArchitectureOptions = { groups: [group], nameRanks: [{ pattern: '^\\p{L}$', rank: CONTRACT_NAME_RANK }] };
+    expect(deriveRank('𝔘', group, options)).toBe(CONTRACT_NAME_RANK);
+  });
 });
 
 describe('resolveWorkspaceRoot', () => {
@@ -128,8 +147,11 @@ describe('resolveWorkspacePackagePatterns', () => {
   });
 
   it('throws when packages is omitted and no pnpm-workspace.yaml exists at the root', () => {
+    // The exact message, not a loose substring match: fakeFs's own readFileSync ENOENT message also happens to embed the literal path "/root/pnpm-workspace.yaml" (it is, after all, the very path this guard exists to check first), so a /pnpm-workspace\.yaml/ regex alone cannot tell "the intended guard fired" apart from "the guard never fired and the code fell through to a real read failure that merely mentions the same filename".
     const fs = fakeFs({}, {});
-    expect(() => resolveWorkspacePackagePatterns(fs, '/root', undefined)).toThrow(/pnpm-workspace\.yaml/);
+    expect(() => resolveWorkspacePackagePatterns(fs, '/root', undefined)).toThrow(
+      '@exadev/eslint-config: no "pnpm-workspace.yaml" found at workspace root "/root", and no "packages" option was given.',
+    );
   });
 
   it('reads the real fixture tree\'s own pnpm-workspace.yaml', () => {
@@ -244,6 +266,26 @@ describe('buildWorkspaceGraph (fabricated tree)', () => {
     expect(graph.packagesByName.get('lonely-tool')?.slice).toBeUndefined();
   });
 
+  it('a namePrefix package whose name genuinely does not match any real, non-empty known slice resolves to an undefined slice', () => {
+    // Unlike the case above, knownSlices here is genuinely non-empty ('store', from the features group below): this exercises sliceByNamePrefix's own loop body actually running and rejecting a real candidate, not merely short-circuiting on an empty set.
+    const fs = fakeFs(
+      {
+        '/root/pnpm-workspace.yaml': "packages:\n  - 'features/*/*'\n  - 'targets/*'\n",
+        '/root/features/store/api/package.json': packageJson('store-api'),
+        '/root/targets/billing-thing/package.json': packageJson('billing-thing'),
+      },
+      {
+        '/root': ['features', 'targets'],
+        '/root/features': ['store'],
+        '/root/features/store': ['api'],
+        '/root/targets': ['billing-thing'],
+      },
+    );
+
+    const graph = buildWorkspaceGraph(fs, '/root', { groups });
+    expect(graph.packagesByName.get('billing-thing')?.slice).toBeUndefined();
+  });
+
   it('a matched directory outside every declared group is silently skipped', () => {
     const fs = fakeFs(
       {
@@ -279,6 +321,20 @@ describe('buildWorkspaceGraph (fabricated tree)', () => {
       { '/root': ['core'], '/root/core': ['broken'] },
     );
 
+    const graph = buildWorkspaceGraph(fs, '/root', { groups });
+    expect(graph.packagesByName.size).toBe(0);
+  });
+
+  it('a matched directory whose package.json is exactly JSON null is silently skipped, not treated as a record (typeof null is "object")', () => {
+    const fs = fakeFs(
+      {
+        '/root/pnpm-workspace.yaml': "packages:\n  - 'core/*'\n",
+        '/root/core/broken/package.json': JSON.stringify(null),
+      },
+      { '/root': ['core'], '/root/core': ['broken'] },
+    );
+
+    expect(() => buildWorkspaceGraph(fs, '/root', { groups })).not.toThrow();
     const graph = buildWorkspaceGraph(fs, '/root', { groups });
     expect(graph.packagesByName.size).toBe(0);
   });
@@ -348,6 +404,18 @@ describe('buildWorkspaceGraph (fabricated tree)', () => {
     expect(graph.packagesByName.get('store-cli')).toMatchObject({ group: 'targets', rank: 3, slice: 'store' });
     expect(graph.packagesByName.get('test-database')).toMatchObject({ group: 'test', rank: 4, slice: undefined });
     expect(graph.dependencyNamesByName.get('store-api-router')?.slice().sort()).toEqual(['kv-adapter-memory', 'store-api-contract']);
+  });
+});
+
+describe('readDeclaredManifest', () => {
+  it('reads the declared name and collects dependency names only from the configured fields, with no extra entries', () => {
+    const fs = fakeFs({ '/root/core/a/package.json': packageJson('a', { b: '1', c: '2' }) }, {});
+    expect(readDeclaredManifest(fs, '/root/core/a', ['dependencies'])).toEqual({ name: 'a', dependencyNames: ['b', 'c'] });
+  });
+
+  it('collects nothing when none of the configured fields are present', () => {
+    const fs = fakeFs({ '/root/core/a/package.json': JSON.stringify({ name: 'a' }) }, {});
+    expect(readDeclaredManifest(fs, '/root/core/a', ['dependencies'])).toEqual({ name: 'a', dependencyNames: [] });
   });
 });
 
