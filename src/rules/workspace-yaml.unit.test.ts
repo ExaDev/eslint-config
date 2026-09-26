@@ -89,9 +89,10 @@ describe('findMatchingQuoteEnd', () => {
     expect(findMatchingQuoteEnd("a''b", 0, "'")).toBe(-1);
   });
 
-  it('never applies the single-quote-only doubling escape to a double-quoted scalar: two adjacent "\\"" characters close at the very first one', () => {
+  it('never applies the single-quote-only doubling escape to a double-quoted scalar, even when the doubling check\'s own SECOND half (a literal "\'" right after) would otherwise coincidentally be satisfied', () => {
+    // The doubling check's own first half is "quote === '\''" (a hard-coded single-quote literal, not a comparison against `quote`), so quote="\"" must make it false on its own: a mutant forcing that first half to always-true is only distinguishable by a case whose SECOND half a real single-quote doubling check would also accept, here a literal "'" sitting right after the double quote.
     const firstClosingQuoteIndex = 1;
-    expect(findMatchingQuoteEnd('a""b', 0, '"')).toBe(firstClosingQuoteIndex);
+    expect(findMatchingQuoteEnd(`a"'b`, 0, '"')).toBe(firstClosingQuoteIndex);
   });
 });
 
