@@ -8,6 +8,8 @@ import { buildPackageJsonKeyOrderConfig } from './package-json-key-order';
 import { buildReactConfig } from './react';
 import recommendedTypeChecked from './recommended-type-checked';
 import { toPublicConfigArray } from './to-public-config-array';
+import { workspaceArchitectureConfig } from './workspace-architecture';
+import type { WorkspaceArchitectureOptions } from './rules/workspace-options';
 
 export interface ExadevConfigOptions {
   readonly react?: boolean;
@@ -16,6 +18,8 @@ export interface ExadevConfigOptions {
   readonly packageJsonKeyOrder?: boolean;
   // true: derive ESLint's ignores from .gitignore, throwing if no .gitignore exists. false: never derive it. undefined (the default): auto-detect -- on if the consumer's project has a .gitignore, silently off if it doesn't (a project with no .gitignore at all -- no version control set up yet -- has nothing for this to read).
   readonly gitignore?: boolean;
+  // Off unless given (unlike every tri-state option above): workspace architecture rules require real per-repo configuration (a "groups" list has no sensible default), so there is no auto-detected middle state. See workspaceArchitectureConfig in src/workspace-architecture.ts.
+  readonly workspaceArchitecture?: WorkspaceArchitectureOptions;
 }
 
 // jsdocAndTsdoc and jsonCanonicalConfig are bundled unconditionally, the same way recommendedTypeChecked itself is -- unlike react/nextjs below, neither is a consumer framework choice with its own optional peer dependency to resolve; eslint-plugin-jsdoc, eslint-plugin-tsdoc, and eslint-plugin-json-canonical are all plain dependencies of this package (see package.json), so every consumer already has them the moment they depend on this package at all.
@@ -30,6 +34,7 @@ export function exadevConfig(options: ExadevConfigOptions = {}, ...userConfigs: 
     ...buildReactConfig({ enabled: options.react }),
     ...buildNextjsConfig({ enabled: options.nextjs }),
     ...buildPackageJsonKeyOrderConfig({ enabled: options.packageJsonKeyOrder }),
+    ...(options.workspaceArchitecture !== undefined ? workspaceArchitectureConfig(options.workspaceArchitecture) : []),
     ...userConfigs,
   ];
   return toPublicConfigArray(built);

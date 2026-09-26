@@ -7,6 +7,7 @@ import barrelDirectSiblingsOnly from './rules/barrel-direct-siblings-only';
 import barrelPolicy from './rules/barrel-policy';
 import noArrayIsarrayMutation from './rules/no-array-isarray-mutation';
 import noControlFlow from './rules/no-control-flow';
+import noDependencyCycle from './rules/no-dependency-cycle';
 import noEnumNumberWidening from './rules/no-enum-number-widening';
 import noEnumReverseLookupWidening from './rules/no-enum-reverse-lookup-widening';
 import noIndexFiles from './rules/no-index-files';
@@ -18,7 +19,9 @@ import noObjectAssign from './rules/no-object-assign';
 import noPointlessReassignment from './rules/no-pointless-reassignment';
 import noSetInstanceofMutation from './rules/no-set-instanceof-mutation';
 import noSideEffectsInIndex from './rules/no-side-effects-in-index';
+import noUphillDependency from './rules/no-uphill-dependency';
 import packageJsonKeyOrder from './rules/package-json-key-order';
+import packageNameMirrorsPath from './rules/package-name-mirrors-path';
 import preferNumericSortCompare from './rules/prefer-numeric-sort-compare';
 import preferOptionsObjectParam from './rules/prefer-options-object-param';
 import preferReadonlyArrayParam from './rules/prefer-readonly-array-param';
@@ -43,6 +46,7 @@ const plugin: TSESLint.FlatConfig.Plugin = {
     'barrel-policy': barrelPolicy,
     'no-array-isarray-mutation': noArrayIsarrayMutation,
     'no-control-flow': noControlFlow,
+    'no-dependency-cycle': noDependencyCycle,
     'no-enum-number-widening': noEnumNumberWidening,
     'no-enum-reverse-lookup-widening': noEnumReverseLookupWidening,
     'no-index-files': noIndexFiles,
@@ -54,7 +58,9 @@ const plugin: TSESLint.FlatConfig.Plugin = {
     'no-pointless-reassignment': noPointlessReassignment,
     'no-set-instanceof-mutation': noSetInstanceofMutation,
     'no-side-effects-in-index': noSideEffectsInIndex,
+    'no-uphill-dependency': noUphillDependency,
     'package-json-key-order': packageJsonKeyOrder,
+    'package-name-mirrors-path': packageNameMirrorsPath,
     'prefer-numeric-sort-compare': preferNumericSortCompare,
     'prefer-options-object-param': preferOptionsObjectParam,
     'prefer-readonly-array-param': preferReadonlyArrayParam,
