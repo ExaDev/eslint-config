@@ -124,6 +124,27 @@ describe('checkDependencies', () => {
     expect(violations).toHaveLength(1);
     expect(violations[0]?.dependencyName).toBe('kv-adapter-memory');
   });
+
+  // isIsolatedPair's own three-way match (first===groupA && second===groupB) || (first===groupB && second===groupA) can be satisfied "accidentally" by a pair sharing only ONE element with a genuinely unrelated group: each case below shares exactly one element with the declared pair ['pair-a', 'pair-b'] while the actual (self, dependency) groups are not that pair at all, proving every one of the four equality comparisons is load-bearing on its own, not just the overall disjunction.
+  describe('isolatedGroups: a pair sharing only one element with an unrelated group combination is not isolated', () => {
+    const pairA = pkg({ name: 'pair-a-pkg', group: 'pair-a' });
+    const pairB = pkg({ name: 'pair-b-pkg', group: 'pair-b' });
+    const unrelated = pkg({ name: 'unrelated-pkg', group: 'unrelated' });
+    const isolatedGraph = new Map([pairA, pairB, unrelated].map((entry) => [entry.name, entry]));
+    const isolatedGroups: readonly (readonly [string, string])[] = [['pair-a', 'pair-b']];
+
+    it('self in an unrelated group depending on the pair\'s own "second" group is not isolated', () => {
+      expect(checkDependencies('unrelated-pkg', unrelated, ['pair-b-pkg'], { graph: isolatedGraph, isolatedGroups })).toEqual([]);
+    });
+
+    it('self in the pair\'s own "first" group depending on an unrelated group is not isolated', () => {
+      expect(checkDependencies('pair-a-pkg', pairA, ['unrelated-pkg'], { graph: isolatedGraph, isolatedGroups })).toEqual([]);
+    });
+
+    it('self in the pair\'s own "second" group depending on an unrelated group is not isolated', () => {
+      expect(checkDependencies('pair-b-pkg', pairB, ['unrelated-pkg'], { graph: isolatedGraph, isolatedGroups })).toEqual([]);
+    });
+  });
 });
 
 describe('dependencyPathExists', () => {
@@ -196,5 +217,14 @@ describe('expectedPackageName', () => {
 
   it("a multi-segment group path is dropped in full under 'drop-group'", () => {
     expect(expectedPackageName('product/store/store-application-context', nestedPath, { scope: '@acme' })).toBe('@acme/store-store-application-context');
+  });
+
+  it('drops an empty segment from a leading slash in relativeDir, rather than shifting every later segment', () => {
+    expect(expectedPackageName('/core/clock/contract', core, { scope: '@exacap' })).toBe('@exacap/clock-contract');
+  });
+
+  it("tolerates a trailing slash in a group's own path, rather than shifting the drop-group boundary by one", () => {
+    const trailingSlashGroup: GroupSpec = { name: 'core', path: 'core/' };
+    expect(expectedPackageName('core/clock/contract', trailingSlashGroup, { scope: '@exacap' })).toBe('@exacap/clock-contract');
   });
 });
