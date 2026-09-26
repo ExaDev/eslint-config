@@ -4,6 +4,7 @@ import { resolveWorkspacePackageDirs } from './workspace-glob';
 import { splitPathSegments } from './workspace-path';
 import { readWorkspacePackages } from './workspace-yaml';
 import { resolveDependencyFields, type GroupSpec, type WorkspaceArchitectureOptions } from './workspace-options';
+import { assertIsError } from './workspace-errors';
 
 /**
  * One workspace package's structural facts: its declared manifest name (never assumed to equal its own directory name, the assumption that made the monorepo-template original's graph silently key packages by folder name instead), which declared group it structurally belongs to, its resolved rank, and its resolved slice (undefined for a group with no slice configuration at all, such as a cross-cutting core group).
@@ -50,11 +51,11 @@ export function findOwningGroup(relativeDir: string, groups: readonly GroupSpec[
 }
 
 /**
- * The name-role model's own rank classification: nameRanks (first pattern match, checked in declaration order) takes priority over the package's structural group.rank, which itself takes priority over defaultRank. Throws when none of the three resolves anything at all, since an unranked package is a genuine configuration gap, not a package this rule can silently skip (skipping it would silently stop checking every one of its dependency edges).
+ * The name-role model's own rank classification: nameRanks (first pattern match, checked in declaration order) takes priority over the package's structural group.rank, which itself takes priority over defaultRank. `declaredName` is the package's own genuine `package.json` "name", never a directory-derived stand-in: pnpm allows a workspace package to declare no name at all, and such a package has nothing for a nameRanks pattern to match (the README states nameRanks checks "a package's declared name", not its directory), so a nameless package skips nameRanks entirely and falls straight through to its group's rank or defaultRank, the same as a package whose name simply matched no pattern. Throws when none of the three resolves anything at all, since an unranked package is a genuine configuration gap, not a package this rule can silently skip (skipping it would silently stop checking every one of its dependency edges).
  */
-export function deriveRank(declaredName: string, group: GroupSpec, options: WorkspaceArchitectureOptions): number {
+export function deriveRank(declaredName: string | undefined, group: GroupSpec, options: WorkspaceArchitectureOptions): number {
   // An explicit undefined check rather than a `?? []` fallback: "nameRanks omitted" and "nameRanks configured but nothing in it matches this name" are the same real answer (fall through to group.rank/defaultRank), so this states that directly instead of manufacturing an empty array purely to make the loop below have something to iterate zero times over.
-  if (options.nameRanks !== undefined) {
+  if (declaredName !== undefined && options.nameRanks !== undefined) {
     for (const rule of options.nameRanks) {
       if (new RegExp(rule.pattern, 'u').test(declaredName)) return rule.rank;
     }
@@ -62,7 +63,7 @@ export function deriveRank(declaredName: string, group: GroupSpec, options: Work
   if (group.rank !== undefined) return group.rank;
   if (options.defaultRank !== undefined) return options.defaultRank;
   throw new Error(
-    `@exadev/eslint-config: no rank could be resolved for workspace package "${declaredName}" (group "${group.name}"). Give the group a "rank", add a matching "nameRanks" pattern, or set "defaultRank".`,
+    `@exadev/eslint-config: no rank could be resolved for workspace package "${declaredName ?? '(no declared name)'}" (group "${group.name}"). Give the group a "rank", add a matching "nameRanks" pattern, or set "defaultRank".`,
   );
 }
 
@@ -108,13 +109,14 @@ export interface DeclaredManifest {
  */
 export function readDeclaredManifest(fs: WorkspaceFs, absoluteDir: string, dependencyFields: readonly string[]): DeclaredManifest | undefined {
   const manifestPath = join(absoluteDir, 'package.json');
+  const raw = fs.readFileSync(manifestPath);
   let parsed: unknown;
   try {
-    parsed = JSON.parse(fs.readFileSync(manifestPath));
+    parsed = JSON.parse(raw);
   } catch (error) {
-    // JSON.parse's own SyntaxError never names the file it was reading, only the byte offset inside whatever string it was given; wrapped here, at the one place that string comes from a real path, so a malformed manifest anywhere in a large workspace can actually be found rather than chased through a bare "Expected double-quoted property name... position 25".
-    const reason = error instanceof Error ? error.message : String(error);
-    throw new Error(`@exadev/eslint-config: could not parse "${manifestPath}" as JSON: ${reason}`, { cause: error });
+    // JSON.parse's own SyntaxError never names the file it was reading, only the byte offset inside whatever string it was given; wrapped here, at the one place that string comes from a real path, so a malformed manifest anywhere in a large workspace can actually be found rather than chased through a bare "Expected double-quoted property name... position 25". readFileSync above sits outside this try specifically so a read failure (EACCES, a race that removes the file after resolveWorkspacePackageDirs confirmed it) is never misreported as a JSON parse error.
+    assertIsError(error, `JSON.parse while parsing "${manifestPath}"`);
+    throw new Error(`@exadev/eslint-config: could not parse "${manifestPath}" as JSON: ${error.message}`, { cause: error });
   }
   if (!isRecord(parsed)) return undefined;
   const name = parsed['name'];
@@ -149,9 +151,13 @@ export function resolveWorkspaceRoot(fs: WorkspaceFs, filename: string, rootOpti
 
 /**
  * The workspace-root-relative, forward-slash-joined directory the manifest at `filename` (context.filename, the file ESLint is currently linting) sits in: computed directly from the filesystem, never trusted from a declared "name" field. Every workspace-architecture rule uses this to confirm the manifest it is linting is genuinely the SAME package.json buildWorkspaceGraph resolved for whatever graph entry it is about to check, since a name is only ever unique within the graph's own build (buildWorkspaceGraph's own duplicate-name throw enforces that), never across a stale or duplicated copy of a manifest sitting elsewhere in the tree outside the workspace's own package globs (a build output directory that copies its source package's package.json verbatim, say). A rule that skipped this check would check that copy under the real package's own graph entry: reporting edges the real package never declared, or letting a single real violation double-report once per copy.
+ *
+ * Both `root` and `filename`'s own directory are resolved through `fs.realpathSync` before comparing: an explicit `root` option and ESLint's own `context.filename` can spell the identical real directory two different ways (a symlink anywhere on either path, a macOS /tmp vs /private/tmp cwd being the recurring real case), and a purely lexical `relative()` between the two spellings would compute a path nowhere near the graph entry's own relativeDir, silently making every workspace-architecture rule report nothing for a perfectly real, correctly-configured package. Comparing realpaths instead makes the two spellings agree while still catching a genuinely different directory (a stale or duplicated manifest copy) as genuinely different.
  */
-export function manifestRelativeDir(root: string, filename: string): string {
-  return relative(root, dirname(resolve(filename))).split(sep).join('/');
+export function manifestRelativeDir(fs: WorkspaceFs, root: string, filename: string): string {
+  const realRoot = fs.realpathSync(resolve(root));
+  const realManifestDir = fs.realpathSync(dirname(resolve(filename)));
+  return relative(realRoot, realManifestDir).split(sep).join('/');
 }
 
 function readPackagesFromYaml(fs: WorkspaceFs, root: string): readonly string[] {
@@ -178,7 +184,10 @@ export function resolveWorkspacePackagePatterns(fs: WorkspaceFs, root: string, p
 interface Candidate {
   readonly relativeDir: string;
   readonly group: GroupSpec;
+  // The graph's own identity key for this package: its genuine declared "name" when it has one, or its relativeDir when it does not (pnpm allows a workspace package to declare no name at all). Used for packagesByName/dependencyNamesByName lookups, where SOME stable, unique key is needed regardless of whether the package declares a name.
   readonly declaredName: string;
+  // The package's genuinely declared "name" verbatim, undefined for one that declares none: kept separate from declaredName above because deriveRank's nameRanks and sliceByNamePrefix both match a pattern against an actual declared name (the README's own wording), never against a directory path standing in for one, so they must be able to tell "no name" apart from declaredName's own directory fallback.
+  readonly name: string | undefined;
   readonly dependencyNames: readonly string[];
 }
 
@@ -198,7 +207,7 @@ function collectCandidates(fs: WorkspaceFs, root: string, options: WorkspaceArch
     if (manifest === undefined) continue;
     // pnpm allows a workspace package to declare no "name" at all; nothing else can then depend on it BY NAME, but its own outgoing dependency edges still need checking, so it is keyed by its own relativeDir instead of being dropped from the graph the way a genuinely unusable manifest (readDeclaredManifest returning undefined above) is.
     const declaredName = manifest.name ?? relativeDir;
-    candidates.push({ relativeDir, group, declaredName, dependencyNames: manifest.dependencyNames });
+    candidates.push({ relativeDir, group, declaredName, name: manifest.name, dependencyNames: manifest.dependencyNames });
   }
   return candidates;
 }
@@ -217,7 +226,9 @@ function collectKnownSlices(candidates: readonly Candidate[]): ReadonlySet<strin
 function deriveSlice(candidate: Candidate, knownSlices: ReadonlySet<string>): string | undefined {
   const { slice } = candidate.group;
   if (slice === undefined) return undefined;
-  return 'segment' in slice ? sliceBySegment(candidate.relativeDir, candidate.group, slice.segment) : sliceByNamePrefix(candidate.declaredName, knownSlices);
+  if ('segment' in slice) return sliceBySegment(candidate.relativeDir, candidate.group, slice.segment);
+  // A 'namePrefix' slice matches a KNOWN slice value against the package's own declared name; a nameless package (candidate.name undefined, pnpm allows omitting it) has no name for that prefix match to run against at all, so it resolves to no slice, rather than matching against its declaredName's own relativeDir fallback the way deriveRank's nameRanks would otherwise be tempted to (the same inconsistency this candidate.name/declaredName split exists to prevent).
+  return candidate.name === undefined ? undefined : sliceByNamePrefix(candidate.name, knownSlices);
 }
 
 /**
@@ -238,7 +249,7 @@ export function buildWorkspaceGraph(fs: WorkspaceFs, root: string, options: Work
       );
     }
 
-    const rank = deriveRank(candidate.declaredName, candidate.group, options);
+    const rank = deriveRank(candidate.name, candidate.group, options);
     const slice = deriveSlice(candidate, knownSlices);
     packagesByName.set(candidate.declaredName, { name: candidate.declaredName, relativeDir: candidate.relativeDir, group: candidate.group.name, rank, slice });
     dependencyNamesByCandidate.set(candidate.declaredName, candidate.dependencyNames);
@@ -285,4 +296,12 @@ export type LoadWorkspaceGraphFn = (filename: string, options: WorkspaceArchitec
 export function loadWorkspaceGraph(filename: string, options: WorkspaceArchitectureOptions): WorkspaceGraph {
   const root = resolveWorkspaceRoot(realWorkspaceFs, filename, options.root);
   return getWorkspaceGraph(realWorkspaceFs, root, options);
+}
+
+/**
+ * The two test seams every workspace-architecture rule's own factory (createNoUphillDependencyRule, createNoDependencyCycleRule, createPackageNameMirrorsPathRule) accepts, bundled into one destructured `deps` parameter rather than two trailing optional positional ones (this package's own `prefer-options-object-param` rule): `loadGraph` lets a test inject a fabricated WorkspaceGraph with zero real filesystem I/O, and `fs` is the WorkspaceFs manifestRelativeDir's own realpath resolution runs through, needed only because that resolution would otherwise hit the real filesystem for a rule test's fabricated (non-existent) root and filenames.
+ */
+export interface WorkspaceRuleDeps {
+  readonly loadGraph?: LoadWorkspaceGraphFn;
+  readonly fs?: WorkspaceFs;
 }
