@@ -1,6 +1,7 @@
 // A minimal reader for pnpm-workspace.yaml's own "packages:" key, deliberately supporting only the one form pnpm's own documentation and every real pnpm-workspace.yaml this package has seen actually uses: a block sequence of quoted or bare glob strings, one per line, indented under the key. A full YAML parser is not a dependency worth taking for a single list of strings; flow style ("packages: ['a', 'b']" or a bare scalar) is rejected outright rather than silently misparsed, naming the "packages" rule option as the escape hatch for a workspace file this reader cannot handle.
 
-const PACKAGES_KEY_PATTERN = /^packages:\s*(.*)$/u;
+// The key itself, bare or wrapped in either quote style ("packages"/'packages'): YAML accepts a quoted mapping key wherever a bare one is valid, and real pnpm-workspace.yaml files are seen in the wild both ways.
+const PACKAGES_KEY_PATTERN = /^(?:packages|"packages"|'packages'):\s*(.*)$/u;
 // Indentation is optional: a block sequence written at the key's own column ("packages:\n- 'core/*'") is as valid YAML as an indented one, and pnpm accepts both.
 const SEQUENCE_ITEM_PATTERN = /^(\s*)-\s*(.*)$/u;
 
@@ -31,9 +32,41 @@ export function requireMatch(pattern: Readonly<RegExp>, text: string): RegExpExe
   return match;
 }
 
+function quoteCharAt(value: string, index: number): string | undefined {
+  const char = value.charAt(index);
+  return char === "'" || char === '"' ? char : undefined;
+}
+
+// The index one past `quote`'s own matching close, starting the search at `openIndex + 1`: a single-quoted YAML scalar escapes a literal quote by doubling it (`''`), so a doubled pair is skipped over rather than read as the close. Returns -1 for an unterminated quote (nothing here to close it), the same "no legitimate finish, so the whole rest of the string is still inside it" reading commentSearchStart below relies on.
+function findMatchingQuoteEnd(value: string, openIndex: number, quote: string): number {
+  for (let index = openIndex + 1; index < value.length; index += 1) {
+    if (value.charAt(index) !== quote) continue;
+    if (quote === "'" && value.charAt(index + 1) === "'") {
+      index += 1;
+      continue;
+    }
+    return index;
+  }
+  return -1;
+}
+
+// Where stripComment may start looking for a genuine comment-opening "#": position 0 when `value` does not open (after its own leading whitespace) with a quote character, or just past that leading quoted scalar's own matching close, so a "#" written anywhere inside a quoted glob (however placed) is never mistaken for a comment: YAML never treats "#" as special inside quotes at all. An unterminated leading quote pushes the start past the whole string, so nothing after it is ever treated as a comment either.
+function commentSearchStart(value: string): number {
+  const contentStart = value.length - value.trimStart().length;
+  const quote = quoteCharAt(value, contentStart);
+  if (quote === undefined) return 0;
+  const closeIndex = findMatchingQuoteEnd(value, contentStart, quote);
+  return closeIndex === -1 ? value.length : closeIndex + 1;
+}
+
+// A "#" opens a comment only when it starts `value` outright or is preceded by whitespace, YAML's own "a comment must be separated from other tokens by white space" rule (a bare "core/#special" is a literal package glob, not "core/" followed by a comment). commentSearchStart above additionally protects a leading quoted scalar's own interior in full, regardless of what precedes a "#" found there.
 function stripComment(value: string): string {
-  const hashIndex = value.indexOf('#');
-  return (hashIndex === -1 ? value : value.slice(0, hashIndex)).trimEnd();
+  for (let index = commentSearchStart(value); index < value.length; index += 1) {
+    if (value.charAt(index) !== '#') continue;
+    const precededByWhitespace = index === 0 || value.charAt(index - 1) === ' ' || value.charAt(index - 1) === '\t';
+    if (precededByWhitespace) return value.slice(0, index).trimEnd();
+  }
+  return value.trimEnd();
 }
 
 // The one place this file decides "is this value wrapped in a matching pair of quote characters": both the single- and double-quote cases share this exact logic, so it is written and tested once rather than twice over. `length >= 2` rules out a lone quote character on its own ("'" alone starts and ends with itself, but is not a quoted EMPTY string, it is an unterminated one).
