@@ -1,3 +1,27 @@
+# [2.21.0](https://github.com/ExaDev/eslint-config/compare/v2.20.2...v2.21.0) (2026-09-26)
+
+
+### Bug Fixes
+
+* **workspace:** accept zero-indent pnpm-workspace.yaml sequence items ([800483c](https://github.com/ExaDev/eslint-config/commit/800483cf9ae6d1f6643a1586c9cdde5d224a4ebe))
+* **workspace:** de-duplicate dependency names before checking uphill rules ([50f752d](https://github.com/ExaDev/eslint-config/commit/50f752d1e08ae07f1b33349576ac49d5ee0dd283))
+* **workspace:** namePrefix slice picks the longest match and strips scope ([d20ee82](https://github.com/ExaDev/eslint-config/commit/d20ee82a5ffe099962c4e4e29d9acdec3ef2c83d))
+* **workspace:** reject unknown option keys and validate isolatedGroups ([73deb85](https://github.com/ExaDev/eslint-config/commit/73deb850684d700b84395debed310ff0ab1713c0))
+* **workspace:** support in-segment glob wildcards and skip node_modules ([456e77f](https://github.com/ExaDev/eslint-config/commit/456e77fa2e72a05e7ae2b02eedbd7c718191a1ae))
+
+
+### Features
+
+* **config:** add workspaceArchitectureConfig and wire it into the plugin ([6f66981](https://github.com/ExaDev/eslint-config/commit/6f66981199d61dc3427cccc5cbc5daef232f8199))
+* **rules:** add no-dependency-cycle ([c52c83c](https://github.com/ExaDev/eslint-config/commit/c52c83c8e662de892a1c062f5f47ee610b6afe6d))
+* **rules:** add no-uphill-dependency ([6308ada](https://github.com/ExaDev/eslint-config/commit/6308ada433f43e1aa9c8b4a1c2df1853f01aa729))
+* **rules:** add package-name-mirrors-path ([ce038f8](https://github.com/ExaDev/eslint-config/commit/ce038f86aeb90201baee1c4f310b8d06c6bd085a))
+* **workspace:** add dependency checks and manifest-reading helpers ([16ddb04](https://github.com/ExaDev/eslint-config/commit/16ddb0450113e5009d4d4f6019792e9210041528))
+* **workspace:** add injectable fs seam and pnpm-workspace.yaml packages reader ([965468a](https://github.com/ExaDev/eslint-config/commit/965468a3f5b7f6c41cec96b5aea5ed8336da493c))
+* **workspace:** add own directory glob matcher for package discovery ([b2f0658](https://github.com/ExaDev/eslint-config/commit/b2f0658036845e43373e8292d0d4e02b1a9ddb7f))
+* **workspace:** add shared workspace architecture options schema and reader ([9db2cc2](https://github.com/ExaDev/eslint-config/commit/9db2cc2659d70067e44a306f651701bf53dd28b3))
+* **workspace:** add workspace dependency graph construction ([67b7d30](https://github.com/ExaDev/eslint-config/commit/67b7d30f931fc947bfacdfe980ecaaf786a19c79))
+
 ## [2.20.2](https://github.com/ExaDev/eslint-config/compare/v2.20.1...v2.20.2) (2026-09-25)
 
 
