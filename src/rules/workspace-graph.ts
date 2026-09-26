@@ -53,8 +53,11 @@ export function findOwningGroup(relativeDir: string, groups: readonly GroupSpec[
  * The name-role model's own rank classification: nameRanks (first pattern match, checked in declaration order) takes priority over the package's structural group.rank, which itself takes priority over defaultRank. Throws when none of the three resolves anything at all, since an unranked package is a genuine configuration gap, not a package this rule can silently skip (skipping it would silently stop checking every one of its dependency edges).
  */
 export function deriveRank(declaredName: string, group: GroupSpec, options: WorkspaceArchitectureOptions): number {
-  for (const rule of options.nameRanks ?? []) {
-    if (new RegExp(rule.pattern, 'u').test(declaredName)) return rule.rank;
+  // An explicit undefined check rather than a `?? []` fallback: "nameRanks omitted" and "nameRanks configured but nothing in it matches this name" are the same real answer (fall through to group.rank/defaultRank), so this states that directly instead of manufacturing an empty array purely to make the loop below have something to iterate zero times over.
+  if (options.nameRanks !== undefined) {
+    for (const rule of options.nameRanks) {
+      if (new RegExp(rule.pattern, 'u').test(declaredName)) return rule.rank;
+    }
   }
   if (group.rank !== undefined) return group.rank;
   if (options.defaultRank !== undefined) return options.defaultRank;
@@ -135,17 +138,25 @@ export function resolveWorkspaceRoot(fs: WorkspaceFs, filename: string, rootOpti
   }
 }
 
-/**
- * Resolves the workspace's own package glob patterns: the given `packages` option verbatim, or, when omitted, pnpm-workspace.yaml's own top-level "packages:" block sequence read from the resolved root.
- */
-export function resolveWorkspacePackagePatterns(fs: WorkspaceFs, root: string, packagesOption: readonly string[] | undefined): readonly string[] {
-  if (packagesOption !== undefined) return packagesOption;
-
+function readPackagesFromYaml(fs: WorkspaceFs, root: string): readonly string[] {
   const yamlPath = join(root, 'pnpm-workspace.yaml');
   if (!fs.existsSync(yamlPath)) {
     throw new Error(`@exadev/eslint-config: no "pnpm-workspace.yaml" found at workspace root "${root}", and no "packages" option was given.`);
   }
   return readWorkspacePackages(fs.readFileSync(yamlPath));
+}
+
+/**
+ * Resolves the workspace's own package glob patterns: the given `packages` option verbatim, or, when omitted, pnpm-workspace.yaml's own top-level "packages:" block sequence read from the resolved root. Throws when that resolution comes back with genuinely zero patterns (an empty "packages" option array, or a "packages:" key with no key at all/an empty sequence and no override), since collectCandidates (below) would then scan nothing at all, quietly turning every workspace-architecture rule into a no-op that reports nothing rather than a real misconfiguration.
+ */
+export function resolveWorkspacePackagePatterns(fs: WorkspaceFs, root: string, packagesOption: readonly string[] | undefined): readonly string[] {
+  const patterns = packagesOption ?? readPackagesFromYaml(fs, root);
+  if (patterns.length === 0) {
+    throw new Error(
+      `@exadev/eslint-config: the resolved workspace "packages" glob list is empty (root "${root}"), which would make every workspace-architecture rule a silent no-op. Add a "packages:" block sequence to pnpm-workspace.yaml, or pass a non-empty "packages" rule option.`,
+    );
+  }
+  return patterns;
 }
 
 interface Candidate {
@@ -227,6 +238,8 @@ export function buildWorkspaceGraph(fs: WorkspaceFs, root: string, options: Work
 }
 
 // Keyed by root plus the resolved options themselves, not a single module-level variable: the monorepo-template original's own cache ignored which root it was first built from, so a second, genuinely different workspace scanned in the same process (a monorepo with more than one pnpm-workspace.yaml, or a test suite exercising several fixture trees) silently kept serving the first tree's graph. JSON.stringify is not a canonical serialisation (key order could in principle differ between two logically-identical option objects built by different code paths), but that only costs a cache miss, never a wrong answer: a miss just rebuilds the graph.
+//
+// KNOWN LIMITATION, inherited unchanged from both prior local implementations this package supersedes (Novus hive's and the monorepo-template's own workspace rule sets): once built for a given root+options key, an entry is never invalidated for the rest of the process's life. A long-running ESLint process (an editor's language server, most notably) that edits a package.json's own declared name or dependencies after that root+options key's first lint keeps serving the STALE graph built before the edit; a rename in particular goes silently unnoticed (`graph.packagesByName.get(declared.name)` simply misses the new name), so every workspace-architecture rule quietly stops checking that package until the process restarts or resetWorkspaceGraphCache is called. A real fix needs more than a per-manifest mtime check: a NEW or REMOVED package directory changes which manifests exist at all, which only a fresh directory-glob rescan (resolveWorkspacePackageDirs) can detect, and the WorkspaceFs seam this module is built on has no stat/mtime operation of its own to build a narrower check on top of. Tracked here as a known limitation rather than solved by half a fix.
 const graphCache = new Map<string, WorkspaceGraph>();
 
 function cacheKey(root: string, options: WorkspaceArchitectureOptions): string {
