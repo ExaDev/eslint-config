@@ -120,13 +120,16 @@ export function last<T>(array: readonly T[]): T {
  * The three per-group naming strategies' own segment selection, keyed by NamingStrategy's own three literal members rather than a chain of ternaries: `Record<NamingStrategy, ...>` requires every member to have its own entry, which is what makes 'drop-group' a genuine, independently-typed branch, not merely "whatever the ternary chain falls through to when nothing else matched". Stryker's own typescript checker rejects a mutant that replaces the `?? 'drop-group'` fallback with some other string, since indexing this record with a value outside NamingStrategy is a type error, caught before any test even runs.
  *
  * - **'drop-group'**: drop the group's own root path segments, keep what remains.
- * - **'keep-group'**: keep every segment of `relativeDir` as-is, including the group's own root segments (a test group whose packages are named "test-<feature>", mirroring the feature they test, needs its own "test" segment kept).
+ * - **'keep-group'**: keep the group's OWN name (or, when its root path nests more than one segment deep, only that path's own last segment) ahead of `rest`, not every segment of `relativeDir` including whatever container directories sit above the group's own root: a group declared as `{ path: 'packages/test' }` derives "test-e2e" for `packages/test/e2e`, never "packages-test-e2e", the same way a group with no nested path at all already would. A test group whose packages are named "test-<feature>", mirroring the feature they test, needs its own "test" segment kept, just not any further container segment above it.
  * - **'basename'**: use only `relativeDir`'s own final segment, ignoring every intermediate directory, for a group whose intermediate structure exists purely for filesystem organisation and carries no naming intent of its own.
  */
-// A single { segments, rest } options object, not two positional parameters: 'drop-group' only ever needs `rest`, so a plain `(segments, rest)` signature would leave it with an unused `segments` parameter, prefixed `_segments` to silence that unused-parameter warning rather than actually removing it, exactly what this project's own no-unused-parameter convention (drop it from the signature) exists to catch instead of paper over. Each function destructures only the field its own strategy actually reads.
-const NAME_SEGMENTS_BY_STRATEGY: Record<NamingStrategy, (parts: { readonly segments: readonly string[]; readonly rest: readonly string[] }) => readonly string[]> = {
+// A single { segments, rest, groupNameSegment } options object, not three positional parameters: 'drop-group' only ever needs `rest`, 'basename' only ever needs `segments`, so a plain positional signature would leave each with unused parameters, prefixed `_x` to silence that unused-parameter warning rather than actually removing it, exactly what this project's own no-unused-parameter convention (drop it from the signature) exists to catch instead of paper over. Each function destructures only the field its own strategy actually reads.
+const NAME_SEGMENTS_BY_STRATEGY: Record<
+  NamingStrategy,
+  (parts: { readonly segments: readonly string[]; readonly rest: readonly string[]; readonly groupNameSegment: string }) => readonly string[]
+> = {
   basename: ({ segments }) => [last(segments)],
-  'keep-group': ({ segments }) => segments,
+  'keep-group': ({ rest, groupNameSegment }) => [groupNameSegment, ...rest],
   'drop-group': ({ rest }) => rest,
 };
 
@@ -136,10 +139,11 @@ const NAME_SEGMENTS_BY_STRATEGY: Record<NamingStrategy, (parts: { readonly segme
 export function expectedPackageName(relativeDir: string, group: GroupSpec, naming: NamingOptions): string {
   const separator = naming.separator ?? '-';
   const segments = splitPathSegments(relativeDir);
-  const groupPrefixLength = splitPathSegments(group.path ?? group.name).length;
-  const rest = segments.slice(groupPrefixLength);
+  const groupPathSegments = splitPathSegments(group.path ?? group.name);
+  const rest = segments.slice(groupPathSegments.length);
+  const groupNameSegment = last(groupPathSegments);
 
-  const nameSegments = NAME_SEGMENTS_BY_STRATEGY[group.naming ?? 'drop-group']({ segments, rest });
+  const nameSegments = NAME_SEGMENTS_BY_STRATEGY[group.naming ?? 'drop-group']({ segments, rest, groupNameSegment });
 
   const joined = nameSegments.join(separator);
   return naming.scope === undefined ? joined : `${naming.scope}/${joined}`;

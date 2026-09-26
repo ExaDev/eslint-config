@@ -214,6 +214,11 @@ describe('expectedPackageName', () => {
     expect(expectedPackageName('test/database', test, { scope: '@novus' })).toBe('@novus/test-database');
   });
 
+  it("'keep-group' derives the group's own name from the LAST segment of its path when that path nests more than one directory deep, not from every container segment above it", () => {
+    const nestedTestGroup: GroupSpec = { name: 'test', path: 'packages/test', naming: 'keep-group' };
+    expect(expectedPackageName('packages/test/e2e', nestedTestGroup, { scope: '@x' })).toBe('@x/test-e2e');
+  });
+
   it("'basename' uses only the final path segment", () => {
     const basenameGroup: GroupSpec = { name: 'core', naming: 'basename' };
     expect(expectedPackageName('core/domain/models/user', basenameGroup, { scope: '@acme' })).toBe('@acme/user');
