@@ -499,6 +499,7 @@ pnpm build
 - [Husky](https://github.com/typicode/husky) hooks: `pre-commit` runs [lint-staged](https://github.com/lint-staged/lint-staged#readme) (`eslint --fix` on staged `*.ts`), `commit-msg` runs commitlint, `pre-push` runs typecheck + test + build.
 - The CI release job sets `HUSKY=0` (commit-msg hook skips the automated release commit) and blanks `NPM_TOKEN`/`NODE_AUTH_TOKEN` explicitly so an inherited token can't win over [OIDC trusted publishing](https://docs.npmjs.com/trusted-publishers).
 - A consumer who already has `eslint-plugin-react`/`@next/eslint-plugin-next` resolvable for unrelated reasons (e.g. hoisted in a monorepo) and writes `.jsx`/`.tsx` files may see new rule activity the moment they upgrade to a version of this package that ships React/Next.js support — with zero action on their part. See the compatibility note under [Optional React and Next.js support](#optional-react-and-nextjs-support).
+- [Workspace architecture](#workspace-architecture)'s dependency graph is cached for the life of the process, keyed by workspace root plus the resolved options, with no invalidation of its own. A long-running ESLint process (an editor's language server, most notably) that renames a package or edits its declared dependencies after that root/options combination's first lint keeps serving the stale graph built before the edit, until the process restarts. Both prior local implementations this feature replaced (Novus hive's and the monorepo-template's own workspace rule sets) carried the identical limitation.
 
 ### Contributing
 

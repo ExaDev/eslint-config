@@ -171,6 +171,16 @@ describe('resolveWorkspacePackagePatterns', () => {
     );
   });
 
+  it('throws when the given "packages" option is explicitly empty', () => {
+    const fs = fakeFs({}, {});
+    expect(() => resolveWorkspacePackagePatterns(fs, '/root', [])).toThrow(/resolved workspace "packages" glob list is empty/);
+  });
+
+  it('throws when pnpm-workspace.yaml has no "packages:" key at all and no override option was given, rather than silently resolving to zero patterns', () => {
+    const fs = fakeFs({ '/root/pnpm-workspace.yaml': 'onlyIgnores:\n  - "**/dist"\n' }, {});
+    expect(() => resolveWorkspacePackagePatterns(fs, '/root', undefined)).toThrow(/resolved workspace "packages" glob list is empty/);
+  });
+
   it('reads the real fixture tree\'s own pnpm-workspace.yaml', () => {
     expect(resolveWorkspacePackagePatterns(realWorkspaceFs, FIXTURE_ROOT, undefined)).toEqual([
       'core/*/*',
