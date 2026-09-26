@@ -6,6 +6,21 @@ import { createNoUphillDependencyRule, findDependencyEntry } from './no-uphill-d
 import type { WorkspaceGraph } from './workspace-graph';
 import type { WorkspacePackageInfo } from './workspace-graph';
 import type { NamedDependency } from './workspace-json-helpers';
+import type { WorkspaceFs } from './workspace-fs';
+
+// FIXED_GRAPH's own root and every filename built from it (selfFilename below) are fabricated paths, never real directories: manifestRelativeDir's own realpath resolution (workspace-graph.ts) is exercised directly by its own unit tests, so this rule's tests only need a WorkspaceFs whose realpathSync passes every path through unchanged, the same as node:fs's own realpathSync would for a path with no symlink anywhere along it.
+const identityFs: WorkspaceFs = {
+  existsSync: () => {
+    throw new Error('not used: this rule never calls existsSync/readFileSync/readdirSync itself, only realpathSync via manifestRelativeDir.');
+  },
+  readFileSync: () => {
+    throw new Error('not used: this rule never calls existsSync/readFileSync/readdirSync itself, only realpathSync via manifestRelativeDir.');
+  },
+  readdirSync: () => {
+    throw new Error('not used: this rule never calls existsSync/readFileSync/readdirSync itself, only realpathSync via manifestRelativeDir.');
+  },
+  realpathSync: (path) => path,
+};
 
 function namedDependency(name: string): NamedDependency {
   const document = parse(`{"${name}": "1"}`, { mode: 'json' });
@@ -43,7 +58,7 @@ const FIXED_GRAPH: WorkspaceGraph = {
   dependencyNamesByName: new Map(),
 };
 
-const rule = createNoUphillDependencyRule(() => FIXED_GRAPH);
+const rule = createNoUphillDependencyRule({ loadGraph: () => FIXED_GRAPH, fs: identityFs });
 
 const ruleTester = new RuleTester({ language: 'json/json', plugins: { json } });
 
@@ -148,6 +163,12 @@ ruleTester.run('no-uphill-dependency', rule, {
     {
       code: manifest('kv-contract', { 'kv-adapter-memory': 'workspace:*' }),
       filename: `${FIXED_GRAPH.root}/dist/kv-contract/package.json`,
+      options: [{ groups: [{ name: 'core' }] }],
+    },
+    // A NESTED object with no "name" of its own must never be analysed as if it were the file's own top-level manifest either, even though (unlike the "nested real-name" case above) its relativeDir-fallback identity resolves to the exact SAME graph entry as the genuine top-level manifest, since relativeDir is derived purely from context.filename, never from which node within the file is being visited. The linted package here (NAMELESS_RELATIVE_DIR) declares no top-level "dependencies" at all, only a nested object that does; if the top-level parent.type === 'Document' guard were ever bypassed, that nested object's own "store-cli" dependency (rank 3, above this rank-0 package) would be wrongly checked and reported as a genuine uphillRank violation.
+    {
+      code: JSON.stringify({ nested: { dependencies: { 'store-cli': 'workspace:*' } } }),
+      filename: `${FIXED_GRAPH.root}/${NAMELESS_RELATIVE_DIR}/package.json`,
       options: [{ groups: [{ name: 'core' }] }],
     },
   ],
