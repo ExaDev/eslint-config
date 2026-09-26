@@ -348,7 +348,7 @@ Both entry points need `@eslint/json` resolvable (`pnpm add -D @eslint/json`), t
 | Field | Meaning |
 | --- | --- |
 | `root` | The workspace root directory. Defaults to the nearest ancestor of the linted file that owns a `pnpm-workspace.yaml`. |
-| `packages` | Workspace package globs (`pnpm-workspace.yaml` dialect: `*`, `**`, `!`-prefixed excludes). Defaults to that file's own top-level `packages:` block sequence. |
+| `packages` | Workspace package globs, matching pnpm's own `pnpm-workspace.yaml` glob support (`*`, `**`, `[...]` character classes, `{...}` brace expansion, `!`-prefixed excludes; a wildcard segment never matches a name starting with "."). Defaults to that file's own top-level `packages:` block sequence, quoted or bare. |
 | `dependencyFields` | `package.json` fields read as a package's declared dependencies. Defaults to `['dependencies']`. |
 | `groups` | The workspace's own directory taxonomy: `{ name, path?, rank?, slice?, naming? }`. `path` defaults to `name` (a group rooted at a directory of the same name). |
 | `nameRanks` | The name-role rank model: `{ pattern, rank }[]`, a package's declared name checked against each `pattern` in order, first match wins, ahead of its own group's `rank`. Omit entirely for a pure group-rank model. |
