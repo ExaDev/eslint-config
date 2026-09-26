@@ -202,6 +202,13 @@ describe('readWorkspaceArchitectureOptions', () => {
     );
   });
 
+  it('throws even when only ONE side of the pair is undeclared, not merely when both are', () => {
+    // Both sides undeclared cannot distinguish OR from AND (both operands are true either way); one declared and one not is the case that actually needs the OR, not the AND, an undeclared "verticals" alone is still enough to make the pair meaningless.
+    expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'features' }], isolatedGroups: [['features', 'verticals']] })).toThrow(
+      '"isolatedGroups" names a group not declared in "groups"',
+    );
+  });
+
   it('throws for an "isolatedGroups" pair that is too short', () => {
     expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, isolatedGroups: [['features']] })).toThrow(MISCONFIGURATION_MESSAGE);
   });
