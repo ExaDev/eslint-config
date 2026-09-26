@@ -4,8 +4,8 @@ import { splitPathSegments } from './workspace-path';
 
 // pnpm-workspace.yaml's own glob dialect, reimplemented directly against the real directory tree rather than via Node's fs.globSync: that API only stabilised in Node 22, below this package's own >=20 engines floor. Every "packages:" glob is a directory glob (it names where a package's own directory lives, never a file), so this matcher only ever walks real subdirectories: '**' matches zero or more whole path segments; every other segment (a bare '*', a literal name, or a partial pattern mixing literal text with '*'/'?' such as 'app-*' or '*-web') is matched against one real directory name at a time via segmentToRegExp below. node_modules is never descended into or matched, mirroring pnpm's own unconditional "**/node_modules/**" exclusion: a hoisted or npm-nested node_modules is real content in the tree, never a workspace package.
 
-// Builds the one-segment matcher behind every non-'**' pattern segment: '*' becomes zero-or-more characters, '?' becomes exactly one, and every other character is escaped so a literal segment (no wildcard at all) matches only its own exact name, same as before this function existed.
-function segmentToRegExp(segment: string): RegExp {
+// Builds the one-segment matcher behind every non-'**' pattern segment: '*' becomes zero-or-more characters, '?' becomes exactly one, and every other character is escaped so a literal segment (no wildcard at all) matches only its own exact name, same as before this function existed. Exported so its own 'u' flag (needed for the same reason deriveRank's nameRanks patterns carry one, see workspace-graph.unit.test.ts) can be asserted directly, independent of any particular directory name this module is ever exercised against.
+export function segmentToRegExp(segment: string): RegExp {
   const escaped = segment.replace(/[.+^${}()|[\]\\]/gu, '\\$&');
   const withWildcards = escaped.replace(/\*/gu, '.*').replace(/\?/gu, '.');
   return new RegExp(`^${withWildcards}$`, 'u');
