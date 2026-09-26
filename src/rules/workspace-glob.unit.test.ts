@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { expandGlob, isExcludePattern, resolveWorkspacePackageDirs } from './workspace-glob';
+import { expandGlob, isExcludePattern, resolveWorkspacePackageDirs, segmentToRegExp } from './workspace-glob';
 import type { WorkspaceFs } from './workspace-fs';
 
 // An in-memory tree keyed by absolute-ish path, mapping each directory to its own subdirectory names, plus a set of paths that own a real package.json.
@@ -17,6 +17,13 @@ function fakeFs(dirs: Record<string, readonly string[]>, packageJsonDirs: readon
     },
   };
 }
+
+describe('segmentToRegExp', () => {
+  it("builds its RegExp with the 'u' flag", () => {
+    // Asserted directly on .flags rather than through any particular directory name: every real match this module makes goes through code points, not UTF-16 code units, and no fixture of plain ASCII directory names would ever observe the difference behaviourally.
+    expect(segmentToRegExp('anything').flags).toBe('u');
+  });
+});
 
 describe('isExcludePattern', () => {
   it('is true for a leading "!"', () => {
