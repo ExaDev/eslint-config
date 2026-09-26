@@ -32,15 +32,25 @@ export function requireMatch(pattern: Readonly<RegExp>, text: string): RegExpExe
   return match;
 }
 
-function quoteCharAt(value: string, index: number): string | undefined {
+/** Reads `text[index]`, throwing rather than reading past the end: both real call sites below derive `index` from a `for` loop whose own condition (`index < text.length`) already guarantees it in range, so an out-of-bounds read here would mean that loop's own invariant broke, not a case to handle quietly. A genuinely maybe-out-of-bounds neighbour check (this file's own "the character right before/after this one, if any" reads) stays a plain `charAt`, deliberately: those are never loop-bound-guaranteed and a missing neighbour is a real, legitimate outcome, not a bug. Exported for the same direct-test reason as requireLine above. */
+export function requireChar(text: string, index: number): string {
+  const char = text[index];
+  if (char === undefined) {
+    throw new Error(`Unreachable: index ${String(index)} is out of bounds for a string of length ${String(text.length)}.`);
+  }
+  return char;
+}
+
+/** Whether `value[index]` is a quote character, returning that exact character (not merely `true`) so a caller can go on to search for the SAME quote style's own matching close. Exported for direct testing of its own per-index decision, independent of commentSearchStart's own real-string scenarios below. */
+export function quoteCharAt(value: string, index: number): string | undefined {
   const char = value.charAt(index);
   return char === "'" || char === '"' ? char : undefined;
 }
 
-// The index one past `quote`'s own matching close, starting the search at `openIndex + 1`: a single-quoted YAML scalar escapes a literal quote by doubling it (`''`), so a doubled pair is skipped over rather than read as the close. Returns -1 for an unterminated quote (nothing here to close it), the same "no legitimate finish, so the whole rest of the string is still inside it" reading commentSearchStart below relies on.
-function findMatchingQuoteEnd(value: string, openIndex: number, quote: string): number {
+// The index one past `quote`'s own matching close, starting the search at `openIndex + 1`: a single-quoted YAML scalar escapes a literal quote by doubling it (`''`), so a doubled pair is skipped over rather than read as the close. Returns -1 for an unterminated quote (nothing here to close it), the same "no legitimate finish, so the whole rest of the string is still inside it" reading commentSearchStart below relies on. Exported for direct testing independent of commentSearchStart's own real-string scenarios.
+export function findMatchingQuoteEnd(value: string, openIndex: number, quote: string): number {
   for (let index = openIndex + 1; index < value.length; index += 1) {
-    if (value.charAt(index) !== quote) continue;
+    if (requireChar(value, index) !== quote) continue;
     if (quote === "'" && value.charAt(index + 1) === "'") {
       index += 1;
       continue;
@@ -50,8 +60,8 @@ function findMatchingQuoteEnd(value: string, openIndex: number, quote: string): 
   return -1;
 }
 
-// Where stripComment may start looking for a genuine comment-opening "#": position 0 when `value` does not open (after its own leading whitespace) with a quote character, or just past that leading quoted scalar's own matching close, so a "#" written anywhere inside a quoted glob (however placed) is never mistaken for a comment: YAML never treats "#" as special inside quotes at all. An unterminated leading quote pushes the start past the whole string, so nothing after it is ever treated as a comment either.
-function commentSearchStart(value: string): number {
+// Where stripComment may start looking for a genuine comment-opening "#": position 0 when `value` does not open (after its own leading whitespace) with a quote character, or just past that leading quoted scalar's own matching close, so a "#" written anywhere inside a quoted glob (however placed) is never mistaken for a comment: YAML never treats "#" as special inside quotes at all. An unterminated leading quote pushes the start past the whole string, so nothing after it is ever treated as a comment either. Exported for direct testing independent of stripComment's own real-string scenarios below.
+export function commentSearchStart(value: string): number {
   const contentStart = value.length - value.trimStart().length;
   const quote = quoteCharAt(value, contentStart);
   if (quote === undefined) return 0;
@@ -59,10 +69,10 @@ function commentSearchStart(value: string): number {
   return closeIndex === -1 ? value.length : closeIndex + 1;
 }
 
-// A "#" opens a comment only when it starts `value` outright or is preceded by whitespace, YAML's own "a comment must be separated from other tokens by white space" rule (a bare "core/#special" is a literal package glob, not "core/" followed by a comment). commentSearchStart above additionally protects a leading quoted scalar's own interior in full, regardless of what precedes a "#" found there.
-function stripComment(value: string): string {
+// A "#" opens a comment only when it starts `value` outright or is preceded by whitespace, YAML's own "a comment must be separated from other tokens by white space" rule (a bare "core/#special" is a literal package glob, not "core/" followed by a comment). commentSearchStart above additionally protects a leading quoted scalar's own interior in full, regardless of what precedes a "#" found there. Exported for direct testing independent of readWorkspacePackages'/unquote's own real-YAML scenarios.
+export function stripComment(value: string): string {
   for (let index = commentSearchStart(value); index < value.length; index += 1) {
-    if (value.charAt(index) !== '#') continue;
+    if (requireChar(value, index) !== '#') continue;
     const precededByWhitespace = index === 0 || value.charAt(index - 1) === ' ' || value.charAt(index - 1) === '\t';
     if (precededByWhitespace) return value.slice(0, index).trimEnd();
   }
