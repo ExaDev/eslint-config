@@ -109,6 +109,33 @@ describe('segmentToRegExp', () => {
     expect(pattern.test('a]c')).toBe(true);
     expect(pattern.test('a]x')).toBe(false);
   });
+
+  it('takes a "]" sitting immediately after the opening "[" as a literal member of the class, not its closing bracket, the POSIX/picomatch convention for what would otherwise be a meaningless empty class', () => {
+    const pattern = segmentToRegExp('[]a]');
+    expect(pattern.test(']')).toBe(true);
+    expect(pattern.test('a')).toBe(true);
+    expect(pattern.test('b')).toBe(false);
+  });
+
+  it('takes a "]" sitting immediately after a negation marker as a literal member too, not the class\'s own close', () => {
+    const pattern = segmentToRegExp('[!]a]');
+    expect(pattern.test(']')).toBe(false);
+    expect(pattern.test('a')).toBe(false);
+    expect(pattern.test('b')).toBe(true);
+  });
+
+  it('a backslash escapes the very next character, turning off whatever special meaning it carried', () => {
+    expect(segmentToRegExp('a\\*b').test('a*b')).toBe(true);
+    expect(segmentToRegExp('a\\*b').test('axb')).toBe(false);
+  });
+
+  it('a backslash escapes a "[" too, so it never opens a character class at all', () => {
+    expect(segmentToRegExp('a\\[b').test('a[b')).toBe(true);
+  });
+
+  it('a trailing, unescaped backslash (nothing left to escape) is itself just a literal backslash', () => {
+    expect(segmentToRegExp('a\\').test('a\\')).toBe(true);
+  });
 });
 
 describe('splitTopLevelAlternatives', () => {
@@ -221,6 +248,41 @@ describe('expandGlob', () => {
     expect(expandGlob(fs, '/root', 'packages/*')).toEqual(['packages/a']);
   });
 
+  it("a single '*' segment never matches a literal 'bower_components' directory name, matching the installed pnpm binary's own unconditional exclusion", () => {
+    const fs = fakeFs({ '/root': ['packages'], '/root/packages': ['a', 'bower_components'] });
+    expect(expandGlob(fs, '/root', 'packages/*')).toEqual(['packages/a']);
+  });
+
+  it("'**' never descends into a 'bower_components' directory either", () => {
+    const fs = fakeFs({
+      '/root': ['packages'],
+      '/root/packages': ['a'],
+      '/root/packages/a': ['bower_components'],
+      '/root/packages/a/bower_components': ['jquery'],
+    });
+    expect([...expandGlob(fs, '/root', 'packages/**')].sort()).toEqual(['packages', 'packages/a']);
+  });
+
+  it('a "./" prefix normalises away, matching the same pattern without it', () => {
+    const fs = fakeFs({ '/root': ['core'], '/root/core': ['a'] });
+    expect(expandGlob(fs, '/root', './core/*')).toEqual(['core/a']);
+  });
+
+  it('a repeated slash normalises to a single one', () => {
+    const fs = fakeFs({ '/root': ['core'], '/root/core': ['a'] });
+    expect(expandGlob(fs, '/root', 'core//*')).toEqual(['core/a']);
+  });
+
+  it('a ".." segment backtracks over the segment before it, matching pnpm\'s own documented normalisation', () => {
+    const fs = fakeFs({ '/root': ['packages'], '/root/packages': ['extra'], '/root/packages/extra': ['a'] });
+    expect(expandGlob(fs, '/root', 'core2/../packages/extra/*')).toEqual(['packages/extra/a']);
+  });
+
+  it('a leading ".." with nothing to pop is kept as-is (there is no ancestor segment inside the pattern to remove), so it simply never matches a real directory', () => {
+    const fs = fakeFs({ '/root': ['core'], '/root/core': ['a'] });
+    expect(expandGlob(fs, '/root', '../core/*')).toEqual([]);
+  });
+
   it("matches a partial, in-segment wildcard ('app-*'), pnpm's own supported dialect beyond a whole-segment '*'", () => {
     const fs = fakeFs({ '/root': ['features'], '/root/features': ['app-store', 'app-billing', 'other'] });
     expect([...expandGlob(fs, '/root', 'features/app-*')].sort()).toEqual(['features/app-billing', 'features/app-store']);
@@ -317,6 +379,34 @@ describe('resolveWorkspacePackageDirs', () => {
       ['/root/core/kv', '/root/!core/billing'],
     );
     expect(resolveWorkspacePackageDirs(fs, '/root', ['core/*', '!core/billing'])).toEqual(['core/kv']);
+  });
+
+  it('throws, naming the pattern, when a positive glob matches no directory at all, rather than silently resolving to an empty result', () => {
+    const fs = fakeFs({ '/root': ['core'], '/root/core': ['kv'] }, ['/root/core/kv']);
+    expect(() => resolveWorkspacePackageDirs(fs, '/root', ['cor/*'])).toThrow('@exadev/eslint-config: the workspace "packages" glob "cor/*" matched no directory under "/root"');
+  });
+
+  it('still throws for a positive glob matching nothing even when another, genuinely matching pattern is also configured', () => {
+    const fs = fakeFs({ '/root': ['core'], '/root/core': ['kv'] }, ['/root/core/kv']);
+    expect(() => resolveWorkspacePackageDirs(fs, '/root', ['core/*', 'targets/*'])).toThrow(/"targets\/\*"/);
+  });
+
+  it('does not throw for an exclude pattern matching nothing (only a positive glob matching nothing is a misconfiguration)', () => {
+    const fs = fakeFs({ '/root': ['core'], '/root/core': ['kv'] }, ['/root/core/kv']);
+    expect(() => resolveWorkspacePackageDirs(fs, '/root', ['core/*', '!core/missing'])).not.toThrow();
+  });
+
+  it('resolves a "./"-prefixed positive pattern to the same packages its unprefixed form would', () => {
+    const fs = fakeFs({ '/root': ['core'], '/root/core': ['a'] }, ['/root/core/a']);
+    expect(resolveWorkspacePackageDirs(fs, '/root', ['./core/*'])).toEqual(['core/a']);
+  });
+
+  it('resolves a "!./"-prefixed exclude pattern to the same directory its unprefixed form would exclude', () => {
+    const fs = fakeFs(
+      { '/root': ['core'], '/root/core': ['a', 'b'] },
+      ['/root/core/a', '/root/core/b'],
+    );
+    expect(resolveWorkspacePackageDirs(fs, '/root', ['core/*', '!./core/b'])).toEqual(['core/a']);
   });
 
   it('never strips the leading character off an INCLUDE pattern when computing the exclude set, even when doing so would coincidentally glob-match another real include\'s own result', () => {
