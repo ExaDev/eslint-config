@@ -88,6 +88,11 @@ describe('findMatchingQuoteEnd', () => {
     // No unescaped closing quote follows the doubled pair at all, so the correct answer is -1; a wrong "index -= 1" style bug here re-examines the same doubled pair without end.
     expect(findMatchingQuoteEnd("a''b", 0, "'")).toBe(-1);
   });
+
+  it('never applies the single-quote-only doubling escape to a double-quoted scalar: two adjacent "\\"" characters close at the very first one', () => {
+    const firstClosingQuoteIndex = 1;
+    expect(findMatchingQuoteEnd('a""b', 0, '"')).toBe(firstClosingQuoteIndex);
+  });
 });
 
 describe('commentSearchStart', () => {
