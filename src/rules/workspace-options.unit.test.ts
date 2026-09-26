@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { MISCONFIGURATION_MESSAGE, readWorkspaceArchitectureOptions, resolveDependencyFields, workspaceArchitectureOptionsSchema } from './workspace-options';
+import {
+  findDuplicateGroupName,
+  MISCONFIGURATION_MESSAGE,
+  readWorkspaceArchitectureOptions,
+  resolveDependencyFields,
+  workspaceArchitectureOptionsSchema,
+} from './workspace-options';
 
 const MINIMAL = { groups: [{ name: 'core' }] };
 
@@ -33,6 +39,12 @@ describe('readWorkspaceArchitectureOptions', () => {
 
   it('throws when only SOME "groups" elements are valid: every one must satisfy isGroupSpec, not merely one of them', () => {
     expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'core' }, { rank: 0 }] })).toThrow(MISCONFIGURATION_MESSAGE);
+  });
+
+  it('throws for two groups declaring the identical name', () => {
+    expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'core' }, { name: 'core', rank: 1 }] })).toThrow(
+      '"groups" declares more than one group named "core"',
+    );
   });
 
   it('accepts the minimal valid shape: one group with only a name', () => {
@@ -116,6 +128,41 @@ describe('readWorkspaceArchitectureOptions', () => {
   it('throws for a group whose "slice" is neither shape', () => {
     expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'core', slice: {} }] })).toThrow(MISCONFIGURATION_MESSAGE);
     expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'core', slice: 'segment-0' }] })).toThrow(MISCONFIGURATION_MESSAGE);
+  });
+
+  it('throws for a "segment" slice with an extra, unknown property alongside it', () => {
+    expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'core', slice: { segment: 0, extra: 1 } }] })).toThrow(MISCONFIGURATION_MESSAGE);
+  });
+
+  it('throws for a slice carrying both "segment" and "namePrefix" at once', () => {
+    expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'core', slice: { segment: 0, namePrefix: true } }] })).toThrow(
+      MISCONFIGURATION_MESSAGE,
+    );
+  });
+
+  it('throws for a "namePrefix" slice with an extra, unknown property alongside it', () => {
+    expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'core', slice: { namePrefix: true, extra: 1 } }] })).toThrow(
+      MISCONFIGURATION_MESSAGE,
+    );
+  });
+
+  it('throws for a negative "segment"', () => {
+    const negativeSegment = -1;
+    expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'core', slice: { segment: negativeSegment } }] })).toThrow(
+      MISCONFIGURATION_MESSAGE,
+    );
+  });
+
+  it('throws for a non-integer "segment"', () => {
+    const fractionalSegment = 1.5;
+    expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'core', slice: { segment: fractionalSegment } }] })).toThrow(
+      MISCONFIGURATION_MESSAGE,
+    );
+  });
+
+  it('accepts a "segment" of exactly zero', () => {
+    const groups = [{ name: 'core', slice: { segment: 0 } }];
+    expect(readWorkspaceArchitectureOptions({ groups }).groups).toEqual(groups);
   });
 
   it('throws for a group whose "naming" is not one of the three strategies', () => {
@@ -261,6 +308,24 @@ describe('readWorkspaceArchitectureOptions', () => {
   });
 });
 
+describe('findDuplicateGroupName', () => {
+  it('returns undefined when every group name is unique', () => {
+    expect(findDuplicateGroupName([{ name: 'core' }, { name: 'features' }])).toBeUndefined();
+  });
+
+  it('returns undefined for an empty groups array', () => {
+    expect(findDuplicateGroupName([])).toBeUndefined();
+  });
+
+  it('returns the duplicated name', () => {
+    expect(findDuplicateGroupName([{ name: 'core' }, { name: 'features' }, { name: 'core' }])).toBe('core');
+  });
+
+  it('returns the name at the point it is seen a second time, not merely the first group\'s own name', () => {
+    expect(findDuplicateGroupName([{ name: 'core' }, { name: 'features' }, { name: 'features' }])).toBe('features');
+  });
+});
+
 describe('resolveDependencyFields', () => {
   it("defaults to ['dependencies'] when dependencyFields is omitted", () => {
     expect(resolveDependencyFields({})).toEqual(['dependencies']);
@@ -275,5 +340,10 @@ describe('workspaceArchitectureOptionsSchema', () => {
   it('requires "groups" and forbids unknown top-level properties', () => {
     expect(workspaceArchitectureOptionsSchema.required).toEqual(['groups']);
     expect(workspaceArchitectureOptionsSchema.additionalProperties).toBe(false);
+  });
+
+  it('constrains a group\'s "slice.segment" to a non-negative integer, matching the reader\'s own isNonNegativeInteger check', () => {
+    const [segmentSchema] = workspaceArchitectureOptionsSchema.properties.groups.items.properties.slice.oneOf;
+    expect(segmentSchema.properties.segment).toEqual({ type: 'integer', minimum: 0 });
   });
 });
