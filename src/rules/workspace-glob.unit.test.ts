@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { expandBraces, expandGlob, isExcludePattern, requireChar, resolveWorkspacePackageDirs, segmentToRegExp } from './workspace-glob';
+import {
+  expandBraces,
+  expandGlob,
+  isExcludePattern,
+  requireChar,
+  resolveWorkspacePackageDirs,
+  segmentToRegExp,
+  splitTopLevelAlternatives,
+} from './workspace-glob';
 import type { WorkspaceFs } from './workspace-fs';
 
 // An in-memory tree keyed by absolute-ish path, mapping each directory to its own subdirectory names, plus a set of paths that own a real package.json.
@@ -40,6 +48,8 @@ describe('segmentToRegExp', () => {
     expect(pattern.test('a')).toBe(true);
     expect(pattern.test('b')).toBe(true);
     expect(pattern.test('c')).toBe(false);
+    // A non-negated class prepends nothing at all, not some other placeholder text a caller never asked for: asserted on a character (a space) that could only ever match if such a placeholder had silently become part of the class body.
+    expect(pattern.test(' ')).toBe(false);
   });
 
   it('negates a character class written with a leading "!", the glob convention', () => {
@@ -98,6 +108,21 @@ describe('segmentToRegExp', () => {
     expect(pattern.test('a]b')).toBe(true);
     expect(pattern.test('a]c')).toBe(true);
     expect(pattern.test('a]x')).toBe(false);
+  });
+});
+
+describe('splitTopLevelAlternatives', () => {
+  it('splits a plain, unnested list on every comma', () => {
+    expect(splitTopLevelAlternatives('a,b,c')).toEqual(['a', 'b', 'c']);
+  });
+
+  it('never splits on a comma nested inside a further "{...}" group', () => {
+    expect(splitTopLevelAlternatives('a,{b,c}')).toEqual(['a', '{b,c}']);
+  });
+
+  it('resumes splitting on a top-level comma that follows an already-closed nested group, rather than treating depth as never returning to zero', () => {
+    // A depth counter that only ever moves in one direction (both '{' and '}' pushing it the same way, say) never returns to zero once any brace at all has been seen, wrongly treating every comma after the FIRST brace character as still nested.
+    expect(splitTopLevelAlternatives('{x},a')).toEqual(['{x}', 'a']);
   });
 });
 
