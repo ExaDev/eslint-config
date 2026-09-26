@@ -1,3 +1,24 @@
+# [2.22.0](https://github.com/ExaDev/eslint-config/compare/v2.21.1...v2.22.0) (2026-09-26)
+
+
+### Bug Fixes
+
+* **workspace rules:** report a nameless package under package-name-mirrors-path ([e47ea1c](https://github.com/ExaDev/eslint-config/commit/e47ea1c9aac60fc61354da86f394cfbdb2b17693))
+* **workspace-architecture:** confirm the linted manifest against its graph entry ([e44215f](https://github.com/ExaDev/eslint-config/commit/e44215f435af216e3aa93d6e926daa192e535115))
+* **workspace-checks:** derive keep-group naming from the group's own segment ([8719c2d](https://github.com/ExaDev/eslint-config/commit/8719c2d43707bff4ce08f2b25a833a01022a4ef7))
+* **workspace-glob:** normalise dot segments and honour glob escapes ([21729f1](https://github.com/ExaDev/eslint-config/commit/21729f11c9957952fef29ea432a1becfcc1ae98b))
+* **workspace-glob:** stop throwing on a packages glob matching no directory ([79dd51b](https://github.com/ExaDev/eslint-config/commit/79dd51b6a9ebd2a49c972d5f765669e192211af3))
+* **workspace-graph:** key a nameless package by its directory ([e8c052f](https://github.com/ExaDev/eslint-config/commit/e8c052fe915d057979e63b128576571f6a446856))
+* **workspace-graph:** resolve manifest paths via realpath; fix nameless-package matching ([4b8c138](https://github.com/ExaDev/eslint-config/commit/4b8c13841923fbd3d6430826b8fa531dad933df0))
+* **workspace-options:** narrow RegExp errors via assertIsError; test 'u' flag and cause ([6aed813](https://github.com/ExaDev/eslint-config/commit/6aed8131b74fa001238e1356651542b9b56692f4))
+* **workspace-options:** validate rankSkip, isolatedGroups and nameRanks ([8b24419](https://github.com/ExaDev/eslint-config/commit/8b24419a3df792e4c2079a7773232ad9342267b2))
+* **workspace:** make the two assertIsError call-site contexts directly testable ([20f4af7](https://github.com/ExaDev/eslint-config/commit/20f4af7cd90dbc66260c1d077a1aa020c5ab52e9))
+
+
+### Features
+
+* **workspace:** add assertIsError, a shared non-Error-throw guard ([1ec4277](https://github.com/ExaDev/eslint-config/commit/1ec427773b4bc99f14854d8347c15cb62105b286))
+
 ## [2.21.1](https://github.com/ExaDev/eslint-config/compare/v2.21.0...v2.21.1) (2026-09-26)
 
 
