@@ -4,11 +4,23 @@ import { splitPathSegments } from './workspace-path';
 
 // Reimplements pnpm-workspace.yaml's own "packages:" glob dialect directly against the real directory tree, rather than via Node's fs.globSync: that API only stabilised in Node 22, below this package's own >=20 engines floor. pnpm resolves these globs through fast-glob (https://pnpm.io/pnpm-workspace_yaml, "@pnpm/workspace.find-packages"), which is why this matcher follows fast-glob's own two behaviours that a naive hand-rolled globber would otherwise miss: brace expansion ('{core,lib}/*' is two patterns, not one literal path) and a wildcard segment never matching a name starting with "." (fast-glob's own default "dot: false"; pnpm's docs state this explicitly: "A '*' never matches a name beginning with a dot, so 'packages/*' skips 'packages/.cache'"). Every "packages:" glob is a directory glob (it names where a package's own directory lives, never a file), so this matcher only ever walks real subdirectories: '**' matches zero or more whole path segments; every other segment (a bare '*', a '[...]' character class, a literal name, or a partial pattern mixing literal text with '*'/'?'/'[...]' such as 'app-*' or '[a-z]-web') is matched against one real directory name at a time via segmentToRegExp below. node_modules is never descended into or matched, mirroring pnpm's own unconditional "**/node_modules/**" exclusion: a hoisted or npm-nested node_modules is real content in the tree, never a workspace package.
 
+/** Reads `text[index]`, throwing rather than reading past the end: every call site in this file only ever derives `index` from a `for` loop whose own condition (`index < text.length`) already guarantees it in range, so an out-of-bounds read here would mean that loop's own invariant broke, not a case to handle quietly. Exported so this throw (unreachable through every real call site) can be tested directly, the same "Unreachable, tested directly rather than trusted on a comment" shape workspace-yaml.ts's own `requireLine` establishes. */
+export function requireChar(text: string, index: number): string {
+  const char = text[index];
+  if (char === undefined) {
+    throw new Error(`Unreachable: index ${String(index)} is out of bounds for a string of length ${String(text.length)}.`);
+  }
+  return char;
+}
+
+// Every character segmentToRegExp's own default (no wildcard, no class) branch below can still reach and must escape under this file's own 'u'-flag regexes: a lone, unescaped ']' is itself a SyntaxError there ("Lone quantifier brackets"), not merely a stylistic nicety the way it would be without 'u', since it can never open a character class of its own to begin with; '[' never reaches this branch at all (its own dedicated branch above handles every '[', matched or not), so it is deliberately absent from this list.
+const REGEXP_SPECIAL_CHARS = /[.+^${}()|\]\\]/gu;
+
 // Builds the one-segment matcher behind every non-'**' pattern segment: '*' becomes zero-or-more characters, '?' becomes exactly one, a balanced '[...]' becomes a regex character class (a leading '!' or '^' negated the glob way, translated to the single '^' regex negation understands), and every other character is escaped so a literal segment (no wildcard or class at all) matches only its own exact name, same as before this function existed. Exported so its own 'u' flag (needed for the same reason deriveRank's nameRanks patterns carry one, see workspace-graph.unit.test.ts) can be asserted directly, independent of any particular directory name this module is ever exercised against.
 export function segmentToRegExp(segment: string): RegExp {
   let source = '';
   for (let index = 0; index < segment.length; ) {
-    const char = segment.charAt(index);
+    const char = requireChar(segment, index);
     if (char === '*') {
       source += '.*';
       index += 1;
@@ -35,7 +47,7 @@ export function segmentToRegExp(segment: string): RegExp {
       index = closeIndex + 1;
       continue;
     }
-    source += char.replace(/[.+^${}()|\\]/gu, '\\$&');
+    source += char.replace(REGEXP_SPECIAL_CHARS, '\\$&');
     index += 1;
   }
   return new RegExp(`^${source}$`, 'u');
@@ -79,7 +91,7 @@ function walkPattern(fs: WorkspaceFs, root: string, segments: readonly string[],
 function findMatchingBrace(pattern: string, openIndex: number): number {
   let depth = 0;
   for (let index = openIndex; index < pattern.length; index += 1) {
-    const char = pattern.charAt(index);
+    const char = requireChar(pattern, index);
     if (char === '{') depth += 1;
     else if (char === '}') {
       depth -= 1;
@@ -95,7 +107,7 @@ function splitTopLevelAlternatives(text: string): readonly string[] {
   let depth = 0;
   let start = 0;
   for (let index = 0; index < text.length; index += 1) {
-    const char = text.charAt(index);
+    const char = requireChar(text, index);
     if (char === '{') depth += 1;
     else if (char === '}') depth -= 1;
     else if (char === ',' && depth === 0) {

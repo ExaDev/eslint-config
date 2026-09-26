@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { expandBraces, expandGlob, isExcludePattern, resolveWorkspacePackageDirs, segmentToRegExp } from './workspace-glob';
+import { expandBraces, expandGlob, isExcludePattern, requireChar, resolveWorkspacePackageDirs, segmentToRegExp } from './workspace-glob';
 import type { WorkspaceFs } from './workspace-fs';
 
 // An in-memory tree keyed by absolute-ish path, mapping each directory to its own subdirectory names, plus a set of paths that own a real package.json.
@@ -18,6 +18,17 @@ function fakeFs(dirs: Record<string, readonly string[]>, packageJsonDirs: readon
   };
 }
 
+describe('requireChar', () => {
+  it('returns the character at a genuinely in-bounds index', () => {
+    expect(requireChar('abc', 1)).toBe('b');
+  });
+
+  it('throws for an out-of-bounds index, a shape no real call site (every one bounded by its own loop\'s "index < length" condition) can produce', () => {
+    const outOfBoundsIndex = 3;
+    expect(() => requireChar('abc', outOfBoundsIndex)).toThrow(/Unreachable/);
+  });
+});
+
 describe('segmentToRegExp', () => {
   it("builds its RegExp with the 'u' flag", () => {
     // Asserted directly on .flags rather than through any particular directory name: every real match this module makes goes through code points, not UTF-16 code units, and no fixture of plain ASCII directory names would ever observe the difference behaviourally.
@@ -35,6 +46,22 @@ describe('segmentToRegExp', () => {
     const pattern = segmentToRegExp('[!ab]');
     expect(pattern.test('a')).toBe(false);
     expect(pattern.test('c')).toBe(true);
+    // The "!" marker itself is stripped from the class body, not left inside it as an excluded character: this is what actually distinguishes slicing it off from leaving the whole, unsliced body behind.
+    expect(pattern.test('!')).toBe(true);
+  });
+
+  it('only a "!"/"^" at the very START of a character class negates it; the same character elsewhere in the class is a literal member', () => {
+    const pattern = segmentToRegExp('[ab^]');
+    expect(pattern.test('a')).toBe(true);
+    expect(pattern.test('^')).toBe(true);
+    expect(pattern.test('c')).toBe(false);
+  });
+
+  it('preserves a literal backslash inside a character class body, rather than silently deleting it', () => {
+    const pattern = segmentToRegExp('[a\\b]');
+    expect(pattern.test('\\')).toBe(true);
+    expect(pattern.test('a')).toBe(true);
+    expect(pattern.test('c')).toBe(false);
   });
 
   it('negates a character class written with a leading "^", the same as a plain regex class', () => {
@@ -59,6 +86,18 @@ describe('segmentToRegExp', () => {
     const pattern = segmentToRegExp('a[b');
     expect(pattern.test('a[b')).toBe(true);
     expect(pattern.test('ab')).toBe(false);
+  });
+
+  it('escapes a literal "]" outside any character class, rather than leaving it to a bare regex construction: unescaped, "u"-flag regexes throw "Lone quantifier brackets" for it', () => {
+    expect(() => segmentToRegExp('a]b')).not.toThrow();
+    expect(segmentToRegExp('a]b').test('a]b')).toBe(true);
+  });
+
+  it('starts the search for a character class\'s own closing "]" strictly after the opening "[", not one character earlier: a literal "]" sitting immediately before the "[" must never be mistaken for that class\'s own close', () => {
+    const pattern = segmentToRegExp('a][bc]');
+    expect(pattern.test('a]b')).toBe(true);
+    expect(pattern.test('a]c')).toBe(true);
+    expect(pattern.test('a]x')).toBe(false);
   });
 });
 
