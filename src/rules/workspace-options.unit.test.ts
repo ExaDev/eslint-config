@@ -217,6 +217,21 @@ describe('readWorkspaceArchitectureOptions', () => {
     );
   });
 
+  it('compiles "nameRanks" patterns under the \'u\' flag, the same flag deriveRank itself later compiles them with: "\\-" is a valid (if redundant) escape without \'u\', but an invalid one under it, so a pattern only \'u\'-flag-invalid must still throw here', () => {
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, nameRanks: [{ pattern: '\\-', rank: 0 }] })).toThrow(/"nameRanks" pattern "\\-"/);
+  });
+
+  it('attaches the original SyntaxError as the thrown error\'s own "cause", not merely folded into its message', () => {
+    // expect.assertions confirms the catch block genuinely ran: with no throw at all, this test would otherwise pass vacuously having asserted nothing.
+    expect.assertions(2);
+    try {
+      readWorkspaceArchitectureOptions({ ...MINIMAL, nameRanks: [{ pattern: '(', rank: 0 }] });
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).cause).toBeInstanceOf(Error);
+    }
+  });
+
   it('passes through a valid "defaultRank"', () => {
     const rank = 3;
     expect(readWorkspaceArchitectureOptions({ ...MINIMAL, defaultRank: rank }).defaultRank).toBe(rank);
