@@ -19,7 +19,9 @@ export interface CheckDependenciesContext {
   readonly isolatedGroups?: readonly (readonly [string, string])[];
 }
 
-function isIsolatedPair(groupA: string, groupB: string, isolatedGroups: readonly (readonly [string, string])[]): boolean {
+// Absence handled here, at the one place that actually decides isolation, rather than a `?? []` fallback at the call site: "no isolatedGroups configured" and "isolatedGroups configured but this particular pair is not in it" are the same real answer (never isolated), so the explicit undefined check states that directly instead of manufacturing an empty array purely to make .some() have something to iterate over.
+function isIsolatedPair(groupA: string, groupB: string, isolatedGroups: readonly (readonly [string, string])[] | undefined): boolean {
+  if (isolatedGroups === undefined) return false;
   return isolatedGroups.some(([first, second]) => (first === groupA && second === groupB) || (first === groupB && second === groupA));
 }
 
@@ -40,13 +42,12 @@ export function checkDependencies(
   context: CheckDependenciesContext,
 ): readonly WorkspaceViolation[] {
   const violations: WorkspaceViolation[] = [];
-  const isolatedGroups = context.isolatedGroups ?? [];
 
   for (const dependencyName of dependencyNames) {
     const dependency = context.graph.get(dependencyName);
     if (dependency === undefined) continue;
 
-    if (isIsolatedPair(self.group, dependency.group, isolatedGroups)) {
+    if (isIsolatedPair(self.group, dependency.group, context.isolatedGroups)) {
       violations.push({
         dependencyName,
         messageId: 'isolatedGroup',
@@ -122,10 +123,11 @@ export function last<T>(array: readonly T[]): T {
  * - **'keep-group'**: keep every segment of `relativeDir` as-is, including the group's own root segments (a test group whose packages are named "test-<feature>", mirroring the feature they test, needs its own "test" segment kept).
  * - **'basename'**: use only `relativeDir`'s own final segment, ignoring every intermediate directory, for a group whose intermediate structure exists purely for filesystem organisation and carries no naming intent of its own.
  */
-const NAME_SEGMENTS_BY_STRATEGY: Record<NamingStrategy, (segments: readonly string[], rest: readonly string[]) => readonly string[]> = {
-  basename: (segments) => [last(segments)],
-  'keep-group': (segments) => segments,
-  'drop-group': (_segments, rest) => rest,
+// A single { segments, rest } options object, not two positional parameters: 'drop-group' only ever needs `rest`, so a plain `(segments, rest)` signature would leave it with an unused `segments` parameter, prefixed `_segments` to silence that unused-parameter warning rather than actually removing it, exactly what this project's own no-unused-parameter convention (drop it from the signature) exists to catch instead of paper over. Each function destructures only the field its own strategy actually reads.
+const NAME_SEGMENTS_BY_STRATEGY: Record<NamingStrategy, (parts: { readonly segments: readonly string[]; readonly rest: readonly string[] }) => readonly string[]> = {
+  basename: ({ segments }) => [last(segments)],
+  'keep-group': ({ segments }) => segments,
+  'drop-group': ({ rest }) => rest,
 };
 
 /**
@@ -137,7 +139,7 @@ export function expectedPackageName(relativeDir: string, group: GroupSpec, namin
   const groupPrefixLength = splitPathSegments(group.path ?? group.name).length;
   const rest = segments.slice(groupPrefixLength);
 
-  const nameSegments = NAME_SEGMENTS_BY_STRATEGY[group.naming ?? 'drop-group'](segments, rest);
+  const nameSegments = NAME_SEGMENTS_BY_STRATEGY[group.naming ?? 'drop-group']({ segments, rest });
 
   const joined = nameSegments.join(separator);
   return naming.scope === undefined ? joined : `${naming.scope}/${joined}`;
