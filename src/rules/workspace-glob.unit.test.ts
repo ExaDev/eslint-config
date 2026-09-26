@@ -23,6 +23,9 @@ function fakeFs(dirs: Record<string, readonly string[]>, packageJsonDirs: readon
       if (entries === undefined) return [];
       return entries.map((name) => ({ name, isDirectory: () => true }));
     },
+    realpathSync: () => {
+      throw new Error('not used in these tests');
+    },
   };
 }
 
@@ -119,6 +122,13 @@ describe('segmentToRegExp', () => {
 
   it('takes a "]" sitting immediately after a negation marker as a literal member too, not the class\'s own close', () => {
     const pattern = segmentToRegExp('[!]a]');
+    expect(pattern.test(']')).toBe(false);
+    expect(pattern.test('a')).toBe(false);
+    expect(pattern.test('b')).toBe(true);
+  });
+
+  it('takes a "]" sitting immediately after a "^" negation marker as a literal member too, the same as after "!": this is what actually distinguishes recognising "^" as a consumed marker (advancing past it, so the leading-position "]"-is-literal exception applies to the NEXT character) from merely leaving an unconsumed "^" as the class body\'s own first character (which would instead let this same "]" close the class immediately, one position too early)', () => {
+    const pattern = segmentToRegExp('[^]a]');
     expect(pattern.test(']')).toBe(false);
     expect(pattern.test('a')).toBe(false);
     expect(pattern.test('b')).toBe(true);
@@ -283,6 +293,17 @@ describe('expandGlob', () => {
     expect(expandGlob(fs, '/root', '../core/*')).toEqual([]);
   });
 
+  it('two consecutive leading ".." segments never pop each other: each is kept as its own literal, unmatchable segment, the same as path.posix.normalize(\'../../x\') staying "../../x" rather than collapsing to "x"', () => {
+    // "x" is a REAL directory here specifically so a wrongly-collapsing normalisation (popping the first ".." placeholder against the second, rather than keeping both) would match it: only a normaliser that keeps both ".." segments literal ever tries to walk a directory actually named "..", which this fake tree does not have, giving no matches either way.
+    const fs = fakeFs({ '/root': ['x'], '/root/x': ['a'] });
+    expect(expandGlob(fs, '/root', '../../x/*')).toEqual([]);
+  });
+
+  it('a real segment followed by two ".." pops it once, then keeps the second ".." as its own literal segment, matching path.posix.normalize(\'a/../../b\') giving "../b", not "b"', () => {
+    const fs = fakeFs({ '/root': ['b'], '/root/b': ['a'] });
+    expect(expandGlob(fs, '/root', 'a/../../b/*')).toEqual([]);
+  });
+
   it("matches a partial, in-segment wildcard ('app-*'), pnpm's own supported dialect beyond a whole-segment '*'", () => {
     const fs = fakeFs({ '/root': ['features'], '/root/features': ['app-store', 'app-billing', 'other'] });
     expect([...expandGlob(fs, '/root', 'features/app-*')].sort()).toEqual(['features/app-billing', 'features/app-store']);
@@ -381,17 +402,17 @@ describe('resolveWorkspacePackageDirs', () => {
     expect(resolveWorkspacePackageDirs(fs, '/root', ['core/*', '!core/billing'])).toEqual(['core/kv']);
   });
 
-  it('throws, naming the pattern, when a positive glob matches no directory at all, rather than silently resolving to an empty result', () => {
+  it('resolves a positive glob matching no directory at all to an empty result, the same as pnpm itself, rather than throwing', () => {
     const fs = fakeFs({ '/root': ['core'], '/root/core': ['kv'] }, ['/root/core/kv']);
-    expect(() => resolveWorkspacePackageDirs(fs, '/root', ['cor/*'])).toThrow('@exadev/eslint-config: the workspace "packages" glob "cor/*" matched no directory under "/root"');
+    expect(resolveWorkspacePackageDirs(fs, '/root', ['cor/*'])).toEqual([]);
   });
 
-  it('still throws for a positive glob matching nothing even when another, genuinely matching pattern is also configured', () => {
-    const fs = fakeFs({ '/root': ['core'], '/root/core': ['kv'] }, ['/root/core/kv']);
-    expect(() => resolveWorkspacePackageDirs(fs, '/root', ['core/*', 'targets/*'])).toThrow(/"targets\/\*"/);
+  it('a declared glob over a group directory with no member subdirectories yet contributes nothing, without affecting another, genuinely matching pattern', () => {
+    const fs = fakeFs({ '/root': ['core', 'verticals'], '/root/core': ['kv'], '/root/verticals': [] }, ['/root/core/kv']);
+    expect(resolveWorkspacePackageDirs(fs, '/root', ['core/*', 'verticals/*/*'])).toEqual(['core/kv']);
   });
 
-  it('does not throw for an exclude pattern matching nothing (only a positive glob matching nothing is a misconfiguration)', () => {
+  it('does not throw for an exclude pattern matching nothing', () => {
     const fs = fakeFs({ '/root': ['core'], '/root/core': ['kv'] }, ['/root/core/kv']);
     expect(() => resolveWorkspacePackageDirs(fs, '/root', ['core/*', '!core/missing'])).not.toThrow();
   });

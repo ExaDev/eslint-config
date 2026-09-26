@@ -47,13 +47,12 @@ export function segmentToRegExp(segment: string): RegExp {
       continue;
     }
     if (char === '[') {
-      // A '!' or '^' negation marker is consumed first, then a ']' sitting in the very next body position (right after '[', or right after that marker) is itself a literal member of the class, not its closing bracket: the same POSIX/picomatch convention that makes an empty class otherwise meaningless. Only a ']' found strictly after that leading position closes the class.
+      // A '!' or '^' negation marker is consumed first, then a ']' sitting in the very next body position (right after '[', or right after that marker) is itself a literal member of the class, not its closing bracket: the same POSIX/picomatch convention that makes an empty class otherwise meaningless. Only a ']' found strictly after that leading position closes the class, so the search always starts one character past bodyStart (which a consumed marker has already advanced past its own position): when segment[bodyStart] genuinely is ']', that skips over it (the leading-position exception above); when it is not, starting the search there instead of at bodyStart finds the exact same first real ']' either way, since indexOf can never match a character that is not there.
       let bodyStart = index + 1;
       const marker = segment[bodyStart];
       const negated = marker === '!' || marker === '^';
       if (negated) bodyStart += 1;
-      const searchFrom = segment[bodyStart] === ']' ? bodyStart + 1 : bodyStart;
-      const closeIndex = segment.indexOf(']', searchFrom);
+      const closeIndex = segment.indexOf(']', bodyStart + 1);
       if (closeIndex === -1) {
         // An unmatched '[' is not a character class at all, just a literal character: escaped the same way every other non-wildcard character is, rather than left to open a regex class that never closes.
         source += '\\[';
@@ -202,7 +201,7 @@ export function isExcludePattern(pattern: string): boolean {
 }
 
 /**
- * Resolves pnpm-workspace.yaml's own package glob list (positive patterns plus "!"-prefixed excludes) against the real directory tree, returning every matching directory (relative to `root`) that also owns a real package.json. A glob match with no package.json of its own is silently not a package (an empty scaffold directory, a stray folder left behind by a rename), matching pnpm's own behaviour rather than treating it as a workspace member. A positive pattern matching NO directory at all, though, is treated differently: that is almost always a typo or a stale path (see the pnpm/pattern mismatch example this throw's own message points at), and letting it through silently would make every workspace-architecture rule quietly stop covering whatever that pattern was meant to reach, exactly the empty-result no-op resolveWorkspacePackagePatterns' own empty-pattern-list guard already exists to prevent one level up.
+ * Resolves pnpm-workspace.yaml's own package glob list (positive patterns plus "!"-prefixed excludes) against the real directory tree, returning every matching directory (relative to `root`) that also owns a real package.json. A glob match with no package.json of its own is silently not a package (an empty scaffold directory, a stray folder left behind by a rename), and a positive pattern matching NO directory at all is silently empty too: pnpm itself accepts a "packages:" glob over a group that currently holds no member directories (a freshly scaffolded group, or one whose only real content so far is a README), so a workspace declaring a two-level nested glob over a "verticals" group before anything lives under it must lint exactly as it did before that glob was added, not abort every workspace-architecture rule with a startup error.
  */
 export function resolveWorkspacePackageDirs(fs: WorkspaceFs, root: string, patterns: readonly string[]): readonly string[] {
   const includePatterns = patterns.filter((pattern) => !isExcludePattern(pattern));
@@ -210,13 +209,7 @@ export function resolveWorkspacePackageDirs(fs: WorkspaceFs, root: string, patte
 
   const included = new Set<string>();
   for (const pattern of includePatterns) {
-    const matches = expandGlob(fs, root, pattern);
-    if (matches.length === 0) {
-      throw new Error(
-        `@exadev/eslint-config: the workspace "packages" glob "${pattern}" matched no directory under "${root}". Fix the pattern (a typo, a stale path, or a "./"/".."/repeated-slash form that still resolves to nothing real), or remove it if it is no longer needed: a positive glob matching nothing would otherwise silently make every workspace-architecture rule skip whatever it was meant to cover.`,
-      );
-    }
-    for (const dir of matches) included.add(dir);
+    for (const dir of expandGlob(fs, root, pattern)) included.add(dir);
   }
 
   const excluded = new Set<string>();
