@@ -173,10 +173,10 @@ function isNonNegativeInteger(value: unknown): value is number {
 
 function isSliceSpec(value: unknown): value is SliceSpec {
   if (!isRecord(value)) return false;
-  // Each branch's own hasOnlyKeys check is what rejects a slice carrying BOTH "segment" and "namePrefix", or either alongside some other unknown property: without it, `{ segment: 0, namePrefix: true }` reads as a valid SliceBySegment, silently dropping the extra key exactly as readWorkspaceArchitectureOptions' own module doc comment says this whole reader is meant never to do at any level it validates.
+  // hasOnlyKeys is what rejects a slice carrying BOTH "segment" and "namePrefix", or either alongside some other unknown property: without it, `{ segment: 0, namePrefix: true }` reads as a valid SliceBySegment, silently dropping the extra key exactly as readWorkspaceArchitectureOptions' own module doc comment says this whole reader is meant never to do at any level it validates.
   if ('segment' in value) return hasOnlyKeys(value, SLICE_BY_SEGMENT_KEYS) && isNonNegativeInteger(value['segment']);
-  if ('namePrefix' in value) return hasOnlyKeys(value, SLICE_BY_NAME_PREFIX_KEYS) && value['namePrefix'] === true;
-  return false;
+  // No separate "'namePrefix' in value" guard here: `value['namePrefix'] === true` can only ever be true when "namePrefix" genuinely is a key (reading a property that was never set reads undefined, never true), so a guard re-deriving that exact same fact first would be a no-op every real input could ever exercise, not a real branch.
+  return hasOnlyKeys(value, SLICE_BY_NAME_PREFIX_KEYS) && value['namePrefix'] === true;
 }
 
 function isNamingStrategy(value: unknown): value is NamingStrategy {
