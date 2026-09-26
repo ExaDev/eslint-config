@@ -52,6 +52,10 @@ describe('readWorkspaceArchitectureOptions', () => {
     expect(result).not.toHaveProperty('naming');
   });
 
+  it('throws for an unknown top-level property, even one that only misspells a real one ("rankskip" for "rankSkip")', () => {
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, rankskip: { maxDistance: 1, exemptRanks: [] } })).toThrow(MISCONFIGURATION_MESSAGE);
+  });
+
   it('passes through a valid "root" string', () => {
     expect(readWorkspaceArchitectureOptions({ ...MINIMAL, root: '/repo' }).root).toBe('/repo');
   });
@@ -96,6 +100,10 @@ describe('readWorkspaceArchitectureOptions', () => {
     expect(readWorkspaceArchitectureOptions({ groups }).groups).toEqual(groups);
   });
 
+  it('throws for a group with an unknown property', () => {
+    expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'core', ranks: 0 }] })).toThrow(MISCONFIGURATION_MESSAGE);
+  });
+
   it('throws for a group whose "path" is not a string', () => {
     const notAString = 5;
     expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'core', path: notAString }] })).toThrow(MISCONFIGURATION_MESSAGE);
@@ -138,6 +146,10 @@ describe('readWorkspaceArchitectureOptions', () => {
     expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, nameRanks: [{ pattern: 'x', rank: 0 }, { rank: 1 }] })).toThrow(MISCONFIGURATION_MESSAGE);
   });
 
+  it('throws for a "nameRanks" entry with an unknown property', () => {
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, nameRanks: [{ pattern: 'x', rank: 0, weight: 1 }] })).toThrow(MISCONFIGURATION_MESSAGE);
+  });
+
   it('passes through a valid "defaultRank"', () => {
     const rank = 3;
     expect(readWorkspaceArchitectureOptions({ ...MINIMAL, defaultRank: rank }).defaultRank).toBe(rank);
@@ -172,9 +184,22 @@ describe('readWorkspaceArchitectureOptions', () => {
     expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, rankSkip: { maxDistance: 1, exemptRanks: 0 } })).toThrow(MISCONFIGURATION_MESSAGE);
   });
 
+  it('throws for a "rankSkip" with an unknown property', () => {
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, rankSkip: { maxDistance: 1, exemptRanks: [], extra: true } })).toThrow(
+      MISCONFIGURATION_MESSAGE,
+    );
+  });
+
   it('passes through valid "isolatedGroups"', () => {
+    const groups = [{ name: 'core' }, { name: 'features' }, { name: 'verticals' }];
     const isolatedGroups = [['features', 'verticals']];
-    expect(readWorkspaceArchitectureOptions({ ...MINIMAL, isolatedGroups }).isolatedGroups).toEqual(isolatedGroups);
+    expect(readWorkspaceArchitectureOptions({ groups, isolatedGroups }).isolatedGroups).toEqual(isolatedGroups);
+  });
+
+  it('throws for an "isolatedGroups" pair naming a group not declared in "groups"', () => {
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, isolatedGroups: [['features', 'verticals']] })).toThrow(
+      '"isolatedGroups" names a group not declared in "groups"',
+    );
   });
 
   it('throws for an "isolatedGroups" pair that is too short', () => {
@@ -222,6 +247,10 @@ describe('readWorkspaceArchitectureOptions', () => {
 
   it('throws for a non-object "naming"', () => {
     expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, naming: 'scoped' })).toThrow(MISCONFIGURATION_MESSAGE);
+  });
+
+  it('throws for a "naming" with an unknown property', () => {
+    expect(() => readWorkspaceArchitectureOptions({ ...MINIMAL, naming: { scope: '@x', prefix: '@x' } })).toThrow(MISCONFIGURATION_MESSAGE);
   });
 });
 

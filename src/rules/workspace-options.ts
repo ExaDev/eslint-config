@@ -31,7 +31,7 @@ export interface RankRule {
 }
 
 export interface RankSkipOptions {
-  // A dependency's rank may sit at most this many ranks below the dependant's own rank (0 is "no skipping": only the immediately lower rank is reachable). Exceeding it, when the dependency's rank is not in exemptRanks, is a rankSkip violation.
+  // A dependency's rank may sit at most this many ranks below the dependant's own rank (checked as `self.rank - dependency.rank > maxDistance`): 1 allows only the immediately lower rank, 0 allows only the same rank as the dependant. Exceeding it, when the dependency's rank is not in exemptRanks, is a rankSkip violation.
   readonly maxDistance: number;
   // Ranks that may always be depended on directly regardless of distance. A pure, dependency-light contract layer, most often rank 0, is the usual case: it is meant to be reachable from anywhere.
   readonly exemptRanks: readonly number[];
@@ -134,6 +134,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+// Every key this reader recognises at each level it validates, checked against the object's own actual keys so an unknown or misspelled one (a typo'd "rankskip" alongside, or instead of, the real "rankSkip") fails loudly here rather than being silently dropped by the whitelisted reconstruction below and never reaching ESLint's own schema at all (workspaceArchitectureConfig builds its rule options by calling this reader on the caller's raw object BEFORE that validation ever sees it; see readWorkspaceArchitectureOptions' own doc comment).
+const TOP_LEVEL_KEYS = ['root', 'packages', 'dependencyFields', 'groups', 'nameRanks', 'defaultRank', 'rankSkip', 'isolatedGroups', 'naming'] as const;
+const GROUP_KEYS = ['name', 'path', 'rank', 'slice', 'naming'] as const;
+const RANK_RULE_KEYS = ['pattern', 'rank'] as const;
+const RANK_SKIP_KEYS = ['maxDistance', 'exemptRanks'] as const;
+const NAMING_KEYS = ['scope', 'separator'] as const;
+
+function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
+  return Object.keys(value).every((key) => allowed.includes(key));
+}
+
 function asOptionalString(value: unknown): string | undefined {
   if (value === undefined) return undefined;
   if (typeof value !== 'string') fail();
@@ -164,6 +175,7 @@ function isNamingStrategy(value: unknown): value is NamingStrategy {
 
 function isGroupSpec(value: unknown): value is GroupSpec {
   if (!isRecord(value)) return false;
+  if (!hasOnlyKeys(value, GROUP_KEYS)) return false;
   if (typeof value['name'] !== 'string') return false;
   const { path, rank, slice, naming } = value;
   if (path !== undefined && typeof path !== 'string') return false;
@@ -179,7 +191,7 @@ function asGroupSpecArray(value: unknown): readonly GroupSpec[] {
 }
 
 function isRankRule(value: unknown): value is RankRule {
-  return isRecord(value) && typeof value['pattern'] === 'string' && typeof value['rank'] === 'number';
+  return isRecord(value) && hasOnlyKeys(value, RANK_RULE_KEYS) && typeof value['pattern'] === 'string' && typeof value['rank'] === 'number';
 }
 
 function asOptionalRankRuleArray(value: unknown): readonly RankRule[] | undefined {
@@ -190,6 +202,7 @@ function asOptionalRankRuleArray(value: unknown): readonly RankRule[] | undefine
 
 function isRankSkipOptions(value: unknown): value is RankSkipOptions {
   if (!isRecord(value)) return false;
+  if (!hasOnlyKeys(value, RANK_SKIP_KEYS)) return false;
   if (typeof value['maxDistance'] !== 'number') return false;
   const { exemptRanks } = value;
   return Array.isArray(exemptRanks) && exemptRanks.every((rank) => typeof rank === 'number');
@@ -213,6 +226,7 @@ function asOptionalIsolatedGroups(value: unknown): readonly (readonly [string, s
 
 function isNamingOptions(value: unknown): value is NamingOptions {
   if (!isRecord(value)) return false;
+  if (!hasOnlyKeys(value, NAMING_KEYS)) return false;
   const { scope, separator } = value;
   if (scope !== undefined && typeof scope !== 'string') return false;
   return separator === undefined || typeof separator === 'string';
@@ -225,10 +239,11 @@ function asOptionalNaming(value: unknown): NamingOptions | undefined {
 }
 
 /**
- * The runtime safety net behind workspaceArchitectureOptionsSchema above: ESLint's own schema validation is the first line of defence (rejecting malformed options before create() ever runs, the same division of labour barrel-policy.ts's readMode establishes for its own, much smaller options shape), but workspaceArchitectureConfig() (src/workspace-architecture.ts) also hands this same options object straight to the plugin's rules as a plain JS value with no ESLint validation pass of its own in between a consumer's config authoring and a real lint run picking it up, so a genuinely malformed options object is still worth failing loudly and specifically here rather than crashing later with a confusing TypeError deep inside graph construction.
+ * The runtime safety net behind workspaceArchitectureOptionsSchema above: ESLint's own schema validation does run whenever the config is used in a real lint (rejecting malformed rule options there too, the same division of labour barrel-policy.ts's readMode establishes for its own, much smaller options shape), but workspaceArchitectureConfig() (src/workspace-architecture.ts) builds its rule options by calling this reader on the caller's raw object BEFORE that validation ever inspects it, and previously reconstructed a whitelisted object that silently dropped any unknown or misspelled top-level key rather than rejecting it, leaving ESLint's own schema nothing left to catch. This reader now rejects an unknown key at every level it validates (top level, group, rankSkip, naming, nameRanks entries) itself, so a genuinely malformed options object still fails loudly and specifically here, whichever entry point it arrives through, rather than crashing later with a confusing TypeError deep inside graph construction or being silently ignored.
  */
 export function readWorkspaceArchitectureOptions(options: unknown): WorkspaceArchitectureOptions {
   if (!isRecord(options)) fail();
+  if (!hasOnlyKeys(options, TOP_LEVEL_KEYS)) fail();
 
   const groups = asGroupSpecArray(options['groups']);
   const root = asOptionalString(options['root']);
@@ -239,6 +254,17 @@ export function readWorkspaceArchitectureOptions(options: unknown): WorkspaceArc
   const rankSkip = asOptionalRankSkip(options['rankSkip']);
   const isolatedGroups = asOptionalIsolatedGroups(options['isolatedGroups']);
   const naming = asOptionalNaming(options['naming']);
+
+  if (isolatedGroups !== undefined) {
+    const groupNames = new Set(groups.map((group) => group.name));
+    for (const [first, second] of isolatedGroups) {
+      if (!groupNames.has(first) || !groupNames.has(second)) {
+        throw new Error(
+          `@exadev/eslint-config: "isolatedGroups" names a group not declared in "groups" (["${first}", "${second}"]). Every isolatedGroups pair must name two of this workspace's own declared groups.`,
+        );
+      }
+    }
+  }
 
   return {
     ...(root !== undefined && { root }),
