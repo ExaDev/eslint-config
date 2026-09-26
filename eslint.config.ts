@@ -5,7 +5,8 @@ import { exadevConfig } from './src/index';
 // defineConfig() over a plain array or the now-@deprecated tseslint.config(): exadevConfig()'s return type is PublicConfigArray (see src/config-types.ts), typed against @eslint/core's own ConfigObject specifically so it satisfies defineConfig()'s parameter type directly -- this file is the first real proof of that, dogfooding the fix on the same repo that ships it.
 export default defineConfig(
   {
-    ignores: ['dist', 'coverage', 'node_modules', '.turbo'],
+    // src/rules/__fixtures__/workspace is a committed fixture tree of synthetic package.json/pnpm-workspace.yaml files (see workspace-graph.unit.test.ts's own real-filesystem cases), not real source or a real dependency manifest of this package's own: it is deliberately excluded the same way dist/coverage are, rather than made to satisfy this repo's own json-canonical/package-json-key-order rules for content that exists purely as test input.
+    ignores: ['dist', 'coverage', 'node_modules', '.turbo', 'src/rules/__fixtures__'],
   },
   {
     languageOptions: {

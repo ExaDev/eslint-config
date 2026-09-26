@@ -1,0 +1,7 @@
+# A minimal, representative pnpm-workspace.yaml fixture: exercises resolveWorkspaceRoot's own ancestor search, resolveWorkspacePackagePatterns' own default read of this file, and the real directory walk buildWorkspaceGraph performs against a genuine (if small) tree, rather than an in-memory stub.
+packages:
+  - 'core/*/*'
+  - 'features/*/*'
+  - 'product/*/*'
+  - 'targets/*'
+  - 'test/*'
