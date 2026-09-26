@@ -141,7 +141,8 @@ export function expectedPackageName(relativeDir: string, group: GroupSpec, namin
   const segments = splitPathSegments(relativeDir);
   const groupPathSegments = splitPathSegments(group.path ?? group.name);
   const rest = segments.slice(groupPathSegments.length);
-  const groupNameSegment = last(groupPathSegments);
+  // The group's own name, unless its path nests more than one directory deep, in which case that nested path's own last segment stands in for it (see the 'keep-group' doc comment above): a group declared `{ name: 'test', path: 'tests' }` keeps 'test', not the path's 'tests'; one declared `{ name: 'e2e', path: 'packages/test' }` keeps 'test', not 'e2e'.
+  const groupNameSegment = groupPathSegments.length > 1 ? last(groupPathSegments) : group.name;
 
   const nameSegments = NAME_SEGMENTS_BY_STRATEGY[group.naming ?? 'drop-group']({ segments, rest, groupNameSegment });
 
