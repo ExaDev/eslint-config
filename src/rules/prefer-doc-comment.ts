@@ -195,10 +195,13 @@ const preferDocComment = createRule<Options, MessageIds>({
       TSTypeAliasDeclaration(node) {
         checkAnchor(getExportWrapper(node));
       },
-      VariableDeclarator(node) {
-        if (node.init?.type !== AST_NODE_TYPES.ArrowFunctionExpression && node.init?.type !== AST_NODE_TYPES.FunctionExpression) return;
-        // A VariableDeclarator's own `.parent` is typed (and, by the grammar, always) exactly VariableDeclaration, so no runtime narrowing check is needed here either, for the identical reason as isMethodOfExportedClass's own comment above.
-        checkAnchor(getExportWrapper(node.parent));
+      // Keyed on the VariableDeclaration itself, not each individual VariableDeclarator: a multi-declarator export (`export const h1 = () => {}, h2 = () => {};`) is still a single statement with a single leading comment group, so checking (and potentially reporting on) each declarator in turn would report the identical comment once per declarator. Reported once, on the declaration as a whole, whenever ANY of its declarators is a function/arrow-function init, matching the "an exported function expression or arrow function assigned to an exported const" shape this rule's own header comment enumerates.
+      VariableDeclaration(node) {
+        const hasFunctionInit = node.declarations.some(
+          (declarator) => declarator.init?.type === AST_NODE_TYPES.ArrowFunctionExpression || declarator.init?.type === AST_NODE_TYPES.FunctionExpression,
+        );
+        if (!hasFunctionInit) return;
+        checkAnchor(getExportWrapper(node));
       },
       MethodDefinition(node) {
         if (!isPublicMethod(node) || !isMethodOfExportedClass(node)) return;

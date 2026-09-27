@@ -227,5 +227,11 @@ ruleTester.run('prefer-doc-comment', rule, {
       output: 'export class C {\n  m(): void {} // trailing\n  /**\n   * Doc line one for n.\n   * Doc line two for n.\n   */\n  n(): void {}\n}',
       errors: [{ messageId: 'preferDocComment' }],
     },
+    // A single statement with two function-valued declarators (`export const h1 = ..., h2 = ...;`): reported and fixed exactly ONCE, on the declaration as a whole, never once per declarator (the `errors` array below asserts exactly one error).
+    {
+      code: '// first line\n// second line\nexport const h1 = (): void => {}, h2 = (): void => {};',
+      output: '/**\n * first line\n * second line\n */\nexport const h1 = (): void => {}, h2 = (): void => {};',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
   ],
 });
