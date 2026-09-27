@@ -354,6 +354,11 @@ ruleTester.run('prefer-options-object-param', rule, {
       code: 'interface I {\n  m(a: number, b?: number, c?: number): void;\n}',
       errors: [{ messageId: 'tooManyTrailingOptional', data: { kind: 'method', count: 2, names: 'b, c' }, suggestions: [] }],
     },
+    // Bail-out: an abstract class method (TSAbstractMethodDefinition), also declaration-only and labelled 'method'. Isolates describeFunctionKind's own parent-type check from the MethodDefinition case above: TSAbstractMethodDefinition is a genuinely different parent node type, checked by its own separate condition, not an alias for MethodDefinition.
+    {
+      code: 'abstract class C {\n  abstract m(a: number, b?: number, c?: number): void;\n}',
+      errors: [{ messageId: 'tooManyTrailingOptional', data: { kind: 'method', count: 2, names: 'b, c' }, suggestions: [] }],
+    },
     // Bail-out: an interface construct signature (TSConstructSignatureDeclaration) — declaration-only, and labelled 'constructor' directly from its own node type rather than through a MethodDefinition parent.
     {
       code: 'interface I {\n  new (a: number, b?: number, c?: number): I;\n}',
