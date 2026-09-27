@@ -375,6 +375,28 @@ ruleTester.run('prefer-options-object-param', rule, {
         },
       ],
     },
+    // Bail-out: an optional (?-marked) ObjectPattern and an optional (?-marked) ArrayPattern in the trailing run, in a declaration-only ambient function signature (TSDeclareFunction). Neither pattern has a single bindable name, so resolveFixableParam bails on both regardless, but proves isOptionalParam itself now recognises `{ x }?: T` and `[y]?: T[]` as optional (both parse and are only valid in a declaration signature, a `.d.ts` file or an interface method, never in a real function body).
+    {
+      code: 'declare function g(a: string, { x }?: { x: number }, [y]?: number[]): void;',
+      errors: [
+        {
+          messageId: 'tooManyTrailingOptional',
+          data: { kind: 'function', count: 2, names: '{ x }?: { x: number }, [y]?: number[]' },
+          suggestions: [],
+        },
+      ],
+    },
+    // The same optional ObjectPattern, in an interface method signature (TSMethodSignature) alongside an ordinary optional Identifier: proves the same isOptionalParam recognition in the other declaration-only shape the option is valid in, and that a resolvable Identifier elsewhere in the same run still resolves to its bare name even though its ObjectPattern neighbour does not.
+    {
+      code: 'interface I {\n  m(a: string, { x }?: { x: number }, c?: number): void;\n}',
+      errors: [
+        {
+          messageId: 'tooManyTrailingOptional',
+          data: { kind: 'method', count: 2, names: '{ x }?: { x: number }, c' },
+          suggestions: [],
+        },
+      ],
+    },
     // An object-literal method shorthand (a `Property` with `method: true`) — fixable, and labelled 'method' via that parent rather than a MethodDefinition.
     {
       code: 'const obj = {\n  m(a: number, b?: number, c?: number) {\n    return a;\n  },\n};',
