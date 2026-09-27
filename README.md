@@ -516,7 +516,7 @@ pnpm build
 
 ### Contributing
 
-Conventional commits are enforced by a husky `commit-msg` hook and re-checked in CI. CI runs commitlint, lint, typecheck+test+build+attw, and Mutation on every push and pull request; the release job runs only on push to `main`, after all pass.
+Conventional commits are enforced by a husky `commit-msg` hook and re-checked in CI. CI runs commitlint, lint, typecheck+test+build+attw, and mutation testing (Stryker) on every pull request, on push to `main`, and on manual dispatch; the release job runs only on `main` (push or manual dispatch), after all four jobs pass.
 
 ### Release
 
