@@ -26,9 +26,9 @@ export interface CommentLike {
 }
 
 /**
- * The number of leading space characters every non-blank line in `lines` shares, the amount a shared left margin (a hand-written block's own body indentation, aligned however its author chose) can be stripped from every line at once while leaving any EXTRA indentation a particular line carries beyond that margin (a nested example, a sub-list) exactly as it was, relative to its neighbours. A blank line (all whitespace or empty) never lowers the shared amount: it carries no indentation of its own to compare, only whichever real content lines happen to surround it. Zero for an empty `lines`, or one all-blank: there is no real content to measure a margin from at all.
+ * The number of leading space characters every non-blank line in `lines` shares, the amount a shared left margin (a hand-written block's own body indentation, aligned however its author chose) can be stripped from every line at once while leaving any EXTRA indentation a particular line carries beyond that margin (a nested example, a sub-list) exactly as it was, relative to its neighbours. A blank line (all whitespace or empty) never lowers the shared amount: it carries no indentation of its own to compare, only whichever real content lines happen to surround it. Zero for an empty `lines`, or one all-blank: there is no real content to measure a margin from at all (`Math.min` of an empty spread would otherwise return `Infinity`, a value extractCommentLines' own caller never actually observes, since a blank line is always reduced to `''` before this value could apply to it, but a real margin of `Infinity` would misrepresent this function's own general contract to any other, future caller).
  */
-function commonLeadingWhitespace(lines: readonly string[]): number {
+export function commonLeadingWhitespace(lines: readonly string[]): number {
   const contentLines = lines.filter((line) => line.trim().length > 0);
   if (contentLines.length === 0) return 0;
 
@@ -61,7 +61,8 @@ export function extractCommentLines(group: readonly CommentLike[]): string[] {
   const lastKept = lastRaw.trim().length > 0;
   const ownBodyRaw = lastKept ? [...middleRaw, lastRaw] : middleRaw;
   const dedent = commonLeadingWhitespace(ownBodyRaw);
-  const ownBodyLines = ownBodyRaw.map((line) => (line.trim().length === 0 ? '' : line.slice(dedent).trimEnd()));
+  // No separate blank-line branch: slicing any all-whitespace (or empty) line at `dedent` and trimming its end always yields '' on its own, for every reachable `dedent` (a substring of an all-whitespace string is itself all-whitespace or empty either way), so the ternary this once was would only ever restate what `.slice(dedent).trimEnd()` already computes.
+  const ownBodyLines = ownBodyRaw.map((line) => line.slice(dedent).trimEnd());
   const lines = [...(firstKept ? [stripSingleLeadingSpace(firstRaw).trimEnd()] : []), ...ownBodyLines];
 
   return stripStarredBlockPrefix(lines);
@@ -75,7 +76,8 @@ const STARRED_BLOCK_LINE_PATTERN = /^\*\s?/u;
  */
 export function stripStarredBlockPrefix(lines: readonly string[]): string[] {
   const contentLines = lines.filter((line) => line.length > 0);
-  if (contentLines.length === 0 || !contentLines.every((line) => STARRED_BLOCK_LINE_PATTERN.test(line))) return [...lines];
+  // No separate `contentLines.length === 0` disjunct: `[].every(...)` is vacuously true, so an empty `contentLines` already makes the lone `!every(...)` check below true on its own, and every one of `lines`' own entries is then, by this same filter's own definition, the literal empty string `''`, which `.replace(STARRED_BLOCK_LINE_PATTERN, '')` always leaves as `''` regardless (nothing in an empty string can match a pattern requiring at least one `*`), so falling through here and returning early both produce the identical result.
+  if (!contentLines.every((line) => STARRED_BLOCK_LINE_PATTERN.test(line))) return [...lines];
 
   return lines.map((line) => line.replace(STARRED_BLOCK_LINE_PATTERN, ''));
 }
@@ -139,10 +141,10 @@ export function isMethodOfExportedClass(node: TSESTree.MethodDefinition): boolea
 }
 
 /**
- * Whether `comment` sits on the same physical line as a real token before it (a genuine trailing comment, `const before = 1; // note`), rather than starting its own line. `sourceCode.getTokenBefore` with `includeComments: false` skips past any earlier comment to the nearest real code token, so a run of several adjacent `//` lines is only ever flagged here on its very first member, the one that can actually share a line with preceding code; every later member in the same run is already known to start its own line (see getLeadingCommentGroup's own blank-line adjacency check, which guarantees each subsequent comment sits on its own physical line once the first is excluded).
+ * Whether `comment` sits on the same physical line as a real CODE token before it (a genuine trailing comment, `const before = 1; // note`), rather than starting its own line. `sourceCode.getTokenBefore` is called with no options at all, deliberately: `includeComments` already defaults to `false` (confirmed directly against the installed eslint's own token-store source), so passing `{ includeComments: false }` explicitly would only restate that default, never change it, leaving no real difference for a test to ever observe. Left at its default, the search skips past any EARLIER comment, an unrelated one merely sharing `comment`'s own physical line (an aside block comment immediately followed by this one), to the nearest real code token specifically; without that skip, an unrelated comment sharing the line would be mistaken for real code and the check would wrongly say "trailing". A run of several adjacent `//` lines is only ever flagged here on its very first member, the one that can actually share a line with preceding code; every later member in the same run is already known to start its own line (see getLeadingCommentGroup's own blank-line adjacency check, which guarantees each subsequent comment sits on its own physical line once the first is excluded).
  */
-function isTrailingComment(sourceCode: TSESLint.SourceCode, comment: TSESTree.Comment): boolean {
-  const tokenBefore = sourceCode.getTokenBefore(comment, { includeComments: false });
+export function isTrailingComment(sourceCode: TSESLint.SourceCode, comment: TSESTree.Comment): boolean {
+  const tokenBefore = sourceCode.getTokenBefore(comment);
 
   return tokenBefore !== null && tokenBefore.loc.end.line === comment.loc.start.line;
 }
@@ -211,8 +213,8 @@ const preferDocComment = createRule<Options, MessageIds>({
       if (groupFirstComment.type === AST_TOKEN_TYPES.Block && groupFirstComment.value.startsWith('*')) return;
 
       const lines = extractCommentLines(group);
-      // A Line-comment run's own comments map one-to-one onto `lines` (one array entry per comment), so a directive line found anywhere in the run, whether first, in the middle, or immediately above `anchor`, can be sliced out of BOTH arrays together, in step, leaving only the genuine prose strictly above it eligible for its own report. A single already-consolidated Block comment has no such one-to-one mapping (one comment node can carry many extracted lines), so a directive found anywhere inside one is left alone entirely rather than risking a fix that touches only part of one physical comment node.
-      const isLineRun = group.every((comment) => comment.type === AST_TOKEN_TYPES.Line);
+      // A Line-comment run's own comments map one-to-one onto `lines` (one array entry per comment), so a directive line found anywhere in the run, whether first, in the middle, or immediately above `anchor`, can be sliced out of BOTH arrays together, in step, leaving only the genuine prose strictly above it eligible for its own report. A single already-consolidated Block comment has no such one-to-one mapping (one comment node can carry many extracted lines), so a directive found anywhere inside one is left alone entirely rather than risking a fix that touches only part of one physical comment node. getLeadingCommentGroup only ever returns one of two homogeneous shapes, a single-element Block group or an all-Line run, never a mix of the two, so `groupFirstComment`'s own type already tells us which one this is, with no need to check every element in step.
+      const isLineRun = groupFirstComment.type === AST_TOKEN_TYPES.Line;
       const directiveIndex = lines.findIndex((line) => isDirectiveComment(line));
       if (directiveIndex !== -1 && !isLineRun) return;
       const consideredLines = directiveIndex === -1 ? lines : lines.slice(0, directiveIndex);
