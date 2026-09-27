@@ -240,6 +240,10 @@ describe('readWorkspacePackages', () => {
     expect(() => readWorkspacePackages("packages: ['core/*/*', 'targets/*']\n")).toThrow(/"packages" rule option/);
   });
 
+  it('prefixes the flow-style error with this package\'s own name, like every other workspace-architecture module', () => {
+    expect(() => readWorkspacePackages("packages: ['core/*/*', 'targets/*']\n")).toThrow(/^@exadev\/eslint-config: /);
+  });
+
   it('throws for a bare scalar on the "packages:" line', () => {
     expect(() => readWorkspacePackages('packages: core\n')).toThrow(/flow style/);
   });
@@ -247,6 +251,10 @@ describe('readWorkspacePackages', () => {
   it('throws, rather than silently returning an empty list, when "packages:" is present but its first real line is neither blank/comment nor a sequence item at all (a block mapping, say)', () => {
     expect(() => readWorkspacePackages('packages:\n  foo: bar\n')).toThrow(/is not a block-sequence item/);
     expect(() => readWorkspacePackages('packages:\n  foo: bar\n')).toThrow(/"packages" rule option/);
+  });
+
+  it('prefixes the block-sequence error with this package\'s own name, like every other workspace-architecture module', () => {
+    expect(() => readWorkspacePackages('packages:\n  foo: bar\n')).toThrow(/^@exadev\/eslint-config: /);
   });
 
   it("reports the offending line's own content trimmed of its surrounding whitespace, not the raw padded line", () => {
