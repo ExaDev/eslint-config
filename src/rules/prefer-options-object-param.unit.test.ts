@@ -306,6 +306,22 @@ ruleTester.run('prefer-options-object-param', rule, {
         },
       ],
     },
+    // NOT a bail-out: a LINE comment ("//"), never itself a block comment at all, whose own text (everything after the "//") happens to start with "*" and mention the run's own parameter name is still not treated as a real doc comment: the comment's own type must be Block, independent of what its text happens to look like. Isolates the type check from the startsWith('*') check above, which the ordinary-block-comment case already isolates the other way.
+    {
+      code: '//* @param b\nfunction f(a: number, b?: number, c?: number): void {\n  return;\n}',
+      errors: [
+        {
+          messageId: 'tooManyTrailingOptional',
+          data: { kind: 'function', count: 2, names: 'b, c' },
+          suggestions: [
+            {
+              messageId: 'wrapInOptionsObject',
+              output: '//* @param b\nfunction f(a: number, options?: { b?: number; c?: number }): void {\n  const { b, c } = options ?? {};\n  return;\n}',
+            },
+          ],
+        },
+      ],
+    },
     // Bail-out: a run parameter whose own name contains a regex-special character ("$" is a valid, if unusual, leading character in a JS identifier) still matches its own `@param` tag correctly. Proves the name is escaped before being interpolated into the tag-matching pattern, not embedded as literal (unescaped) regex syntax.
     {
       code: '/**\n * @param $special\n */\nfunction f(a: number, $special?: number, c?: number): void {\n  return;\n}',

@@ -133,7 +133,9 @@ describe('findNearestPackageJson', () => {
     mkdirSync(deepDir, { recursive: true });
 
     expect(findNearestPackageJson(deepDir)).toBeUndefined();
-    // A second call for the identical directory, still with no package.json anywhere in its ancestry: proves the cached "undefined" outcome is itself returned (packageJsonByStartDir.has, not a nullish check, is what distinguishes "cached absence" from "never looked up").
+
+    // Written only AFTER the first call already walked (finding nothing) and cached that outcome: a genuinely fresh second walk would find this file immediately (it sits directly in deepDir), so only the cached "undefined" outcome being returned, not a real re-walk, explains a second undefined result here.
+    writeFileSync(join(deepDir, 'package.json'), JSON.stringify({ name: 'appeared-after-first-call' }));
     expect(findNearestPackageJson(deepDir)).toBeUndefined();
   });
 });
