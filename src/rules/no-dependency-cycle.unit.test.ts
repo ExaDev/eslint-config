@@ -132,7 +132,7 @@ ruleTester.run('no-dependency-cycle', rule, {
       options: [{ groups: [{ name: 'core' }] }],
       errors: [{ messageId: 'cycle', data: { from: NAMELESS_RELATIVE_DIR, to: 'a' } }],
     },
-    // An INDIRECT cycle: "c" here declares a dependency on "a", and the fixture's own edges (a -> b -> c) mean "a" can only reach "c" through "b", never directly. The old message wording ("which depends back on") claimed a direct back-edge regardless, so this reported "a depends on b, which depends back on a" even though "b" itself has no edge to "a" at all; the reworded message ("which can reach back to") makes no such claim and stays true for this transitive path.
+    // An INDIRECT cycle: "c" here declares a dependency on "a", and the fixture's own edges (a -> b -> c) mean "c" reaches "a" only through "b", never directly, so the message must not claim a direct back-edge from "b" to "a".
     {
       code: manifest('c', { a: 'workspace:*' }),
       filename: selfFilename('c'),
