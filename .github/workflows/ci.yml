@@ -6,6 +6,11 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Cancels a superseded run when a branch or PR gets pushed to again, so a stale commit's mutation job doesn't keep burning CI minutes after a newer commit has already replaced it. Scoped away from main: cancel-in-progress only fires off main so a merge landing mid-release never kills the release/publish jobs, which run solely on a push to main.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 permissions:
   contents: read
 
