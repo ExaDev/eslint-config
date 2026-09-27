@@ -319,5 +319,11 @@ ruleTester.run('prefer-doc-comment', rule, {
       output: '/**\n * Returns an Array<string> of matches.\n * second line\n */\nexport function foo() {}',
       errors: [{ messageId: 'preferDocComment' }],
     },
+    // A comment sharing its own line with an EARLIER, unrelated block comment (`/* aside */ // real comment`): isTrailingComment only ever excludes a comment sharing a line with real CODE, never with another comment, so this one still reaches the fixer. The indent taken for every continuation line and the closing delimiter must be only the line's own leading whitespace (here, none at all, since the line starts with `/* aside */`), never the raw `/* aside */ ` text itself: splicing that text onto every line instead (this rule's own previous behaviour) reproduced it before the fixer's own `*` on each continuation line and before its own closing `*/`, corrupting the file into a syntax error.
+    {
+      code: '/* aside */ // This comment follows a block comment on the same line and is long enough to be substantial for sure.\nexport function afterAside() {}',
+      output: '/* aside */ /**\n * This comment follows a block comment on the same line and is long enough to be substantial for sure.\n */\nexport function afterAside() {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
   ],
 });
