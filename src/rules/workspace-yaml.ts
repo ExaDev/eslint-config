@@ -105,7 +105,7 @@ export function readWorkspacePackages(yamlText: string): readonly string[] {
   const inlineWithoutComment = stripComment(inline);
   if (inlineWithoutComment.length > 0) {
     throw new Error(
-      `pnpm-workspace.yaml's "packages:" key is written in flow style ("${inlineWithoutComment}"), which this package's minimal reader does not support. Rewrite it as a block sequence (one "- 'glob'" per line), or pass the "packages" rule option explicitly.`,
+      `@exadev/eslint-config: pnpm-workspace.yaml's "packages:" key is written in flow style ("${inlineWithoutComment}"), which this package's minimal reader does not support. Rewrite it as a block sequence (one "- 'glob'" per line), or pass the "packages" rule option explicitly.`,
     );
   }
 
@@ -120,7 +120,7 @@ export function readWorkspacePackages(yamlText: string): readonly string[] {
       // A present "packages:" key whose own sequence has already yielded at least one item legitimately ends here (the next line belongs to a different top-level key, or is genuinely unindented content outside this block). One that has yielded nothing at all yet, by contrast, means the very shape under the key is not a block sequence this reader supports (a mapping, say): silently returning an empty list here would make every package in the workspace invisible to every rule rather than surfacing the real problem.
       if (items.length === 0) {
         throw new Error(
-          `pnpm-workspace.yaml's "packages:" key is present but its next line ("${line.trim()}") is not a block-sequence item ("- 'glob'"). This package's minimal reader only supports a block sequence; rewrite it, or pass the "packages" rule option explicitly.`,
+          `@exadev/eslint-config: pnpm-workspace.yaml's "packages:" key is present but its next line ("${line.trim()}") is not a block-sequence item ("- 'glob'"). This package's minimal reader only supports a block sequence; rewrite it, or pass the "packages" rule option explicitly.`,
         );
       }
       break;
