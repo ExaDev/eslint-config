@@ -3,7 +3,6 @@ import {
   expandBraces,
   expandGlob,
   isExcludePattern,
-  requireChar,
   resolveWorkspacePackageDirs,
   segmentToRegExp,
   splitTopLevelAlternatives,
@@ -28,17 +27,6 @@ function fakeFs(dirs: Record<string, readonly string[]>, packageJsonDirs: readon
     },
   };
 }
-
-describe('requireChar', () => {
-  it('returns the character at a genuinely in-bounds index', () => {
-    expect(requireChar('abc', 1)).toBe('b');
-  });
-
-  it('throws for an out-of-bounds index, a shape no real call site (every one bounded by its own loop\'s "index < length" condition) can produce', () => {
-    const outOfBoundsIndex = 3;
-    expect(() => requireChar('abc', outOfBoundsIndex)).toThrow(/Unreachable/);
-  });
-});
 
 describe('segmentToRegExp', () => {
   it("builds its RegExp with the 'u' flag", () => {

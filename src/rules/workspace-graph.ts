@@ -5,6 +5,7 @@ import { splitPathSegments } from './workspace-path';
 import { readWorkspacePackages } from './workspace-yaml';
 import { resolveDependencyFields, type GroupSpec, type WorkspaceArchitectureOptions } from './workspace-options';
 import { assertIsError, jsonParseContext } from './workspace-errors';
+import { isRecord } from '../is-record';
 
 /**
  * One workspace package's structural facts: its declared manifest name (never assumed to equal its own directory name, the assumption that made the monorepo-template original's graph silently key packages by folder name instead), which declared group it structurally belongs to, its resolved rank, and its resolved slice (undefined for a group with no slice configuration at all, such as a cross-cutting core group).
@@ -88,10 +89,6 @@ function sliceByNamePrefix(declaredName: string, knownSlices: ReadonlySet<string
   const unscoped = stripScope(declaredName);
   const matches = [...knownSlices].filter((candidate) => unscoped === candidate || unscoped.startsWith(`${candidate}-`));
   return matches.sort((a, b) => b.length - a.length)[0];
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
 }
 
 /**

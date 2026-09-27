@@ -1,5 +1,7 @@
 // A minimal reader for pnpm-workspace.yaml's own "packages:" key, deliberately supporting only the one form pnpm's own documentation and every real pnpm-workspace.yaml this package has seen actually uses: a block sequence of quoted or bare glob strings, one per line, indented under the key. A full YAML parser is not a dependency worth taking for a single list of strings; flow style ("packages: ['a', 'b']" or a bare scalar) is rejected outright rather than silently misparsed, naming the "packages" rule option as the escape hatch for a workspace file this reader cannot handle.
 
+import { requireChar } from './workspace-path';
+
 // The key itself, bare or wrapped in either quote style ("packages"/'packages'): YAML accepts a quoted mapping key wherever a bare one is valid, and real pnpm-workspace.yaml files are seen in the wild both ways.
 const PACKAGES_KEY_PATTERN = /^(?:packages|"packages"|'packages'):\s*(.*)$/u;
 // Indentation is optional: a block sequence written at the key's own column ("packages:\n- 'core/*'") is as valid YAML as an indented one, and pnpm accepts both.
@@ -30,15 +32,6 @@ export function requireMatch(pattern: Readonly<RegExp>, text: string): RegExpExe
     throw new Error(`Unreachable: /${pattern.source}/ was already confirmed to match "${text}".`);
   }
   return match;
-}
-
-/** Reads `text[index]`, throwing rather than reading past the end: both real call sites below derive `index` from a `for` loop whose own condition (`index < text.length`) already guarantees it in range, so an out-of-bounds read here would mean that loop's own invariant broke, not a case to handle quietly. A genuinely maybe-out-of-bounds neighbour check (this file's own "the character right before/after this one, if any" reads) stays a plain `charAt`, deliberately: those are never loop-bound-guaranteed and a missing neighbour is a real, legitimate outcome, not a bug. Exported for the same direct-test reason as requireLine above. */
-export function requireChar(text: string, index: number): string {
-  const char = text[index];
-  if (char === undefined) {
-    throw new Error(`Unreachable: index ${String(index)} is out of bounds for a string of length ${String(text.length)}.`);
-  }
-  return char;
 }
 
 /** Whether `value[index]` is a quote character, returning that exact character (not merely `true`) so a caller can go on to search for the SAME quote style's own matching close. Exported for direct testing of its own per-index decision, independent of commentSearchStart's own real-string scenarios below. */

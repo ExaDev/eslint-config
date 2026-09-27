@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module';
 import type { TSESLint } from '@typescript-eslint/utils';
+import { isRecord } from './is-record';
 
 // A specifier resolved this way is never a string literal at the call site — always a runtime-computed argument — so no bundler's static import graph can see or attempt to resolve it. This is what lets eslint-plugin-react/eslint-plugin-react-hooks/eslint-plugin-jsx-a11y/@next/eslint-plugin-next stay genuinely optional: unlike typescript-eslint (required unconditionally the moment anything is imported from this package's root module, see recommended-type-checked.ts's own comment on that cost), these four are the first genuinely optional dependency this package has ever had. createRequire, not a dynamic import(), is what makes "attempt to load, tolerate absence" possible while keeping every existing export a plain, synchronously-available array — import() always returns a Promise, which would force every consumer into top-level await just to spread this package's default export, a real ergonomics regression for zero benefit.
 const nodeRequire = createRequire(import.meta.url);
@@ -13,10 +14,6 @@ export function tryRequire(specifier: string, requireFn: RequireFn = nodeRequire
   } catch {
     return undefined;
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
 }
 
 // A plugin's own exported "recommended" config can still carry a top-level `parserOptions` key — a legacy eslintrc-format field flat config's schema actively REJECTS with a hard ConfigError, not silently ignores, confirmed directly: eslint-plugin-jsx-a11y's real configs.recommended export has exactly this shape (`{ parserOptions: { ecmaFeatures: { jsx: true } }, plugins, rules }`), and spreading it as-is into a real Linter.verify() call throws "This appears to be in eslintrc format rather than flat config format." Relocated into languageOptions.parserOptions rather than dropped, since it carries real settings (enabling JSX parsing, here) a caller still needs. Operates on a plain Record so every access/spread is genuinely type-safe with no assertion — narrowing to TSESLint.FlatConfig.Config happens only after this normalization, in readFlatConfig below.

@@ -1,11 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { isRecord } from '../is-record';
 
 // Resolves the umbrella rule's 'auto' mode: a package that looks like a real, importable entry point (a non-empty `exports` or `main` field) gets 'single' — it needs a barrel at its own entry point — everything else gets 'banned', identical to today's hardcoded default. `private: true` is deliberately not consulted: a pnpm workspace package is routinely both `private` (never published to a registry) and a genuine import target for sibling packages via `exports` (that's what `linkWorkspacePackages` is for), so `private` says nothing about whether a barrel is warranted.
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
 
 // A present-but-empty `exports` (`{}`, `[]`, `''`) declares no real entry point — treated the same as absent, matching the parallel `main: ''` case decideAutoBarrelMode already has to handle.
 function hasRealExports(value: unknown): boolean {
