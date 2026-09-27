@@ -96,6 +96,10 @@ ruleTester.run('prefer-doc-comment', rule, {
     'export const C = class {\n  // first line\n  // second line\n  m() {}\n};',
     // An exported const whose init is neither an arrow function nor a function expression: this rule's own enumerated target list only ever names those two shapes for a const, so a plain value is never reported, however substantial its leading comment.
     '// first line\n// second line\nexport const x = 5;',
+    // An exported `let` (not `const`) whose init IS an arrow function: this rule's own scope, both in its header comment and the README, is deliberately "assigned to an exported const", never `let`/`var`, so this is never reported, however substantial its leading comment.
+    '// first line\n// second line\nexport let notConst = (): number => 1;',
+    // The identical shape with `var` in place of `let`: the same restriction applies regardless of which non-`const` keyword is used.
+    '// first line\n// second line\nexport var alsoNotConst = (): number => 1;',
     // A public method of a class EXPRESSION that IS directly default-exported (parenthesised, so the parser keeps it a ClassExpression rather than an anonymous ClassDeclaration): still never reported, since isMethodOfExportedClass's own type check requires a genuine ClassDeclaration specifically, not merely "some kind of exported class".
     'export default (class {\n  // first line\n  // second line\n  m() {}\n});',
     // A single logical line of exactly the default threshold's own length: not substantial (strictly greater than, not greater-than-or-equal).

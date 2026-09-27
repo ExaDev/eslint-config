@@ -369,8 +369,9 @@ const preferDocComment = createRule<Options, MessageIds>({
       TSTypeAliasDeclaration(node) {
         checkAnchor(getExportWrapper(node));
       },
-      // Keyed on the VariableDeclaration itself, not each individual VariableDeclarator: a multi-declarator export (`export const h1 = () => {}, h2 = () => {};`) is still a single statement with a single leading comment group, so checking (and potentially reporting on) each declarator in turn would report the identical comment once per declarator. Reported once, on the declaration as a whole, whenever ANY of its declarators is a function/arrow-function init, matching the "an exported function expression or arrow function assigned to an exported const" shape this rule's own header comment enumerates.
+      // Keyed on the VariableDeclaration itself, not each individual VariableDeclarator: a multi-declarator export (`export const h1 = () => {}, h2 = () => {};`) is still a single statement with a single leading comment group, so checking (and potentially reporting on) each declarator in turn would report the identical comment once per declarator. Restricted to `kind === 'const'`: this rule's own scope (see this file's own header comment) is deliberately "an exported function expression or arrow function assigned to an exported const", never `let`/`var`, so an `export let f = () => {}`/`export var f = () => {}` is left alone regardless of its own leading comment, exactly like every other declaration shape this rule does not enumerate. Reported once, on the declaration as a whole, whenever ANY of its declarators is a function/arrow-function init.
       VariableDeclaration(node) {
+        if (node.kind !== 'const') return;
         const hasFunctionInit = node.declarations.some(
           (declarator) => declarator.init?.type === AST_NODE_TYPES.ArrowFunctionExpression || declarator.init?.type === AST_NODE_TYPES.FunctionExpression,
         );
