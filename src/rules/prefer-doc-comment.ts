@@ -1,5 +1,7 @@
 import { AST_NODE_TYPES, AST_TOKEN_TYPES, ESLintUtils, type TSESLint, type TSESTree } from '@typescript-eslint/utils';
 
+import { TSDocParser } from '@microsoft/tsdoc';
+
 import { firstAndLastOrThrow } from './prefer-options-object-param';
 
 // This package's own convention (see jsdoc.ts's own header comment) already distinguishes a symbol with a real public contract, which gets a doc comment, from one that doesn't, which gets a plain comment or nothing at all. eslint-plugin-jsdoc's own `require-jsdoc` family is deliberately turned off (jsdoc.ts) rather than demanding a doc comment appear from nothing, since forcing every function everywhere to carry a JSDoc block is a different, much larger policy this package isn't making. This rule fills the one gap that leaves: a public symbol that already HAS a substantial leading comment, just not in the `/** ... */` shape eslint-plugin-jsdoc/eslint-plugin-tsdoc can actually validate. It never demands documentation that doesn't already exist in some form; it only upgrades the format of documentation that does, and only for a symbol this package's own convention already says warrants one (an exported declaration).
@@ -85,10 +87,21 @@ export function isDirectiveComment(text: string): boolean {
   return DIRECTIVE_COMMENT_PATTERN.test(text);
 }
 
-// A character TSDoc/JSDoc gives special meaning to once the same text sits inside a doc comment: `@` opens a tag, `{`/`}` bracket an inline tag, `<`/`>` open or close what tsdoc/syntax (wired unconditionally alongside this rule, jsdoc.ts) reads as an HTML element; a literal closing comment delimiter would additionally end the new doc comment prematurely, mid-content. None of these is unusual in ordinary prose (a scoped package name, a generic type parameter, a destructured object literal, a comparison), so a comment containing any of them is withheld from BOTH the report and the fix, not merely the fix: correctly escaping each occurrence without misrepresenting the original text is a real judgement call, and this rule's own "verbatim, no rewording" contract deliberately stays out of making it. Confirmed directly against this repository's own pre-existing "why" comments, several of which already reference a scoped rule id, a generic type parameter, or a destructured object literal in ordinary prose: wrapping any of those verbatim in a doc comment trips `tsdoc/syntax`/`jsdoc/escape-inline-tags` immediately, so reporting them at all, even fix-withheld, would leave a permanent, unresolvable lint failure rather than a genuine choice for a caller to make.
-const UNSAFE_CHARACTER_PATTERN = /[@{}<>]/u;
-export function hasUnsafeDocCommentContent(lines: readonly string[]): boolean {
-  return lines.some((line) => line.includes('*/') || UNSAFE_CHARACTER_PATTERN.test(line));
+/**
+ * Whether any line of the candidate doc-comment body already contains a literal closing-comment delimiter. This is checked independently of, and never overridden by, parsesAsValidTsDoc below: a `*\/` sitting inside what would become the new comment's own content ends that comment at the LEXICAL level the moment the file is re-read, the instant the JS/TS tokeniser reaches it, regardless of whether the surrounding text is otherwise valid TSDoc. Applying a fix here would not merely leave a bad doc comment, it would corrupt the file into a syntax error, so this check alone always withholds the fix, with no parser able to tell us otherwise.
+ */
+export function containsCommentTerminator(lines: readonly string[]): boolean {
+  return lines.some((line) => line.includes('*/'));
+}
+
+// One parser instance, reused across every candidate this rule ever checks: TSDocParser carries no per-parse mutable state of its own (each call to parseString returns a fresh ParserContext), so there is nothing a second instance would buy over the one eslint-plugin-tsdoc's own `tsdoc/syntax` rule (wired unconditionally alongside this rule, jsdoc.ts) is already built on.
+const tsdocParser = new TSDocParser();
+
+/**
+ * Whether `candidateText` (the exact `/**\n ... \n *\/` text this rule's own fixer would splice into the source) parses as valid TSDoc with zero warnings or errors. Delegates entirely to the real parser eslint-plugin-tsdoc's own `tsdoc/syntax` rule already validates every doc comment against, rather than hand-maintaining a second, narrower approximation of the same grammar: an unescaped `@`, `{`, `}`, `<`, `>`, backslash or unbalanced backtick, and any other genuine TSDoc syntax error, are all caught by this one real check, never a hand-picked character subset that is simultaneously too broad (banning an entirely safe generic type reference such as `Array<string>`, which this parser accepts with no messages at all) and too narrow (missing a backslash or a stray backtick, each of which trips a real tsdoc/syntax error once the comment already exists).
+ */
+export function parsesAsValidTsDoc(candidateText: string): boolean {
+  return tsdocParser.parseString(candidateText).log.messages.length === 0;
 }
 
 type ExportWrapper = TSESTree.ExportDefaultDeclaration | TSESTree.ExportNamedDeclaration;
@@ -210,20 +223,18 @@ const preferDocComment = createRule<Options, MessageIds>({
 
       const substantial = consideredLines.length >= 2 || firstLine.length > maxLineLength;
       if (!substantial) return;
-      // See hasUnsafeDocCommentContent's own doc comment for why this withholds the REPORT too, not merely the fix.
-      if (hasUnsafeDocCommentContent(consideredLines)) return;
 
       const [firstComment, lastComment] = firstAndLastOrThrow(consideredGroup);
+      const indent = sourceCode.text.slice(firstComment.range[0] - firstComment.loc.start.column, firstComment.range[0]);
+      const body = consideredLines.map((line) => (line.length > 0 ? `${indent} * ${line}` : `${indent} *`)).join('\n');
+      const replacement = `/**\n${body}\n${indent} */`;
+      // containsCommentTerminator is checked independently of, and never overridden by, parsesAsValidTsDoc: see its own doc comment for why a literal `*\/` withholds the fix regardless of what TSDoc itself thinks of the rest of the candidate text.
+      const canAutofix = !containsCommentTerminator(consideredLines) && parsesAsValidTsDoc(replacement);
 
       context.report({
         loc: { start: firstComment.loc.start, end: lastComment.loc.end },
         messageId: 'preferDocComment',
-        fix(fixer) {
-          const indent = sourceCode.text.slice(firstComment.range[0] - firstComment.loc.start.column, firstComment.range[0]);
-          const body = consideredLines.map((line) => (line.length > 0 ? `${indent} * ${line}` : `${indent} *`)).join('\n');
-
-          return fixer.replaceTextRange([firstComment.range[0], lastComment.range[1]], `/**\n${body}\n${indent} */`);
-        },
+        fix: canAutofix ? (fixer) => fixer.replaceTextRange([firstComment.range[0], lastComment.range[1]], replacement) : null,
       });
     }
 

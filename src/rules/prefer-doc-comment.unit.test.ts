@@ -106,18 +106,6 @@ ruleTester.run('prefer-doc-comment', rule, {
     '// short intro\n// TODO: revisit\n// trailing detail\nexport function foo() {}',
     // A directive-shaped line found INSIDE an already-consolidated Block comment (the shape multiline-comment-style's own bare-block fixer produces from a `//` run), rather than in a genuine `//` run: never split, and never reported at all, since a Block comment's one comment node has no one-to-one mapping onto its own extracted lines for a partial fix to slice safely (checkAnchor's own `!isLineRun` guard). A real `eslint-disable-next-line` is safe to use here, unlike in the `//`-run cases above: ESLint's own core directive parsing only ever recognises a comment whose ENTIRE own text matches directive syntax, never a line embedded inside a larger block's prose, so this never risks an unused-directive complaint of its own.
     '/* intro line\n   eslint-disable-next-line no-empty-function\n   trailing detail */\nexport function foo() {}',
-    // Substantial, exported, but the comment's own text contains a bare `@`: withheld from reporting entirely, since promoting it into a doc comment would trip tsdoc/syntax on the very first character TSDoc treats as a tag opener.
-    '// references an at-sign like this literal one: @ right here\n// second line\nexport function foo() {}',
-    // Substantial, exported, but the comment's own text contains a literal closing comment delimiter: promoting it would prematurely end the new doc comment mid-content.
-    '// contains a literal star-slash close like this: */ right here\n// second line\nexport function foo() {}',
-    // Substantial, exported, but the comment's own text contains a bare `{`: TSDoc reads this as opening an inline tag.
-    '// uses an opening brace like this one: { right here\n// second line\nexport function foo() {}',
-    // Substantial, exported, but the comment's own text contains a bare `}`: TSDoc reads this as closing an inline tag.
-    '// uses a closing brace like this one: } right here\n// second line\nexport function foo() {}',
-    // Substantial, exported, but the comment's own text contains a bare `<`: TSDoc reads this as opening an HTML element.
-    '// uses a less-than sign like this one: < right here\n// second line\nexport function foo() {}',
-    // Substantial, exported, but the comment's own text contains a bare `>`: TSDoc reads this as closing an HTML element.
-    '// uses a greater-than sign like this one: > right here\n// second line\nexport function foo() {}',
     // A short `//` comment immediately above the declaration, with an unrelated BLOCK comment further above it: the leading-comment group stops at the type mismatch (Block, not Line), so only the short adjacent line comment is considered, and it alone is not substantial.
     '/* explanatory aside */\n// x\nexport function foo() {}',
     // Two `//` comments with a blank line between them: the leading-comment group stops at that gap, so only the short adjacent line comment (immediately above the declaration) is considered.
@@ -259,6 +247,60 @@ ruleTester.run('prefer-doc-comment', rule, {
     {
       code: '// Explanation line one.\n// Explanation line two.\n// TODO: revisit\n// Explanation line three.\nexport function d4(): void {}',
       output: '/**\n * Explanation line one.\n * Explanation line two.\n */\n// TODO: revisit\n// Explanation line three.\nexport function d4(): void {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // The comment's own text contains a bare `@` not shaped like a real TSDoc tag: no longer silently exempt from being reported at all (the old character-class gate withheld even the report, hiding a real violation). Still reported, but with no fix, since the exact candidate genuinely fails to parse as valid TSDoc, confirmed directly against the real parser rather than assumed.
+    {
+      code: '// references an at-sign like this literal one: @ right here\n// second line\nexport function foo() {}',
+      output: null,
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // The comment's own text contains a literal closing comment delimiter: reported, but the fix is withheld regardless of what the TSDoc parser itself thinks of the rest of the text (containsCommentTerminator, checked independently), since splicing it in verbatim would end the new comment early at the JS/TS tokeniser's own level.
+    {
+      code: '// contains a literal star-slash close like this: */ right here\n// second line\nexport function foo() {}',
+      output: null,
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A bare `{` not shaped like a real TSDoc inline tag: reported, no fix.
+    {
+      code: '// uses an opening brace like this one: { right here\n// second line\nexport function foo() {}',
+      output: null,
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A bare `}`: reported, no fix.
+    {
+      code: '// uses a closing brace like this one: } right here\n// second line\nexport function foo() {}',
+      output: null,
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A bare `<` followed by a space, which TSDoc reads as a malformed HTML element name: reported, no fix.
+    {
+      code: '// uses a less-than sign like this one: < right here\n// second line\nexport function foo() {}',
+      output: null,
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A bare `>`, which TSDoc requires escaping to avoid confusion with an HTML tag close: reported, no fix.
+    {
+      code: '// uses a greater-than sign like this one: > right here\n// second line\nexport function foo() {}',
+      output: null,
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A Windows-style path containing a backslash: fails tsdoc/syntax's own `tsdoc-unnecessary-backslash` once inside a doc comment, exactly the shape the old character-class gate missed entirely (it checked `@{}<>` only, never a backslash). Reported, no fix.
+    {
+      code: '// a comment mentioning C:\\Users\\joe\n// second line\nexport function foo() {}',
+      output: null,
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // An unbalanced backtick: fails tsdoc/syntax's own `tsdoc-code-span-missing-delimiter`, the other shape the old gate missed entirely. Reported, no fix.
+    {
+      code: '// an unbalanced ` backtick here\n// second line\nexport function foo() {}',
+      output: null,
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A generic type reference (`Array<string>`): the exact shape the OLD character-class gate wrongly banned outright, since it contains `<`/`>`, even though it parses as perfectly valid TSDoc. Now reported AND fixed, proving the new parser-based gate is not simply a stricter version of the old one.
+    {
+      code: '// Returns an Array<string> of matches.\n// second line\nexport function foo() {}',
+      output: '/**\n * Returns an Array<string> of matches.\n * second line\n */\nexport function foo() {}',
       errors: [{ messageId: 'preferDocComment' }],
     },
   ],
