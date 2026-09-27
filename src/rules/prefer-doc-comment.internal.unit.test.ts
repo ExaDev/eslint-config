@@ -1,0 +1,129 @@
+import { AST_TOKEN_TYPES, ESLintUtils, type TSESTree } from '@typescript-eslint/utils';
+
+import { RuleTester } from '@typescript-eslint/rule-tester';
+
+import tseslint from 'typescript-eslint';
+
+import { describe, expect, it } from 'vitest';
+
+import { extractCommentLines, getExportWrapper, hasUnsafeDocCommentContent, isDirectiveComment } from './prefer-doc-comment';
+
+function definedOrThrow<T>(value: T | undefined): T {
+  if (value === undefined) {
+    throw new Error('Unreachable: expected the probe rule below to have captured this value.');
+  }
+
+  return value;
+}
+
+// getExportWrapper's own `parent === undefined` guard is unreachable through the rule itself (every real call site hands it a declaration/class-body-member node, never a Program), but the function's own general contract (it accepts any TSESTree.Node) still needs a real Program node to exercise it directly, the same "caller already confirmed" shape firstAndLastOrThrow's own direct empty-array test uses for its sibling helper. A real Program node's own `.parent` is only ever obtainable from a genuine parse (Program is the one node type with no parent at all), not safely hand-fabricated.
+let capturedProgram: TSESTree.Program | undefined;
+const probeCreateRule = ESLintUtils.RuleCreator((name) => name);
+const probe = probeCreateRule({
+  name: 'probe',
+  meta: { type: 'problem', schema: [], docs: { description: 'probe' }, messages: { hit: 'hit' } },
+  defaultOptions: [],
+  create(context) {
+    return {
+      Program(node) {
+        capturedProgram = node;
+        context.report({ node, messageId: 'hit' });
+      },
+    };
+  },
+});
+
+new RuleTester({ languageOptions: { parser: tseslint.parser, sourceType: 'module' } }).run('probe', probe, {
+  valid: [],
+  invalid: [{ code: 'const x = 1;', errors: [{ messageId: 'hit' }] }],
+});
+
+// extractCommentLines only ever reads a comment's own `type`/`value` fields (see CommentLike's own doc comment), so a plain hand-written literal object is a safe, drift-free stand-in for a real TSESTree.Comment here, unlike the node/scope fabrication this codebase's own similarly-shaped internal tests (prefer-options-object-param.internal.unit.test.ts) deliberately avoid.
+describe('extractCommentLines', () => {
+  it('returns an empty array for an empty group', () => {
+    // Never reached through the rule itself (getLeadingCommentGroup always returns a non-empty group), but extractCommentLines's own general contract still answers this the same way firstAndLastOrThrow's own direct empty-array test does for its sibling helper.
+    expect(extractCommentLines([])).toEqual([]);
+  });
+
+  it('returns one entry per Line comment, each with its own single leading space trimmed', () => {
+    expect(
+      extractCommentLines([
+        { type: AST_TOKEN_TYPES.Line, value: ' first' },
+        { type: AST_TOKEN_TYPES.Line, value: ' second' },
+      ]),
+    ).toEqual(['first', 'second']);
+  });
+
+  it('returns a single entry, trimmed, for a single-physical-line Block comment', () => {
+    expect(extractCommentLines([{ type: AST_TOKEN_TYPES.Block, value: ' short ' }])).toEqual(['short']);
+  });
+
+  it('splits a multi-physical-line Block comment on its own linebreaks, dropping only a genuinely empty first/last segment', () => {
+    expect(extractCommentLines([{ type: AST_TOKEN_TYPES.Block, value: ' one\n   two\n   three ' }])).toEqual(['one', 'two', 'three']);
+  });
+
+  it('keeps a non-empty first segment (does not assume it is always pure padding)', () => {
+    expect(extractCommentLines([{ type: AST_TOKEN_TYPES.Block, value: 'one\ntwo\nthree' }])).toEqual(['one', 'two', 'three']);
+  });
+
+  it('returns an empty array for a Block comment containing nothing but blank lines', () => {
+    expect(extractCommentLines([{ type: AST_TOKEN_TYPES.Block, value: '\n' }])).toEqual([]);
+  });
+});
+
+describe('getExportWrapper', () => {
+  it('returns undefined for a Program node (the one node type with no parent at all)', () => {
+    expect(getExportWrapper(definedOrThrow(capturedProgram))).toBeUndefined();
+  });
+});
+
+describe('isDirectiveComment', () => {
+  // Each recognised marker gets its own case, isolated from ESLint's own core directive-comment handling (which the main RuleTester suite's own comment explains would otherwise misreport an `eslint-disable` fixture as an unused directive): a mutant deleting any single alternative from the rule's own regex is only caught by exercising that exact alternative directly.
+  it.each([
+    'eslint-disable',
+    'eslint-disable-next-line no-console',
+    'eslint-disable-line no-console',
+    'ts-expect-error',
+    'ts-ignore',
+    'ts-nocheck',
+    'todo: revisit',
+    'fixme: revisit',
+    'TODO: revisit',
+    'FIXME: revisit',
+  ])('recognises %s as a directive', (text) => {
+    expect(isDirectiveComment(text)).toBe(true);
+  });
+
+  it('does not recognise ordinary prose as a directive', () => {
+    expect(isDirectiveComment('an ordinary explanatory comment')).toBe(false);
+  });
+
+  it('does not recognise a marker word only when it is not at the very start of the comment', () => {
+    // Pins the leading `^` anchor: a mutant removing it would wrongly match a directive marker appearing mid-sentence.
+    expect(isDirectiveComment('this mentions todo later in the sentence')).toBe(false);
+  });
+
+  it('does not match a marker word without its own word boundary immediately after it', () => {
+    // Pins the trailing `\b`: "todoist" is not the "todo" marker, just a longer word that happens to start with it.
+    expect(isDirectiveComment('todoist is not a real marker')).toBe(false);
+  });
+});
+
+describe('hasUnsafeDocCommentContent', () => {
+  it('returns false for ordinary prose containing none of the unsafe characters', () => {
+    expect(hasUnsafeDocCommentContent(['an ordinary line', 'a second ordinary line'])).toBe(false);
+  });
+
+  it.each(['@', '{', '}', '<', '>'])('returns true when a line contains a bare %s', (character) => {
+    expect(hasUnsafeDocCommentContent([`a line containing ${character} right here`])).toBe(true);
+  });
+
+  it('returns true when a line contains a literal closing comment delimiter', () => {
+    expect(hasUnsafeDocCommentContent(['a line containing a close like this: */ right here'])).toBe(true);
+  });
+
+  it('checks every line, not only the first', () => {
+    // Pins `.some` over the array (a mutant weakening it to check only `lines[0]` would miss an unsafe character on a later line).
+    expect(hasUnsafeDocCommentContent(['a safe first line', 'a second line with @ in it'])).toBe(true);
+  });
+});
