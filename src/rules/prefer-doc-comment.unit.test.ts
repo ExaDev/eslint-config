@@ -102,6 +102,10 @@ ruleTester.run('prefer-doc-comment', rule, {
     'export function foo() {}',
     // A single trailing `//` comment sitting on the same line as the PRECEDING statement, directly above an export with nothing else between them: getLeadingCommentGroup treats this as not really `foo`'s own leading comment at all (isTrailingComment), so there is no group, and no report, however long the trailing text.
     'export const before = 1; // trailing note\nexport function foo() {}',
+    // A directive in the middle of a run, with only ONE short explanation line above it: the lines above the directive are sliced out on their own (never merged with the directive itself), and that one short line alone is not substantial, so nothing is reported at all, proving the split happens before the substantiality check, not after. A plain TODO stands in for a real `eslint-disable-next-line` here, the same substitution and reasoning the "directive-shaped (a short TODO marker)" case above already uses: this minimal RuleTester setup has no `no-empty-function` rule registered to report anything for a real disable comment to suppress, so ESLint's own core would flag it as an unused directive, a false failure unrelated to this rule.
+    '// short intro\n// TODO: revisit\n// trailing detail\nexport function foo() {}',
+    // A directive-shaped line found INSIDE an already-consolidated Block comment (the shape multiline-comment-style's own bare-block fixer produces from a `//` run), rather than in a genuine `//` run: never split, and never reported at all, since a Block comment's one comment node has no one-to-one mapping onto its own extracted lines for a partial fix to slice safely (checkAnchor's own `!isLineRun` guard). A real `eslint-disable-next-line` is safe to use here, unlike in the `//`-run cases above: ESLint's own core directive parsing only ever recognises a comment whose ENTIRE own text matches directive syntax, never a line embedded inside a larger block's prose, so this never risks an unused-directive complaint of its own.
+    '/* intro line\n   eslint-disable-next-line no-empty-function\n   trailing detail */\nexport function foo() {}',
     // Substantial, exported, but the comment's own text contains a bare `@`: withheld from reporting entirely, since promoting it into a doc comment would trip tsdoc/syntax on the very first character TSDoc treats as a tag opener.
     '// references an at-sign like this literal one: @ right here\n// second line\nexport function foo() {}',
     // Substantial, exported, but the comment's own text contains a literal closing comment delimiter: promoting it would prematurely end the new doc comment mid-content.
@@ -243,6 +247,18 @@ ruleTester.run('prefer-doc-comment', rule, {
     {
       code: '// intro\n//   indented example line\nexport function foo() {}',
       output: '/**\n * intro\n *   indented example line\n */\nexport function foo() {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A directive on the LAST line, immediately above the export, with substantial explanation above it: only the explanation lines are converted; the directive itself is left as a plain, untouched `//` comment directly above the export, so it still functions as a real suppression for it. A plain TODO stands in for a real `eslint-disable-next-line` here for the same reason the "directive-shaped (a short TODO marker)" valid case above already gives: a real disable comment naming an unregistered rule would trip ESLint's own unused-directive check in this minimal RuleTester setup, a false failure unrelated to this rule; isDirectiveComment's own internal unit test already exercises the real `eslint-disable` family directly and in isolation.
+    {
+      code: '// Explanation line one.\n// Explanation line two.\n// TODO: revisit\nexport function d3(): void {}',
+      output: '/**\n * Explanation line one.\n * Explanation line two.\n */\n// TODO: revisit\nexport function d3(): void {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A directive in the MIDDLE of a run, with substantial explanation both above and below it: only the lines strictly above the directive are converted; the directive line and every line from it onward, including the trailing explanation, are left completely untouched.
+    {
+      code: '// Explanation line one.\n// Explanation line two.\n// TODO: revisit\n// Explanation line three.\nexport function d4(): void {}',
+      output: '/**\n * Explanation line one.\n * Explanation line two.\n */\n// TODO: revisit\n// Explanation line three.\nexport function d4(): void {}',
       errors: [{ messageId: 'preferDocComment' }],
     },
   ],

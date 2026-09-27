@@ -12,7 +12,7 @@ const createRule = ESLintUtils.RuleCreator(
   (name) => `https://github.com/ExaDev/eslint-config/blob/main/src/rules/${name}.ts`,
 );
 
-// A directive-shaped comment (an eslint-disable family comment, a TypeScript suppression comment, or a TODO/FIXME marker) is never reported regardless of length or line count: none of these is a symbol's documentation at all, so promoting one to a `/** ... */` doc comment would misrepresent it as such. Tested against the FIRST extracted line only (see extractCommentLines below): a genuine directive is, in practice, always a single, self-contained line, and a leading directive line on an otherwise-substantial multi-line comment already signals "this whole leading comment is a suppression/marker, not documentation prose", matching the singular "a comment that is a directive" framing this rule's own commissioning task used. Case-insensitive throughout: `TODO`/`FIXME`/`Todo`/`todo` are all common in the wild, and matching `eslint-disable`/`ts-expect-error` case-insensitively too is strictly more lenient, never a false negative risk.
+// A directive-shaped LINE (an eslint-disable family comment, a TypeScript suppression comment, or a TODO/FIXME marker) is never itself absorbed into a `/** ... */` doc comment: none of these is a symbol's documentation at all, so promoting one would misrepresent it as such, and merging it bodily into a bigger block comment destroys it as a directive regardless of where it sits (ESLint/TypeScript only ever recognise a directive comment as a whole, self-contained comment of its own, never a sentence buried inside a larger one). checkAnchor below splits the group's own extracted lines at the FIRST directive line found anywhere in the run, not only the last: the lines strictly above it are still real, independently judgeable documentation prose (still eligible for their own report/fix), while the directive line and everything from it onward is excluded from the fix range entirely and left completely untouched. Case-insensitive throughout: `TODO`/`FIXME`/`Todo`/`todo` are all common in the wild, and matching `eslint-disable`/`ts-expect-error` case-insensitively too is strictly more lenient, never a false negative risk.
 const DIRECTIVE_COMMENT_PATTERN = /^(?:eslint-disable(?:-next-line|-line)?|ts-expect-error|ts-ignore|ts-nocheck|todo|fixme)\b/iu;
 
 /**
@@ -193,26 +193,34 @@ const preferDocComment = createRule<Options, MessageIds>({
       const group = getLeadingCommentGroup(sourceCode, anchor);
       if (group === undefined) return;
       // getLeadingCommentGroup always returns a non-empty array (a single Block comment, or a Line-comment run seeded with at least one element), so firstAndLastOrThrow's own throw branch is genuinely unreachable here; reusing it (rather than a second, redundant `=== undefined` guard) is exactly the "caller already confirmed a minimum length" case its own doc comment describes.
-      const [firstComment, lastComment] = firstAndLastOrThrow(group);
+      const [groupFirstComment] = firstAndLastOrThrow(group);
       // Already a genuine `/** ... */` doc comment: left alone, whatever its length.
-      if (firstComment.type === AST_TOKEN_TYPES.Block && firstComment.value.startsWith('*')) return;
+      if (groupFirstComment.type === AST_TOKEN_TYPES.Block && groupFirstComment.value.startsWith('*')) return;
 
       const lines = extractCommentLines(group);
-      const [firstLine] = lines;
-      if (firstLine === undefined) return;
-      if (isDirectiveComment(firstLine)) return;
+      // A Line-comment run's own comments map one-to-one onto `lines` (one array entry per comment), so a directive line found anywhere in the run, whether first, in the middle, or immediately above `anchor`, can be sliced out of BOTH arrays together, in step, leaving only the genuine prose strictly above it eligible for its own report. A single already-consolidated Block comment has no such one-to-one mapping (one comment node can carry many extracted lines), so a directive found anywhere inside one is left alone entirely rather than risking a fix that touches only part of one physical comment node.
+      const isLineRun = group.every((comment) => comment.type === AST_TOKEN_TYPES.Line);
+      const directiveIndex = lines.findIndex((line) => isDirectiveComment(line));
+      if (directiveIndex !== -1 && !isLineRun) return;
+      const consideredLines = directiveIndex === -1 ? lines : lines.slice(0, directiveIndex);
+      const consideredGroup = directiveIndex === -1 ? group : group.slice(0, directiveIndex);
 
-      const substantial = lines.length >= 2 || firstLine.length > maxLineLength;
+      const [firstLine] = consideredLines;
+      if (firstLine === undefined) return;
+
+      const substantial = consideredLines.length >= 2 || firstLine.length > maxLineLength;
       if (!substantial) return;
       // See hasUnsafeDocCommentContent's own doc comment for why this withholds the REPORT too, not merely the fix.
-      if (hasUnsafeDocCommentContent(lines)) return;
+      if (hasUnsafeDocCommentContent(consideredLines)) return;
+
+      const [firstComment, lastComment] = firstAndLastOrThrow(consideredGroup);
 
       context.report({
         loc: { start: firstComment.loc.start, end: lastComment.loc.end },
         messageId: 'preferDocComment',
         fix(fixer) {
           const indent = sourceCode.text.slice(firstComment.range[0] - firstComment.loc.start.column, firstComment.range[0]);
-          const body = lines.map((line) => (line.length > 0 ? `${indent} * ${line}` : `${indent} *`)).join('\n');
+          const body = consideredLines.map((line) => (line.length > 0 ? `${indent} * ${line}` : `${indent} *`)).join('\n');
 
           return fixer.replaceTextRange([firstComment.range[0], lastComment.range[1]], `/**\n${body}\n${indent} */`);
         },
