@@ -211,9 +211,16 @@ describe('isDirectiveComment', () => {
     'eslint-disable',
     'eslint-disable-next-line no-console',
     'eslint-disable-line no-console',
+    // The bare (`@`-less) form: never how a real TypeScript directive is written, but still recognised, since the alternative's own leading `@` is optional, not required.
     'ts-expect-error',
     'ts-ignore',
     'ts-nocheck',
+    'ts-check',
+    // The real, `@`-prefixed form every TypeScript directive actually appears as once extractCommentLines has stripped only the single conventional space after `//` (never the `@` itself): pins the whole reason this rule exists to recognise `ts-*` markers at all, since the bare form above is never what a real fixture's own extracted line looks like.
+    '@ts-expect-error',
+    '@ts-ignore',
+    '@ts-nocheck',
+    '@ts-check',
     'todo: revisit',
     'fixme: revisit',
     'TODO: revisit',
