@@ -60,6 +60,22 @@ ruleTester.run('prefer-options-object-param', rule, {
     },
   ],
   invalid: [
+    // The trailing optional run reaches all the way back to the FIRST parameter, index 0, with no leading required parameter at all: proves getTrailingOptionalRun's own backward walk actually reaches and includes index 0, rather than stopping one short of it.
+    {
+      code: 'function f(a?: number, b?: number): void {\n  return;\n}',
+      errors: [
+        {
+          messageId: 'tooManyTrailingOptional',
+          data: { kind: 'function', count: 2, names: 'a, b' },
+          suggestions: [
+            {
+              messageId: 'wrapInOptionsObject',
+              output: 'function f(options?: { a?: number; b?: number }): void {\n  const { a, b } = options ?? {};\n  return;\n}',
+            },
+          ],
+        },
+      ],
+    },
     // A plain function, fixed by wrapping the trailing optional run in a destructured options parameter.
     {
       code: 'function f(a: number, b: string, c?: number, d?: string): void {\n  return a;\n}',
@@ -247,10 +263,53 @@ ruleTester.run('prefer-options-object-param', rule, {
       code: 'const f = (a: number, b?: number, c?: number): number => a;',
       errors: [{ messageId: 'tooManyTrailingOptional', data: { kind: 'function', count: 2, names: 'b, c' }, suggestions: [] }],
     },
-    // Bail-out: a `@param` JSDoc tag names a parameter in the run — an existing doc comment describing it by name would go stale the moment it disappears from the signature.
+    // Bail-out: a `@param` JSDoc tag names a parameter in the run: an existing doc comment describing it by name would go stale the moment it disappears from the signature.
     {
       code: '/**\n * Does something.\n * @param a - first\n * @param b - second\n */\nfunction f(a: number, b?: number, c?: number): void {\n  return;\n}',
       errors: [{ messageId: 'tooManyTrailingOptional', data: { kind: 'function', count: 2, names: 'b, c' }, suggestions: [] }],
+    },
+    // Bail-out: the same JSDoc tag, but positioned before a `const f = (...) => {...}` declaration rather than directly before the arrow function itself. Proves getLeadingJSDocComment's own climb through VariableDeclarator then VariableDeclaration, since the doc comment sits immediately before neither the arrow function nor its own first wrapper, only its second.
+    {
+      code: '/**\n * Does something.\n * @param b - second\n */\nconst f = (a: number, b?: number, c?: number): void => {\n  return;\n};',
+      errors: [{ messageId: 'tooManyTrailingOptional', data: { kind: 'function', count: 2, names: 'b, c' }, suggestions: [] }],
+    },
+    // NOT a bail-out: a JSDoc comment is present and correctly identified as such, but it names none of the run's own parameters (only the leading required one). Proves a genuine JSDoc match still gets suggested when it simply has nothing to say about the parameters being collapsed.
+    {
+      code: '/**\n * Does something.\n * @param a - first\n */\nfunction f(a: number, b?: number, c?: number): void {\n  return;\n}',
+      errors: [
+        {
+          messageId: 'tooManyTrailingOptional',
+          data: { kind: 'function', count: 2, names: 'b, c' },
+          suggestions: [
+            {
+              messageId: 'wrapInOptionsObject',
+              output:
+                '/**\n * Does something.\n * @param a - first\n */\nfunction f(a: number, options?: { b?: number; c?: number }): void {\n  const { b, c } = options ?? {};\n  return;\n}',
+            },
+          ],
+        },
+      ],
+    },
+    // NOT a bail-out: an ordinary block comment (single "*", not JSDoc's own double-star "/**" convention) that happens to mention the run's own parameter name is still not treated as a real doc comment at all, so it never bails, even though the reported diagnostic passes it straight to jsDocMentionsParam if the comment-shape check itself were ever weakened.
+    {
+      code: '/* @param b */\nfunction f(a: number, b?: number, c?: number): void {\n  return;\n}',
+      errors: [
+        {
+          messageId: 'tooManyTrailingOptional',
+          data: { kind: 'function', count: 2, names: 'b, c' },
+          suggestions: [
+            {
+              messageId: 'wrapInOptionsObject',
+              output: '/* @param b */\nfunction f(a: number, options?: { b?: number; c?: number }): void {\n  const { b, c } = options ?? {};\n  return;\n}',
+            },
+          ],
+        },
+      ],
+    },
+    // Bail-out: a run parameter whose own name contains a regex-special character ("$" is a valid, if unusual, leading character in a JS identifier) still matches its own `@param` tag correctly. Proves the name is escaped before being interpolated into the tag-matching pattern, not embedded as literal (unescaped) regex syntax.
+    {
+      code: '/**\n * @param $special\n */\nfunction f(a: number, $special?: number, c?: number): void {\n  return;\n}',
+      errors: [{ messageId: 'tooManyTrailingOptional', data: { kind: 'function', count: 2, names: '$special, c' }, suggestions: [] }],
     },
     // Bail-out: a decorated parameter in the run — this parameter is otherwise fully resolvable (a plain name and an explicit type), isolating the decorator check from the "no explicit type annotation" bucket above. The reported `names` text shows the bare 'b?: number' rather than '@dec() b?: number' — a parameter's own decorators sit outside its own node range in the AST (confirmed directly), so a plain source-text echo of the parameter node itself never includes them; this is a cosmetic property of the diagnostic text only and does not affect the bail-out itself, which reads `.decorators` directly rather than the node's own range.
     {
