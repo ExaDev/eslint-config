@@ -44,11 +44,17 @@ const FUNCTION_LIKE_SELECTOR = [
   'TSMethodSignature',
 ].join(', ');
 
-// A parameter is optional exactly when it carries a `?` marker or a default value — a TSParameterProperty is optional exactly when the parameter it wraps is, and a bare RestElement/ArrayPattern/ObjectPattern (with no default) never is, since none of those three can carry either marker. Exported so this can be tested directly against fabricated parameter nodes.
+// A parameter is optional exactly when it carries a `?` marker or a default value: a TSParameterProperty is optional exactly when the parameter it wraps is. An Identifier, an ObjectPattern and an ArrayPattern each carry their own `?` marker via their own `optional` field (`{ x }?: T` and `[y]?: T[]` are valid in a declaration signature, a `.d.ts` file and an interface method, even though neither can appear in a real function body); a bare RestElement never carries either marker, since a rest parameter cannot be written with a `?` in valid TypeScript. Exported so this can be tested directly against fabricated parameter nodes.
 export function isOptionalParam(param: TSESTree.Parameter): boolean {
   if (param.type === AST_NODE_TYPES.TSParameterProperty) return isOptionalParam(param.parameter);
   if (param.type === AST_NODE_TYPES.AssignmentPattern) return true;
-  if (param.type === AST_NODE_TYPES.Identifier) return param.optional;
+  if (
+    param.type === AST_NODE_TYPES.Identifier ||
+    param.type === AST_NODE_TYPES.ObjectPattern ||
+    param.type === AST_NODE_TYPES.ArrayPattern
+  ) {
+    return param.optional;
+  }
   return false;
 }
 

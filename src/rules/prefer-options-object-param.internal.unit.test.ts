@@ -16,6 +16,9 @@ function definedOrThrow<T>(value: T | undefined): T {
 let optionalIdentifierParam: TSESTree.Parameter | undefined;
 let requiredIdentifierParam: TSESTree.Parameter | undefined;
 let bareDestructuredParam: TSESTree.Parameter | undefined;
+let optionalObjectPatternParam: TSESTree.Parameter | undefined;
+let optionalArrayPatternParam: TSESTree.Parameter | undefined;
+let restParam: TSESTree.Parameter | undefined;
 let capturedScope: TSESLint.Scope.Scope | undefined;
 let constructorFunctionNode: TSESTree.FunctionExpression | TSESTree.TSEmptyBodyFunctionExpression | undefined;
 let regularMethodFunctionNode: TSESTree.FunctionExpression | TSESTree.TSEmptyBodyFunctionExpression | undefined;
@@ -29,7 +32,14 @@ const probe = createRule({
     return {
       FunctionDeclaration(node) {
         if (node.id?.name !== 'paramsProbe') return;
-        [optionalIdentifierParam, requiredIdentifierParam, bareDestructuredParam] = node.params;
+        [
+          optionalIdentifierParam,
+          requiredIdentifierParam,
+          bareDestructuredParam,
+          optionalObjectPatternParam,
+          optionalArrayPatternParam,
+          restParam,
+        ] = node.params;
         capturedScope = context.sourceCode.getScope(node);
         context.report({ node, messageId: 'hit' });
       },
@@ -46,9 +56,9 @@ ruleTester.run('probe', probe, {
   valid: [],
   invalid: [
     {
-      // Two `var options;` declarations in the same function scope are the same real Variable with two distinct identifier occurrences (JS `var` re-declaration), the one natural way to get a Variable with more than one identifier without hand-fabricating one. The class alongside it supplies a real constructor and a real regular method, both captured by the MethodDefinition visitor above, for describeFunctionKind's own direct tests below.
+      // Two `var options;` declarations in the same function scope are the same real Variable with two distinct identifier occurrences (JS `var` re-declaration), the one natural way to get a Variable with more than one identifier without hand-fabricating one. The class alongside it supplies a real constructor and a real regular method, both captured by the MethodDefinition visitor above, for describeFunctionKind's own direct tests below. `{ d }?: { d: number }` and `[e]?: number[]` are an optional ObjectPattern and ArrayPattern: syntactically valid even in a real function body (confirmed by parsing this fixture at all), and the one way to capture real optional-pattern nodes for isOptionalParam's own direct tests below. The trailing `...rest: number[]` captures a real RestElement: isOptionalParam is never called on one through the rule's own traversal (getTrailingOptionalRun always skips a trailing rest parameter before calling it), so its own direct test below is the only thing that exercises isOptionalParam's final fallback at all.
       code:
-        'function paramsProbe(a?: number, b: number, { c }: { c: number }): void {\n  var options;\n  var options;\n}\nclass ProbeClass {\n  constructor(a: number) {}\n  regularMethod(a: number) {}\n}',
+        'function paramsProbe(a?: number, b: number, { c }: { c: number }, { d }?: { d: number }, [e]?: number[], ...rest: number[]): void {\n  var options;\n  var options;\n}\nclass ProbeClass {\n  constructor(a: number) {}\n  regularMethod(a: number) {}\n}',
       errors: [{ messageId: 'hit' }],
     },
   ],
@@ -66,6 +76,18 @@ describe('isOptionalParam', () => {
   it('returns false, never undefined, for a bare (non-optional, no default) destructured ObjectPattern parameter', () => {
     // The distinguishing case: an ObjectPattern has no `optional` property at all, so a mutant that reaches the Identifier branch's `return param.optional` regardless of type would return `undefined` here, not `false`. Every real call site treats the two as equivalent (`!isOptionalParam(...)`, where `!undefined === !false`), so only a strict `toBe(false)` assertion, not real rule behaviour, can tell them apart.
     expect(isOptionalParam(definedOrThrow(bareDestructuredParam))).toBe(false);
+  });
+
+  it('returns true for an optional (?-marked) ObjectPattern', () => {
+    expect(isOptionalParam(definedOrThrow(optionalObjectPatternParam))).toBe(true);
+  });
+
+  it('returns true for an optional (?-marked) ArrayPattern', () => {
+    expect(isOptionalParam(definedOrThrow(optionalArrayPatternParam))).toBe(true);
+  });
+
+  it('returns false for a RestElement, the one Parameter variant none of the earlier branches match', () => {
+    expect(isOptionalParam(definedOrThrow(restParam))).toBe(false);
   });
 });
 
