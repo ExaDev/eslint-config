@@ -1,18 +1,10 @@
 import type { MemberNode, ObjectNode, StringNode } from '@humanwhocodes/momoa';
+import { getMemberKeyName } from './json-member-key';
 
 // Shared momoa-shaped reading for every workspace-architecture rule: identifying package.json's own top-level "name" and "dependencies"-style fields. This is the actual fix for the hive original's own never-firing top-level guard: its `Member` visitor checked `parent === undefined`, but @eslint/json's own JSONRuleVisitor types a Member's parent as the ObjectNode that contains it, never undefined (only the traversal root, which is never a Member, has an undefined parent), so that guard passed unconditionally and never actually restricted anything to the manifest's own top level. The real check has to happen one level up, on the Object visitor, confirming its own parent is the Document node (see package-json-key-order.ts's identical objectParentOrThrow/`parent.type === 'Document'` pattern); every rule below is written as `Object(node, parent) { if (parent?.type !== 'Document') return; ... }` for exactly this reason, never as a `Member` visitor.
 
 function isStringNode(node: { readonly type: string }): node is StringNode {
   return node.type === 'String';
-}
-
-// momoa's own MemberNode.name is typed as StringNode | IdentifierNode because momoa's grammar also covers JSON5 (unquoted identifier keys), but every workspace-architecture rule's own meta.languages is only ever `json/json`/`json/jsonc`, where an unquoted key is a genuine parse error, never a value this function is asked to name. Mirrors package-json-key-order.ts's identical getMemberKeyName, kept as its own local copy rather than a shared import since each module narrows to the minimal structural shape it actually reads. Exported so that guarantee is checked directly against a deliberately IdentifierNode-shaped input, rather than trusted on the strength of this comment alone.
-export function getMemberKeyName(member: { readonly name: { readonly type: string } }): string {
-  const { name } = member;
-  if (!isStringNode(name)) {
-    throw new Error(`Unreachable: workspace-json-helpers only supports json/json and json/jsonc, where an unquoted (Identifier) member name is a parse error (got a "${name.type}" name instead).`);
-  }
-  return name.value;
 }
 
 /** package.json's own declared "name" field, read directly off a confirmed-top-level Object node. Returns undefined for a manifest with no "name" at all, or one whose value is not a plain string (a shape other JSON tooling would already flag elsewhere, not this rule's concern). */
