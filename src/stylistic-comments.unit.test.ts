@@ -128,3 +128,24 @@ describe('padding-line-between-statements (consecutive directives and imports st
     expect(fixedOutput(code)).toBe("import { a } from './x';\nimport { b } from './y';\n\nconst c = 1;\n");
   });
 });
+
+// A real --fix run pinning the confirmed, documented gap this file's own header comment describes: spaced-comment's own hard-coded exemption only recognises the SPACED triple-slash form (`/// <reference ... />`), never the no-space one, which is still valid TypeScript syntax. Both cases are pinned here, not only the broken one, so a future upstream fix (which would flip the second assertion) is caught by a real, visibly failing test rather than silently going unnoticed.
+describe('spaced-comment (triple-slash reference directive)', () => {
+  const linter = new LinterClass();
+
+  function fixedOutput(code: string): string {
+    const config: Linter.Config[] = [{ files: ['**'], languageOptions: { sourceType: 'module', ecmaVersion: 2022 } }, ...stylisticCommentsConfig] as Linter.Config[];
+
+    return linter.verifyAndFix(code, config, 'reference.ts').output;
+  }
+
+  it('leaves a spaced triple-slash reference directive untouched, the shape TypeScript itself always emits', () => {
+    const code = '/// <reference types="node" />\nexport const z = 1;\n';
+    expect(fixedOutput(code)).toBe(code);
+  });
+
+  it('rewrites a no-space triple-slash reference directive, breaking it: the confirmed upstream gap tracked at ExaDev/eslint-config#47', () => {
+    const code = '///<reference types="node" />\nexport const z = 1;\n';
+    expect(fixedOutput(code)).toBe('// /<reference types="node" />\nexport const z = 1;\n');
+  });
+});
