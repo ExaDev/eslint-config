@@ -323,5 +323,11 @@ ruleTester.run('prefer-doc-comment', rule, {
       output: '/* aside */ /**\n * This comment follows a block comment on the same line and is long enough to be substantial for sure.\n */\nexport function afterAside() {}',
       errors: [{ messageId: 'preferDocComment' }],
     },
+    // A CRLF file: every line break in the fixture below, both between the two `//` lines and after them, is a real `\r\n` pair, never a bare `\n`. The fixer's own replacement must use that same `\r\n` throughout its own new text (between `/**` and the first body line, between the two body lines, and before the closing ` */`), never a hard-coded `\n`, which would leave the file with the two conventions mixed.
+    {
+      code: '// first line\r\n// second line\r\nexport function crlf() {}',
+      output: '/**\r\n * first line\r\n * second line\r\n */\r\nexport function crlf() {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
   ],
 });
