@@ -32,7 +32,7 @@ export default defineConfig(
     rules: { '@typescript-eslint/consistent-type-assertions': 'off' },
   },
   {
-    // src/consumer-compatibility.ts deliberately exercises tseslint.config() (now @deprecated) to prove this package's exported array still satisfies it, so existing consumers who haven't migrated to defineConfig() keep working -- see that file's own comment. src/readme-examples.ts does the same for the one README example (the "lighter option" section's plugin.configs.recommended pattern) that documents tseslint.config() specifically, since that wrapper is README.md's own stated reason a consumer would still reach for it (string extends isn't accepted there).
+    // src/consumer-compatibility.ts deliberately exercises tseslint.config() (now @deprecated) to prove this package's exported array still satisfies it, so existing consumers who haven't migrated to defineConfig() keep working; see that file's own comment. src/readme-examples.ts does the same for the one README example (the "lighter option" section's plugin.configs.recommended pattern) that documents tseslint.config() specifically, since that wrapper is README.md's own stated reason a consumer would still reach for it (string extends isn't accepted there).
     files: ['src/consumer-compatibility.ts', 'src/readme-examples.ts'],
     rules: { '@typescript-eslint/no-deprecated': 'off' },
   },
