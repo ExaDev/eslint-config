@@ -57,9 +57,23 @@ jobs:
       - run: pnpm build
       - run: pnpm exec attw --pack
 
+  mutation:
+    name: Mutation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:mutation
+
   required-checks:
     name: Required Checks
-    needs: [commitlint, lint, typecheck]
+    needs: [commitlint, lint, typecheck, mutation]
     # Always runs, even if a dependency failed, so it can report that failure itself rather than being skipped -- a required check that's silently absent blocks a PR indefinitely instead of failing it visibly.
     if: always()
     runs-on: ubuntu-latest
@@ -75,7 +89,7 @@ jobs:
 
   release:
     name: Release
-    needs: [commitlint, lint, typecheck]
+    needs: [commitlint, lint, typecheck, mutation]
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 15
