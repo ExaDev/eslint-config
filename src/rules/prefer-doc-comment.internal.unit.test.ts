@@ -243,6 +243,14 @@ describe('isDirectiveComment', () => {
     'FIXME: revisit',
     // A bare `prettier-ignore` directive, the shape Prettier itself only ever recognises as a whole, self-contained comment.
     'prettier-ignore',
+    // The rest of the real ESLint directive/config-comment family, verified directly against the installed eslint's own `lib/shared/directives.js`, not merely assumed: re-enabling a previously disabled rule, and the block-only inline config keywords that mark a variable or environment rather than suppressing a rule at all.
+    'eslint-enable',
+    'eslint-enable no-console',
+    'eslint no-console: off',
+    'eslint-env node',
+    'global foo, bar',
+    'globals foo, bar',
+    'exported foo',
     // Each coverage tool's own `ignore` keyword, always separated from the tool name by real whitespace: `c8 ignore next`, `v8 ignore next`, `istanbul ignore next`, plus one further istanbul variant (`ignore if`) proving the pattern matches on the tool name and the `ignore` keyword alone, never the specific word after it.
     'c8 ignore next',
     'v8 ignore next',
@@ -277,6 +285,14 @@ describe('isDirectiveComment', () => {
     // Pins the `\s+` between the tool name and "ignore": a mutant weakening it to `\s*` would still match this input via its own zero-width case, silently accepting a shape no real coverage tool ever writes.
     expect(isDirectiveComment('c8ignore next')).toBe(false);
   });
+
+  it.each(['eslint-config-prettier is a real dependency of this package', 'eslint-plugin-jsdoc ships its own recommended config', 'global-scoped state is avoided here', 'exported-members are documented above'])(
+    'does not recognise ordinary prose starting with an ESLint-keyword-shaped compound word as a directive: %s',
+    (text) => {
+      // Pins the ESLint family's own `(?=\s|$)` lookahead over the generic trailing `\b`: a mutant weakening it back to a bare `\b` would wrongly match every one of these, since a hyphen immediately satisfies a word boundary too.
+      expect(isDirectiveComment(text)).toBe(false);
+    },
+  );
 });
 
 describe('isTripleSlashDirective', () => {
