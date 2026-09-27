@@ -1,4 +1,4 @@
-import { AST_TOKEN_TYPES, ESLintUtils, type TSESLint, type TSESTree } from '@typescript-eslint/utils';
+import { AST_TOKEN_TYPES, ESLintUtils, type TSESLint } from '@typescript-eslint/utils';
 import { RuleTester } from '@typescript-eslint/rule-tester';
 import tseslint from 'typescript-eslint';
 import { describe, expect, it } from 'vitest';
@@ -7,8 +7,6 @@ import {
   containsCommentTerminator,
   detectLineBreak,
   extractCommentLines,
-  firstMatchOrEmpty,
-  getExportWrapper,
   isBeforeByRange,
   isDirectiveComment,
   isTrailingComment,
@@ -25,29 +23,9 @@ function definedOrThrow<T>(value: T | undefined): T {
   return value;
 }
 
-// getExportWrapper's own `parent === undefined` guard is unreachable through the rule itself (every real call site hands it a declaration/class-body-member node, never a Program), but the function's own general contract (it accepts any TSESTree.Node) still needs a real Program node to exercise it directly, the same "caller already confirmed" shape firstAndLastOrThrow's own direct empty-array test uses for its sibling helper. A real Program node's own `.parent` is only ever obtainable from a genuine parse (Program is the one node type with no parent at all), not safely hand-fabricated.
-let capturedProgram: TSESTree.Program | undefined;
 const probeCreateRule = ESLintUtils.RuleCreator((name) => name);
-const probe = probeCreateRule({
-  name: 'probe',
-  meta: { type: 'problem', schema: [], docs: { description: 'probe' }, messages: { hit: 'hit' } },
-  defaultOptions: [],
-  create(context) {
-    return {
-      Program(node) {
-        capturedProgram = node;
-        context.report({ node, messageId: 'hit' });
-      },
-    };
-  },
-});
 
-new RuleTester({ languageOptions: { parser: tseslint.parser, sourceType: 'module' } }).run('probe', probe, {
-  valid: [],
-  invalid: [{ code: 'const x = 1;', errors: [{ messageId: 'hit' }] }],
-});
-
-// isTrailingComment needs a real SourceCode (for getTokenBefore) and real Comment nodes in a genuine positional relationship a hand-written CommentLike object cannot supply, captured via a second probe rule over one fixture carrying both shapes its own doc comment describes: a comment genuinely trailing real code on its own line, and a comment merely sharing ITS line with an EARLIER, unrelated comment rather than real code.
+// isTrailingComment needs a real SourceCode (for getTokenBefore) and real Comment nodes in a genuine positional relationship a hand-written CommentLike object cannot supply, captured via a probe rule over one fixture carrying both shapes its own doc comment describes: a comment genuinely trailing real code on its own line, and a comment merely sharing ITS line with an EARLIER, unrelated comment rather than real code.
 let capturedCommentsSourceCode: TSESLint.SourceCode | undefined;
 const commentsProbe = probeCreateRule({
   name: 'comments-probe',
@@ -75,9 +53,9 @@ new RuleTester({ languageOptions: { parser: tseslint.parser, sourceType: 'module
 
 // extractCommentLines only ever reads a comment's own `type`/`value` fields (see CommentLike's own doc comment), so a plain hand-written literal object is a safe, drift-free stand-in for a real TSESTree.Comment here, unlike the node/scope fabrication this codebase's own similarly-shaped internal tests (prefer-options-object-param.internal.unit.test.ts) deliberately avoid.
 describe('extractCommentLines', () => {
-  it('returns an empty array for an empty group', () => {
-    // Never reached through the rule itself (getLeadingCommentGroup always returns a non-empty group), but extractCommentLines's own general contract still answers this the same way firstAndLastOrThrow's own direct empty-array test does for its sibling helper.
-    expect(extractCommentLines([])).toEqual([]);
+  it('throws for an empty group', () => {
+    // Never reached through the rule itself (getLeadingCommentGroup always returns a non-empty group); reuses firstAndLastOrThrow's own "caller already confirmed a minimum length" guarantee, so an empty group fails loudly rather than silently returning an empty array.
+    expect(() => extractCommentLines([])).toThrow(/Unreachable/u);
   });
 
   it('returns one entry per Line comment, each with its own single leading space trimmed', () => {
@@ -196,12 +174,6 @@ describe('isTrailingComment', () => {
     const sourceCode = definedOrThrow(capturedCommentsSourceCode);
     const note = sourceCode.getAllComments().at(-1);
     expect(isTrailingComment(sourceCode, definedOrThrow(note))).toBe(false);
-  });
-});
-
-describe('getExportWrapper', () => {
-  it('returns undefined for a Program node (the one node type with no parent at all)', () => {
-    expect(getExportWrapper(definedOrThrow(capturedProgram))).toBeUndefined();
   });
 });
 
@@ -380,21 +352,6 @@ describe('containsCommentTerminator', () => {
   });
 });
 
-describe('firstMatchOrEmpty', () => {
-  it('returns the real match text when one is present', () => {
-    expect(firstMatchOrEmpty(['  '])).toBe('  ');
-  });
-
-  it('returns an empty string for a genuinely absent match (null)', () => {
-    expect(firstMatchOrEmpty(null)).toBe('');
-  });
-
-  it('returns an empty string when a real, non-null match array has no index-0 element of its own', () => {
-    // Never reached through any real caller in this file (a real RegExp#exec result's own index 0 is always the whole match), but this function's own general contract still needs an answer for it, pinning the destructured default distinctly from the `?? []` fallback the case above already covers.
-    expect(firstMatchOrEmpty([])).toBe('');
-  });
-});
-
 describe('detectLineBreak', () => {
   it('returns a bare LF when that is the break found', () => {
     expect(detectLineBreak('first\nsecond', 0)).toBe('\n');
@@ -410,9 +367,9 @@ describe('detectLineBreak', () => {
     expect(detectLineBreak('before\nfirst\r\nsecond', 'before\n'.length)).toBe('\r\n');
   });
 
-  it('returns a bare LF fallback when there is no line break anywhere in the searched text', () => {
-    // Never reached through the rule itself (a leading comment group and its anchor are always on different physical lines), but this function's own general contract still needs an answer for it, the same "caller already confirmed" shape this file's own definedOrThrow helper documents for its own unreachable branch.
-    expect(detectLineBreak('no break here at all', 0)).toBe('\n');
+  it('throws when there is no line break anywhere in the searched text', () => {
+    // Never reached through the rule itself (a leading comment group and its anchor are always on different physical lines, per getLeadingCommentGroup's own adjacency guarantee); pins that this genuinely unreachable case fails loudly rather than silently defaulting to a guessed line break.
+    expect(() => detectLineBreak('no break here at all', 0)).toThrow(/Unreachable/u);
   });
 });
 
