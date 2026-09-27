@@ -285,10 +285,10 @@ ruleTester.run('prefer-doc-comment', rule, {
       output: '/**\n * Explanation line one.\n * Explanation line two.\n */\n// TODO: revisit\nexport function d3(): void {}',
       errors: [{ messageId: 'preferDocComment' }],
     },
-    // An `eslint-enable` directive directly above the export, with substantial explanation above it: only the explanation converts; `// eslint-enable no-console` is left completely untouched directly above the export, still a real re-enable for the rule the matching `eslint-disable` further up switched off, never silently removed by being folded into the new doc comment's own prose.
+    // A `// eslint-enable no-console` Line comment is NOT itself a live ESLint directive at all: source-code.js's own getInlineConfigNodes only honours `eslint-disable-line`/`eslint-disable-next-line` on a Line comment, every other family member (including bare `eslint-enable`) only on a Block comment (confirmed directly against the installed eslint's own source). So this whole three-line run, including the `eslint-enable` line itself, is ordinary prose to this rule and merges into the doc comment in full; nothing here was ever a working directive for this fix to destroy.
     {
       code: '// Explains why this function exists and\n// what callers must guarantee.\n// eslint-enable no-console\nexport function f() {}',
-      output: '/**\n * Explains why this function exists and\n * what callers must guarantee.\n */\n// eslint-enable no-console\nexport function f() {}',
+      output: '/**\n * Explains why this function exists and\n * what callers must guarantee.\n * eslint-enable no-console\n */\nexport function f() {}',
       errors: [{ messageId: 'preferDocComment' }],
     },
     // A `#endregion` editor folding marker directly above the export, with substantial explanation above it: only the explanation converts; `// #endregion` is left completely untouched directly above the export, still a real fold boundary for the editor, never silently removed by being folded into the new doc comment's own prose.
@@ -403,6 +403,32 @@ ruleTester.run('prefer-doc-comment', rule, {
     {
       code: 'export namespace N {\n  // first line\n  // second line\n  export function f() {}\n}',
       output: 'export namespace N {\n  /**\n   * first line\n   * second line\n   */\n  export function f() {}\n}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // Five confirmed regressions, each a single `//` line over the default 80-character threshold, none of them a real directive: the widened DIRECTIVE_COMMENT_PATTERN's own `i` flag used to treat ordinary capitalised prose that merely opens with an ESLint-family word ("ESLint"/"Global"/"Exported") as directive-shaped, a case-insensitivity false negative fixed by matching that family case-sensitively; a mixed-case "Todo" opening ordinary prose is fixed by requiring the real marker shape (all-uppercase, or an immediate `:`/`(`); and a genuine lowercase `eslint-enable` opening a Line comment is fixed by recognising that ESLint itself never honours that label as a Line-comment directive at all (only Block), so this rule must not either. Each was silently unreported before this fix, and each is now reported and cleanly autofixed, since none of them collides with any real TSDoc syntax.
+    {
+      code: '// ESLint plugins resolve their rules lazily, so this cache must warm before the very first lint run completes successfully.\nexport function pluginCache() {}',
+      output: '/**\n * ESLint plugins resolve their rules lazily, so this cache must warm before the very first lint run completes successfully.\n */\nexport function pluginCache() {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    {
+      code: '// Global registry of handlers, keyed by name, shared across every request the process ever serves.\nexport function handlerRegistry() {}',
+      output: '/**\n * Global registry of handlers, keyed by name, shared across every request the process ever serves.\n */\nexport function handlerRegistry() {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    {
+      code: '// Exported for the CLI entry point, this helper must remain stable across every published release.\nexport function cliEntry() {}',
+      output: '/**\n * Exported for the CLI entry point, this helper must remain stable across every published release.\n */\nexport function cliEntry() {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    {
+      code: '// Todo list items are rendered directly from the shared store without any client side filtering applied.\nexport function todoList() {}',
+      output: '/**\n * Todo list items are rendered directly from the shared store without any client side filtering applied.\n */\nexport function todoList() {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    {
+      code: '// eslint-enable is what this helper emits once the temporary suppression block above it has been safely closed.\nexport function emitEnable() {}',
+      output: '/**\n * eslint-enable is what this helper emits once the temporary suppression block above it has been safely closed.\n */\nexport function emitEnable() {}',
       errors: [{ messageId: 'preferDocComment' }],
     },
   ],
