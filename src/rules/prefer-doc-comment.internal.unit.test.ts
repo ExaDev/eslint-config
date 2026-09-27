@@ -310,6 +310,23 @@ describe('isDirectiveComment', () => {
       expect(isDirectiveComment(text, AST_TOKEN_TYPES.Line)).toBe(false);
     },
   );
+
+  // Each pattern's own leading `^` anchor, pinned directly: a real marker shape sitting NOT at the very start of the comment (mid-sentence) is never itself a directive, only ever the comment's own opening word. A mutant removing any of these anchors would still match, since `RegExp#exec` searches the whole string, not only its start.
+  it('does not recognise an ESLint-family marker appearing mid-sentence, only ever at the very start', () => {
+    expect(isDirectiveComment('An aside mentions eslint-disable mid sentence', AST_TOKEN_TYPES.Block)).toBe(false);
+  });
+
+  it('does not recognise the coverage/ts-directive/prettier-ignore/region family appearing mid-sentence', () => {
+    expect(isDirectiveComment('A note that mentions ts-expect-error later on', AST_TOKEN_TYPES.Line)).toBe(false);
+  });
+
+  it('does not recognise the all-uppercase TODO/FIXME marker appearing mid-sentence', () => {
+    expect(isDirectiveComment('A note mentions TODO later on', AST_TOKEN_TYPES.Line)).toBe(false);
+  });
+
+  it('does not recognise a marked lowercase todo/fixme appearing mid-sentence', () => {
+    expect(isDirectiveComment('A note mentions todo: later on', AST_TOKEN_TYPES.Line)).toBe(false);
+  });
 });
 
 describe('isTripleSlashDirective', () => {
