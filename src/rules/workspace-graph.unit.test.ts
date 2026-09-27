@@ -248,6 +248,22 @@ describe('buildWorkspaceGraph (fabricated tree)', () => {
     expect(graph.packagesByName.get('store-api')).toEqual({ name: 'store-api', relativeDir: 'features/store/api', group: 'features', rank: 1, slice: 'store' });
   });
 
+  it('drops a "." packages entry (the workspace root itself) rather than throwing "is not covered by any configured group"', () => {
+    // A "." glob resolves to the workspace root itself, relative to itself: the empty string. pnpm allows this so the root package.json can opt into workspace-wide tooling without becoming a publishable member of any group; no configured group's own "path" could ever cover an empty relativeDir, so this must be dropped before findOwningGroup ever sees it.
+    const fs = fakeFs(
+      {
+        '/root/pnpm-workspace.yaml': "packages:\n  - '.'\n  - 'core/*'\n",
+        '/root/package.json': packageJson('workspace-root'),
+        '/root/core/kv/package.json': packageJson('kv-contract'),
+      },
+      { '/root': ['core'], '/root/core': ['kv'] },
+    );
+
+    const graph = buildWorkspaceGraph(fs, '/root', { groups });
+    expect(graph.packagesByName.get('workspace-root')).toBeUndefined();
+    expect(graph.packagesByName.get('kv-contract')).toEqual({ name: 'kv-contract', relativeDir: 'core/kv', group: 'core', rank: 0, slice: undefined });
+  });
+
   it("a segment-sliced group whose configured segment index is deeper than the package's own path never contributes a known slice", () => {
     const shallowGroups: readonly GroupSpec[] = [
       { name: 'features', rank: 1, slice: { segment: 5 } },
