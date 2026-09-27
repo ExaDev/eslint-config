@@ -6,21 +6,21 @@ import plugin from './plugin';
 import { JSX_FILE_PATTERNS } from './react';
 import stylisticCommentsConfig from './stylistic-comments';
 
-// The three blocks this file's own shape assertions below each check in turn: the hand-picked JS/TS rules, the .d.ts multiline-comment-style override, and the JSX-specific rules. Named here since a bare `3` would itself trip @typescript-eslint/no-magic-numbers with nothing explaining what it denotes.
-const EXPECTED_CONFIG_BLOCK_COUNT = 3;
+// The two blocks this file's own shape assertions below each check in turn: the hand-picked JS/TS rules, and the JSX-specific rules. Named here since a bare `2` would itself trip @typescript-eslint/no-magic-numbers with nothing explaining what it denotes.
+const EXPECTED_CONFIG_BLOCK_COUNT = 2;
 
 // Deep-equality (toEqual) against each block's full expected shape, not toMatchObject: a mutant that empties any nested object literal (`plugins: {}`, `rules: {}`) or the whole block (`{}`) is only caught by an assertion that would fail on a MISSING expected key too, not just a changed value on a key that happens to already be present.
 describe('stylisticCommentsConfig', () => {
-  it('has exactly three config blocks', () => {
+  it('has exactly two config blocks', () => {
     expect(stylisticCommentsConfig).toHaveLength(EXPECTED_CONFIG_BLOCK_COUNT);
   });
 
-  it('the first block scopes the hand-picked comment/class-member/statement rules to every JS/TS file, with their exact options', () => {
+  it('the first block scopes the hand-picked comment/class-member/statement rules to every JS/TS file, with their exact options, and does not enable multiline-comment-style', () => {
+    // No `@stylistic/multiline-comment-style` key at all: see this file's own header comment on why it is deliberately withheld rather than merely turned `'off'` somewhere, which a mutant swapping an omission for an explicit `'off'` entry could otherwise slip past an object-shape check that only asserts the keys it expects are present.
     expect(stylisticCommentsConfig[0]).toEqual({
       files: ['**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}'],
       plugins: { '@stylistic': stylistic, exadev: plugin },
       rules: {
-        '@stylistic/multiline-comment-style': ['error', 'bare-block'],
         '@stylistic/spaced-comment': ['error', 'always', { block: { markers: ['!'] } }],
         '@stylistic/lines-between-class-members': 'error',
         '@stylistic/line-comment-position': ['error', 'above'],
@@ -37,18 +37,8 @@ describe('stylisticCommentsConfig', () => {
     });
   });
 
-  it("the second block turns multiline-comment-style back off for .d.ts files only, changing nothing else the first block turns on for them", () => {
+  it("the second block scopes exactly the three JSX-specific rules, at their bare defaults, to react.ts's own JSX_FILE_PATTERNS", () => {
     expect(stylisticCommentsConfig[1]).toEqual({
-      files: ['**/*.d.ts'],
-      plugins: { '@stylistic': stylistic },
-      rules: {
-        '@stylistic/multiline-comment-style': 'off',
-      },
-    });
-  });
-
-  it("the third block scopes exactly the three JSX-specific rules, at their bare defaults, to react.ts's own JSX_FILE_PATTERNS", () => {
-    expect(stylisticCommentsConfig[2]).toEqual({
       files: [...JSX_FILE_PATTERNS],
       plugins: { '@stylistic': stylistic },
       rules: {
@@ -81,11 +71,13 @@ describe('spaced-comment (the /*! license/banner marker)', () => {
   });
 });
 
-// A real --fix run, not just the config shape asserted above: the second block's own file scoping only matters through which file multiline-comment-style's own fixer actually reaches, which the config-shape test above cannot observe.
-describe('multiline-comment-style (consecutive triple-slash directives in a .d.ts file)', () => {
+// A real --fix run, not just the config shape asserted above: proves multiline-comment-style is genuinely not enabled at all (see this file's own header comment on why), not merely scoped away from some files, by running the config against the exact shapes that would break under the installed v5.10.0's own directive-comment gap if the rule were on.
+describe('multiline-comment-style (deliberately not enabled, in any file)', () => {
   const linter = new LinterClass();
   // The exact shape TypeScript itself generates for a Next.js project's own next-env.d.ts: two consecutive `/// <reference ... />` lines with no blank line between them, and nothing else above the statement they sit over.
   const tripleSlashCode = '/// <reference types="node" />\n/// <reference lib="es2022" />\nexport const z = 1;\n';
+  // The real-world prettier-ignore repro this package's own review found: a prose comment immediately above a directive the installed rule's own filter does not recognise, on a NON-exported statement (so exadev/prefer-doc-comment, scoped to exported declarations only, never reports or fixes it either).
+  const prettierIgnoreCode = '// A lookup table laid out by hand.\n// prettier-ignore\nconst grid = [\n  [1, 0, 0],\n];\n';
 
   function fixedOutput(code: string, filename: string): string {
     const config: Linter.Config[] = [{ files: ['**'], languageOptions: { sourceType: 'module', ecmaVersion: 2022 } }, ...stylisticCommentsConfig] as Linter.Config[];
@@ -93,14 +85,21 @@ describe('multiline-comment-style (consecutive triple-slash directives in a .d.t
     return linter.verifyAndFix(code, config, filename).output;
   }
 
-  it('leaves both directives as their own standalone lines, untouched, in a .d.ts file', () => {
+  it('leaves two consecutive triple-slash reference directives untouched in a .d.ts file', () => {
     expect(fixedOutput(tripleSlashCode, 'next-env.d.ts')).toBe(tripleSlashCode);
   });
 
-  it('still merges the identical two lines into one broken block comment in an ordinary .ts file, proving the .d.ts override is scoped rather than a blanket disable', () => {
-    const output = fixedOutput(tripleSlashCode, 'ordinary.ts');
-    expect(output).not.toBe(tripleSlashCode);
-    expect(output.startsWith('/* / <reference')).toBe(true);
+  it('leaves the identical two triple-slash directives untouched in an ordinary .ts file too, the shape a vite.config.ts following Vitest\'s own documented convention uses', () => {
+    expect(fixedOutput(tripleSlashCode, 'vite.config.ts')).toBe(tripleSlashCode);
+  });
+
+  it('leaves a prose comment directly above a prettier-ignore directive as two standalone `//` lines, never merged into one block that would swallow the directive', () => {
+    expect(fixedOutput(prettierIgnoreCode, 'table.ts')).toBe(prettierIgnoreCode);
+  });
+
+  it('leaves an ordinary run of `//` lines with no directive at all as standalone lines too, proving the rule is off rather than merely blind to directive-shaped input', () => {
+    const code = '// first line\n// second line\nconst x = 1;\n';
+    expect(fixedOutput(code, 'plain.ts')).toBe(code);
   });
 });
 
