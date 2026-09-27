@@ -1,6 +1,9 @@
 import type { Linter } from 'eslint';
+
 import { Linter as LinterClass } from 'eslint';
+
 import { describe, expect, it } from 'vitest';
+
 import jsdocAndTsdoc from './jsdoc';
 
 // Exercises the real exported array directly against ESLint's own Linter, the same pattern react.test.ts/recommended-type-checked.test.ts already use — proving the shipped config's actual runtime behaviour rather than describing its shape in a comment.
@@ -8,6 +11,7 @@ const linter = new LinterClass();
 
 function lint(code: string, filename: string) {
   const config: Linter.Config[] = [{ files: ['**'], languageOptions: { sourceType: 'module', ecmaVersion: 2022 } }, ...jsdocAndTsdoc] as Linter.Config[];
+
   return linter.verify(code, config, filename).map((message) => message.ruleId);
 }
 

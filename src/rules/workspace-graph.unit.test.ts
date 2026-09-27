@@ -1,5 +1,7 @@
 import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
+
 import {
   buildWorkspaceGraph,
   deriveRank,
@@ -13,7 +15,9 @@ import {
   resolveWorkspaceRoot,
   stripScope,
 } from './workspace-graph';
+
 import { realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
+
 import type { GroupSpec, WorkspaceArchitectureOptions } from './workspace-options';
 
 const FIXTURE_ROOT = join(import.meta.dirname, '__fixtures__/workspace');
@@ -29,11 +33,13 @@ function fakeFs(
     readFileSync: (path) => {
       const content = files[path];
       if (content === undefined) throw new Error(`ENOENT: ${path}`);
+
       return content;
     },
     readdirSync: (path) => {
       const entries = dirs[path];
       if (entries === undefined) return [];
+
       return entries.map((name) => ({ name, isDirectory: () => !name.includes('.') }));
     },
     realpathSync: (path) => realpaths[path] ?? path,

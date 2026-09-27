@@ -1,9 +1,15 @@
 import json from '@eslint/json';
+
 import { RuleTester } from 'eslint';
+
 import { describe, expect, it } from 'vitest';
+
 import { createPackageNameMirrorsPathRule, findGroupSpec } from './package-name-mirrors-path';
+
 import type { WorkspaceGraph, WorkspacePackageInfo } from './workspace-graph';
+
 import type { GroupSpec } from './workspace-options';
+
 import type { WorkspaceFs } from './workspace-fs';
 
 function pkg(name: string, relativeDir: string, group: string): WorkspacePackageInfo {

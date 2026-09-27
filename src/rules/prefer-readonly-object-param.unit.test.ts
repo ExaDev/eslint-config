@@ -1,5 +1,7 @@
 import { RuleTester } from '@typescript-eslint/rule-tester';
+
 import { describe, expect, it } from 'vitest';
+
 import rule, { hasSymbolFlag } from './prefer-readonly-object-param';
 
 describe('hasSymbolFlag', () => {

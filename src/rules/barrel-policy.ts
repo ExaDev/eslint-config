@@ -1,5 +1,7 @@
 import type { Rule } from 'eslint';
+
 import { findNearestPackageJson, resolveAutoMode, type ReadPackageJsonFn } from './barrel-auto-detect';
+
 import {
   createSplitReexportDetector,
   hasSource,
@@ -14,7 +16,9 @@ import {
   type RawBarrelMode,
 } from './barrel-helpers';
 
-// Extracts and validates the `mode` option, defaulting to 'auto' both when the options array has no item at all and when an item is present but carries no `mode` key — either way there is nothing invalid here, just nothing stated, so this returns rather than throws. A standalone function (not inline in create) so ESLint's `any`-typed `context.options[0]` is funneled through an `unknown` parameter boundary — passing `any` into `unknown` is safe, whereas inline member access on `any` (`options.mode`) propagates `any` through every later use and trips the type-aware lint rules. Inside the function `options` is `unknown`, so the narrowing composes cleanly without an assertion. A `mode` key that IS present but not one of the four raw literals still throws — that is a genuine misconfiguration, not an omission. Exported so that throw — a safety net behind the rule's schema, which ESLint's own Linter/RuleTester already enforce before create() is ever called with invalid options — can be exercised directly rather than left permanently unreachable through real linting.
+/**
+ * Extracts and validates the `mode` option, defaulting to 'auto' both when the options array has no item at all and when an item is present but carries no `mode` key — either way there is nothing invalid here, just nothing stated, so this returns rather than throws. A standalone function (not inline in create) so ESLint's `any`-typed `context.options[0]` is funneled through an `unknown` parameter boundary — passing `any` into `unknown` is safe, whereas inline member access on `any` (`options.mode`) propagates `any` through every later use and trips the type-aware lint rules. Inside the function `options` is `unknown`, so the narrowing composes cleanly without an assertion. A `mode` key that IS present but not one of the four raw literals still throws — that is a genuine misconfiguration, not an omission. Exported so that throw — a safety net behind the rule's schema, which ESLint's own Linter/RuleTester already enforce before create() is ever called with invalid options — can be exercised directly rather than left permanently unreachable through real linting.
+ */
 export function readMode(options: unknown): RawBarrelMode {
   if (options === undefined) return 'auto';
   if (typeof options !== 'object' || options === null) {
@@ -24,18 +28,21 @@ export function readMode(options: unknown): RawBarrelMode {
   if (!isRawBarrelMode(options.mode)) {
     throw new Error("exadev/barrel-policy requires options: { mode: 'banned' | 'single' | 'siblings' | 'auto' }.");
   }
+
   return options.mode;
 }
 
-// The convenience layer over this package's barrel rules: one rule id, one `{ mode }` option selecting one of three complete index-file policies, so a consumer writes a single config entry instead of wiring several rules together. The three modes are the orthogonal combinations of "which files may be barrels", "what a barrel may contain", and "where a barrel's re-exports may come from":
-//
-// 'banned'   — no index files at all; re-exports banned everywhere. 'single'   — exactly src/index.ts may be a barrel; it contains only re-exports; re-exports banned everywhere else. 'siblings' — any index file may be a barrel; each contains only re-exports; each re-export comes from a direct sibling (./module); re-exports banned in every non-index file.
-//
-// Implemented self-contained (its own visitor + message ids) over the shared predicates in barrel-helpers.ts, so the standalone rules and this umbrella share one source of truth for "what is an index file", "what is a pure re-export", "what is a direct sibling", and "what is a split-statement re-export" — no behavioural drift between the granular rules and the convenience one. A consumer uses EITHER this umbrella (one line, opinionated) OR the individual rules (full control, e.g. 'single' plus one extra cross-package re-export exception); not both, since they would double-report the same violations.
-//
-// Unlike the standalone no-non-barrel-reexport, this umbrella is non-fixable: the autofix belongs on the granular rule, and a policy-level rule that sometimes fixes and sometimes doesn't would surface that inconsistency under one rule id. Consumers who want the autofix use no-non-barrel-reexport directly.
-//
-// A factory, not a plain object, specifically so a test can inject a stub ReadPackageJsonFn (see barrel-auto-detect.ts) without that resolver becoming part of the rule's public JSON options schema — ESLint validates context.options against meta.schema with additionalProperties: false, so there is no options-based channel to smuggle a function through even if one were wanted. The default export below is this factory called with the real, filesystem-backed default; barrel-policy.unit.test.ts imports createBarrelPolicyRule directly to exercise 'auto' against fabricated package.json data with zero real filesystem I/O. Mirrors the requireFn-as-parameter-with-a-real-default shape optional-plugin.ts's tryRequire already establishes for the same "injectable in tests, defaulted in production" problem.
+/**
+ * The convenience layer over this package's barrel rules: one rule id, one `{ mode }` option selecting one of three complete index-file policies, so a consumer writes a single config entry instead of wiring several rules together. The three modes are the orthogonal combinations of "which files may be barrels", "what a barrel may contain", and "where a barrel's re-exports may come from":
+ *
+ * 'banned'   — no index files at all; re-exports banned everywhere. 'single'   — exactly src/index.ts may be a barrel; it contains only re-exports; re-exports banned everywhere else. 'siblings' — any index file may be a barrel; each contains only re-exports; each re-export comes from a direct sibling (./module); re-exports banned in every non-index file.
+ *
+ * Implemented self-contained (its own visitor + message ids) over the shared predicates in barrel-helpers.ts, so the standalone rules and this umbrella share one source of truth for "what is an index file", "what is a pure re-export", "what is a direct sibling", and "what is a split-statement re-export" — no behavioural drift between the granular rules and the convenience one. A consumer uses EITHER this umbrella (one line, opinionated) OR the individual rules (full control, e.g. 'single' plus one extra cross-package re-export exception); not both, since they would double-report the same violations.
+ *
+ * Unlike the standalone no-non-barrel-reexport, this umbrella is non-fixable: the autofix belongs on the granular rule, and a policy-level rule that sometimes fixes and sometimes doesn't would surface that inconsistency under one rule id. Consumers who want the autofix use no-non-barrel-reexport directly.
+ *
+ * A factory, not a plain object, specifically so a test can inject a stub ReadPackageJsonFn (see barrel-auto-detect.ts) without that resolver becoming part of the rule's public JSON options schema — ESLint validates context.options against meta.schema with additionalProperties: false, so there is no options-based channel to smuggle a function through even if one were wanted. The default export below is this factory called with the real, filesystem-backed default; barrel-policy.unit.test.ts imports createBarrelPolicyRule directly to exercise 'auto' against fabricated package.json data with zero real filesystem I/O. Mirrors the requireFn-as-parameter-with-a-real-default shape optional-plugin.ts's tryRequire already establishes for the same "injectable in tests, defaulted in production" problem.
+ */
 export function createBarrelPolicyRule(readPackageJsonFn: ReadPackageJsonFn = findNearestPackageJson): Rule.RuleModule {
   return {
     meta: {
@@ -71,11 +78,13 @@ export function createBarrelPolicyRule(readPackageJsonFn: ReadPackageJsonFn = fi
         Program(node) {
           if (mode === 'banned') {
             if (isIndexFile(filename)) context.report({ node, messageId: 'indexFileBanned' });
+
             return;
           }
           if (mode === 'single') {
             if (isIndexFile(filename) && !isMainBarrel(filename)) {
               context.report({ node, messageId: 'nonMainIndexFile' });
+
               return;
             }
             if (isMainBarrel(filename)) {
@@ -83,6 +92,7 @@ export function createBarrelPolicyRule(readPackageJsonFn: ReadPackageJsonFn = fi
                 if (!isPureReexport(statement)) context.report({ node: statement, messageId: 'sideEffectInBarrel', data: { description: statement.type } });
               }
             }
+
             return;
           }
           // mode === 'siblings': any index file is a barrel; enforce purity on each.

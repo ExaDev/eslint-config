@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { assertIsError, jsonParseContext, regExpConstructorContext } from './workspace-errors';
 
 describe('assertIsError', () => {

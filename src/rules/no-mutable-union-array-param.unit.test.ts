@@ -1,6 +1,9 @@
 import { RuleTester } from '@typescript-eslint/rule-tester';
+
 import tseslint from 'typescript-eslint';
+
 import { describe, expect, it } from 'vitest';
+
 import rule from './no-mutable-union-array-param';
 
 // Pins every literal in the rule's own metadata — name, docs url/description, message text, and the empty defaultOptions array — against mutation, since none of these are otherwise observable through a RuleTester fixture.
@@ -18,9 +21,9 @@ describe('rule metadata', () => {
   });
 });
 
-// This rule is built with ESLintUtils.RuleCreator (needed for typed TSESTree node access), which plain eslint's own RuleTester cannot type-check a rule against — see
-// @typescript-eslint/rule-tester's own docs. No type information is actually needed at lint time
-// for THIS rule (it never touches the type checker), so parserOptions.project/projectService is deliberately omitted here.
+/* This rule is built with ESLintUtils.RuleCreator (needed for typed TSESTree node access), which plain eslint's own RuleTester cannot type-check a rule against — see
+   @typescript-eslint/rule-tester's own docs. No type information is actually needed at lint time
+   for THIS rule (it never touches the type checker), so parserOptions.project/projectService is deliberately omitted here. */
 const ruleTester = new RuleTester({
   languageOptions: { parser: tseslint.parser, sourceType: 'module' },
 });

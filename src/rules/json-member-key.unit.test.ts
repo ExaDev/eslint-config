@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { getMemberKeyName } from './json-member-key';
 
 describe('getMemberKeyName', () => {

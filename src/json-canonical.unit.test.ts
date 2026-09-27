@@ -1,15 +1,19 @@
 import { Linter } from 'eslint';
+
 import { describe, expect, it, vi } from 'vitest';
+
 import { toPublicConfigArray } from './to-public-config-array';
 
 // A plain static `import ... from './json-canonical'` at file scope, or a shared `beforeAll` importing it once, would run that module's own top-level `requireConfig()` calls — which can throw — outside any single test's own execution, so Vitest reports the failure as a suite-level/hook-level error rather than a specific test failing (confirmed directly: under a mutation that makes isSingleFlatConfig always reject a genuinely valid config, both a top-level static import and a shared beforeAll produce a "Failed Suite" that a mutation testing tool's own result parsing does not register as a kill). Every test below instead performs its own `await import('./json-canonical')` inside its own body: Node's module cache means this is a cheap, already-resolved lookup once the module has loaded successfully, but if the module's own top-level code throws, that throw happens during this specific test's own execution and is reported as an ordinary failed test, exactly like the mocked-failure cases already were.
 async function loadJsonCanonicalConfig() {
   const jsonCanonicalModule = await import('./json-canonical');
+
   return jsonCanonicalModule.default;
 }
 
 async function loadIsSingleFlatConfig() {
   const jsonCanonicalModule = await import('./json-canonical');
+
   return jsonCanonicalModule.isSingleFlatConfig;
 }
 

@@ -1,15 +1,18 @@
 import { AST_NODE_TYPES, ESLintUtils } from '@typescript-eslint/utils';
+
 import type { TSESTree } from '@typescript-eslint/utils';
+
 import * as ts from 'typescript';
+
 import { asExpression } from './ts-node-guards';
 
-// A numeric enum's reverse mapping — indexing the enum object itself with a number, e.g. `Direction[n]` — is typed as plain `string` for ANY number, including one outside the enum's actual member range, where it genuinely returns `undefined` at runtime. Confirmed directly via the TypeScript compiler API: `enum Direction { Up, Down } declare const n: number; const label: string = Direction[n]; label.toUpperCase();` type-checks cleanly under `tsc --strict` with zero errors, then throws at runtime for any `n` outside `0`/`1` because `Direction[999]` is `undefined`, not a `string`.
-//
-// Unlike a forward assignment into an enum-typed slot (see no-enum-number-widening.ts), TypeScript does NOT range-check even a numeric LITERAL index here — confirmed directly: `Direction[999]` type-checks with zero errors too, and the resulting type of the whole element-access expression is identically `string` for every index we tried (`Direction[0]`, `Direction[999]`, `Direction[n]`, `Direction[Direction.Up]` all resolve to plain, non-literal `string`), so the element-access expression's own type gives no signal to distinguish safe from unsafe. This rule therefore inspects the INDEX expression's own actual type instead, mirroring no-enum-number-widening.ts's EnumLike/isLiteral/NumberLike checks applied to the source of an assignment. A literal index is still excluded from this rule's scope even though tsc does not verify it either: a literal is a concrete value visible and checkable by a reviewer at the call site, whereas a bare `number` variable's value depends on runtime data flow no reviewer can inspect by reading the line.
-//
-// A numeric enum's reverse mapping only exists because the compiler adds a real `[key: number]: string` index signature to the enum's own object type (confirmed via `checker.getIndexInfoOfType` on `typeof Direction` returning a `string`-typed index info) — a string enum's object type has no such index signature at all (confirmed: `enum Colour { Red = 'red' } declare const n: number; Colour[n];` is a real compile error, "no index signature with a parameter of type 'number' was found"), so string enums are naturally out of scope and never reach this rule's report.
-//
-// No safe full autofix exists, for the same reason as no-enum-number-widening.ts: the real fix is a runtime membership check, a behavioural decision only a human can make. One genuine suggestion is offered instead: when the enum-indexed expression is the init of a variable declared with an explicit `: string` annotation, rewriting that annotation to `: string | undefined` does not hide the unsoundness — it forces the real gap to surface as new compile errors everywhere the variable is later used as a bare `string`, which the developer must then resolve for real. Other syntactic positions (return statements, call arguments, bare assignments) have no equivalent annotation to rewrite, so they get a plain report only, mirroring no-object-assign.ts's own tiered "safe case gets more, everything else gets a plain report" pattern.
+/* A numeric enum's reverse mapping — indexing the enum object itself with a number, e.g. `Direction[n]` — is typed as plain `string` for ANY number, including one outside the enum's actual member range, where it genuinely returns `undefined` at runtime. Confirmed directly via the TypeScript compiler API: `enum Direction { Up, Down } declare const n: number; const label: string = Direction[n]; label.toUpperCase();` type-checks cleanly under `tsc --strict` with zero errors, then throws at runtime for any `n` outside `0`/`1` because `Direction[999]` is `undefined`, not a `string`.
+   
+   Unlike a forward assignment into an enum-typed slot (see no-enum-number-widening.ts), TypeScript does NOT range-check even a numeric LITERAL index here — confirmed directly: `Direction[999]` type-checks with zero errors too, and the resulting type of the whole element-access expression is identically `string` for every index we tried (`Direction[0]`, `Direction[999]`, `Direction[n]`, `Direction[Direction.Up]` all resolve to plain, non-literal `string`), so the element-access expression's own type gives no signal to distinguish safe from unsafe. This rule therefore inspects the INDEX expression's own actual type instead, mirroring no-enum-number-widening.ts's EnumLike/isLiteral/NumberLike checks applied to the source of an assignment. A literal index is still excluded from this rule's scope even though tsc does not verify it either: a literal is a concrete value visible and checkable by a reviewer at the call site, whereas a bare `number` variable's value depends on runtime data flow no reviewer can inspect by reading the line.
+   
+   A numeric enum's reverse mapping only exists because the compiler adds a real `[key: number]: string` index signature to the enum's own object type (confirmed via `checker.getIndexInfoOfType` on `typeof Direction` returning a `string`-typed index info) — a string enum's object type has no such index signature at all (confirmed: `enum Colour { Red = 'red' } declare const n: number; Colour[n];` is a real compile error, "no index signature with a parameter of type 'number' was found"), so string enums are naturally out of scope and never reach this rule's report.
+   
+   No safe full autofix exists, for the same reason as no-enum-number-widening.ts: the real fix is a runtime membership check, a behavioural decision only a human can make. One genuine suggestion is offered instead: when the enum-indexed expression is the init of a variable declared with an explicit `: string` annotation, rewriting that annotation to `: string | undefined` does not hide the unsoundness — it forces the real gap to surface as new compile errors everywhere the variable is later used as a bare `string`, which the developer must then resolve for real. Other syntactic positions (return statements, call arguments, bare assignments) have no equivalent annotation to rewrite, so they get a plain report only, mirroring no-object-assign.ts's own tiered "safe case gets more, everything else gets a plain report" pattern. */
 
 const createRule = ESLintUtils.RuleCreator(
   (name) => `https://github.com/ExaDev/eslint-config/blob/main/src/rules/${name}.ts`,
@@ -44,7 +47,8 @@ const noEnumReverseLookupWidening = createRule({
         const objectType = checker.getTypeAtLocation(objectTsNode);
         // `Type.symbol` is declared non-optional in typescript's own .d.ts even though a type without an associated symbol genuinely has none at runtime — `Type.getSymbol()` is the honest, correctly `Symbol | undefined`-typed accessor for the same value, so it is used here instead of trusting the lying field type.
         const objectSymbol = objectType.getSymbol();
-        if (!objectSymbol || !(objectSymbol.flags & ts.SymbolFlags.Enum)) return; // not an enum object at all — out of scope
+        // not an enum object at all — out of scope
+        if (!objectSymbol || !(objectSymbol.flags & ts.SymbolFlags.Enum)) return;
 
         // Only a numeric enum's object type carries a real `[key: number]: string` reverse-mapping index signature — a string enum's object type has none, so this also naturally excludes string enums without needing a separate check.
         if (!checker.getIndexInfoOfType(objectType, ts.IndexKind.Number)) return;
@@ -56,12 +60,15 @@ const noEnumReverseLookupWidening = createRule({
         const propertyType = checker.getBaseConstraintOfType(rawPropertyType) ?? rawPropertyType;
 
         if (propertyType.flags & ts.TypeFlags.EnumLike) {
-          // EnumLike alone isn't enough — confirmed directly that indexing with a DIFFERENT enum's member (e.g. `enum Other { A = 999 } Direction[Other.A]`) is also EnumLike and also isLiteral(), so without this assignability check it fell through the same "safe pass-through" branch as Direction's own members, even though Other.A is no more a valid Direction index than the bare literal 999 is. isTypeAssignableTo(propertyType, the enum's own declared type) is true only for that enum's own members (Direction.Up assignable to Direction) and false for a different enum's member (Other.A not assignable to Direction) — confirmed empirically for both cases.
-          if (checker.isTypeAssignableTo(propertyType, checker.getDeclaredTypeOfSymbol(objectSymbol))) return; // the enum's own member (e.g. Direction[Direction.Up]) — safe pass-through
+          /* EnumLike alone isn't enough — confirmed directly that indexing with a DIFFERENT enum's member (e.g. `enum Other { A = 999 } Direction[Other.A]`) is also EnumLike and also isLiteral(), so without this assignability check it fell through the same "safe pass-through" branch as Direction's own members, even though Other.A is no more a valid Direction index than the bare literal 999 is. isTypeAssignableTo(propertyType, the enum's own declared type) is true only for that enum's own members (Direction.Up assignable to Direction) and false for a different enum's member (Other.A not assignable to Direction) — confirmed empirically for both cases.
+             the enum's own member (e.g. Direction[Direction.Up]) — safe pass-through */
+          if (checker.isTypeAssignableTo(propertyType, checker.getDeclaredTypeOfSymbol(objectSymbol))) return;
           // else: a different enum's member — falls through to the report below, same as a bare number.
         } else {
-          if (propertyType.isLiteral()) return; // a literal index is a concrete, reviewable value at the call site — out of this rule's scope
-          if (!(propertyType.flags & ts.TypeFlags.NumberLike)) return; // not a number at all — out of scope
+          // a literal index is a concrete, reviewable value at the call site — out of this rule's scope
+          if (propertyType.isLiteral()) return;
+          // not a number at all — out of scope
+          if (!(propertyType.flags & ts.TypeFlags.NumberLike)) return;
         }
 
         // objectType (the value expression's type) is 'typeof Direction'; getDeclaredTypeOfSymbol resolves the enum's own type ('Direction') for a cleaner message, matching no-enum-number-widening.ts's naming.
@@ -88,6 +95,7 @@ const noEnumReverseLookupWidening = createRule({
               },
             ],
           });
+
           return;
         }
 

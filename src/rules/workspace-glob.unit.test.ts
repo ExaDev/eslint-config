@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   expandBraces,
   expandGlob,
@@ -7,11 +8,13 @@ import {
   segmentToRegExp,
   splitTopLevelAlternatives,
 } from './workspace-glob';
+
 import type { WorkspaceFs } from './workspace-fs';
 
 // An in-memory tree keyed by absolute-ish path, mapping each directory to its own subdirectory names, plus a set of paths that own a real package.json.
 function fakeFs(dirs: Record<string, readonly string[]>, packageJsonDirs: readonly string[] = []): WorkspaceFs {
   const packageJsonSet = new Set(packageJsonDirs.map((dir) => `${dir}/package.json`));
+
   return {
     existsSync: (path) => path in dirs || packageJsonSet.has(path),
     readFileSync: () => {
@@ -20,6 +23,7 @@ function fakeFs(dirs: Record<string, readonly string[]>, packageJsonDirs: readon
     readdirSync: (path) => {
       const entries = dirs[path];
       if (entries === undefined) return [];
+
       return entries.map((name) => ({ name, isDirectory: () => true }));
     },
     realpathSync: () => {

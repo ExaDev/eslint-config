@@ -1,5 +1,7 @@
 import { RuleTester } from 'eslint';
+
 import tseslint from 'typescript-eslint';
+
 import rule from './no-index-files';
 
 const ruleTester = new RuleTester({

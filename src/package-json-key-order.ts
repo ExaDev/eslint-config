@@ -1,9 +1,15 @@
 import { existsSync, readFileSync } from 'node:fs';
+
 import { join } from 'node:path';
+
 import type { ConfigArrayValue } from './config-types';
+
 import { resolveJsonPlugin } from './json-plugin';
+
 import { tryRequire, type RequireFn } from './optional-plugin';
+
 import plugin from './plugin';
+
 import type { PackageJsonKeyOrderOptions } from './rules/package-json-key-order';
 
 export interface PackageJsonKeyOrderConfigOptions extends PackageJsonKeyOrderOptions {
@@ -32,6 +38,7 @@ const SYNCPACK_CONFIG_FILENAMES: readonly string[] = [
 function packageJsonHasSyncpackKey(cwd: string): boolean {
   try {
     const raw: unknown = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf8'));
+
     return typeof raw === 'object' && raw !== null && 'syncpack' in raw;
   } catch {
     return false;
@@ -57,6 +64,7 @@ export function buildPackageJsonKeyOrderConfig(options: PackageJsonKeyOrderConfi
         `@exadev/eslint-config: package.json key ordering was explicitly requested but '@eslint/json' could not be resolved. Install it with: pnpm add -D @eslint/json`,
       );
     }
+
     return [];
   }
 

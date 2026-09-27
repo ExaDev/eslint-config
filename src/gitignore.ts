@@ -1,6 +1,9 @@
 import { existsSync } from 'node:fs';
+
 import { join } from 'node:path';
+
 import { includeIgnoreFile } from '@eslint/config-helpers';
+
 import type { ConfigArrayValue } from './config-types';
 
 export interface GitignoreConfigOptions {
@@ -22,6 +25,7 @@ export function buildGitignoreConfig(options: GitignoreConfigOptions = {}): Conf
     if (options.enabled === true) {
       throw new Error(`@exadev/eslint-config: gitignore-based ignores were explicitly requested but no .gitignore was found at ${gitignorePath}`);
     }
+
     return [];
   }
 

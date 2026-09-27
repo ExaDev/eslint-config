@@ -1,8 +1,13 @@
 import json from '@eslint/json';
+
 import { Linter, RuleTester } from 'eslint';
+
 import { describe, expect, test } from 'vitest';
+
 import { at, compareSyncpackKey, computeOrderPermutation, isValidSortAzOrder, isValidTopLevelOrder, objectParentOrThrow, rangeOf } from './package-json-key-order';
+
 import rule from './package-json-key-order';
+
 import { getMemberKeyName } from './json-member-key';
 
 describe('at', () => {

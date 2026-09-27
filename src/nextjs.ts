@@ -1,4 +1,5 @@
 import type { ConfigArrayValue } from './config-types';
+
 import { readFlatConfig, tryRequire, type RequireFn } from './optional-plugin';
 
 export interface NextjsConfigOptions {
@@ -22,5 +23,6 @@ export function buildNextjsConfig(options: NextjsConfigOptions = {}): ConfigArra
       `@exadev/eslint-config: Next.js support was explicitly requested but '@next/eslint-plugin-next' could not be resolved. Install it with: ${INSTALL_COMMAND}`,
     );
   }
+
   return nextConfig === undefined ? [] : [nextConfig];
 }

@@ -1,6 +1,7 @@
 // The one options shape shared by all three workspace-architecture rules (no-uphill-dependency, no-dependency-cycle, package-name-mirrors-path), so a consumer configures the workspace once and passes the identical object to each rule (or once to workspaceArchitectureConfig(), which wires all three). See the package README's own workspace architecture section for the option-by-option reasoning; this file is the schema and the runtime reader, not the policy.
 
 import { assertIsError, regExpConstructorContext } from './workspace-errors';
+
 import { isRecord } from '../is-record';
 
 export interface SliceBySegment {
@@ -11,7 +12,9 @@ export interface SliceByNamePrefix {
   readonly namePrefix: true;
 }
 
-// A group's own sub-partition, used by the crossSlice check: two packages in the same or a differently-ranked group but different slices (two feature verticals, say) are still isolated from each other. 'segment' reads the slice value directly from the package's own path (the Nth path segment after the group's own root); 'namePrefix' is for a group with no such structure of its own (a flat targets/ directory) whose packages instead take their slice from whichever OTHER group's already-observed slice value prefixes their own declared name.
+/**
+ * A group's own sub-partition, used by the crossSlice check: two packages in the same or a differently-ranked group but different slices (two feature verticals, say) are still isolated from each other. 'segment' reads the slice value directly from the package's own path (the Nth path segment after the group's own root); 'namePrefix' is for a group with no such structure of its own (a flat targets/ directory) whose packages instead take their slice from whichever OTHER group's already-observed slice value prefixes their own declared name.
+ */
 export type SliceSpec = SliceBySegment | SliceByNamePrefix;
 
 export type NamingStrategy = 'drop-group' | 'keep-group' | 'basename';
@@ -148,6 +151,7 @@ function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[])
 function asOptionalString(value: unknown): string | undefined {
   if (value === undefined) return undefined;
   if (typeof value !== 'string') fail();
+
   return value;
 }
 
@@ -159,12 +163,14 @@ function isInteger(value: unknown): value is number {
 function asOptionalInteger(value: unknown): number | undefined {
   if (value === undefined) return undefined;
   if (!isInteger(value)) fail();
+
   return value;
 }
 
 function asOptionalStringArray(value: unknown): readonly string[] | undefined {
   if (value === undefined) return undefined;
   if (!Array.isArray(value) || !value.every((item) => typeof item === 'string')) fail();
+
   return value;
 }
 
@@ -180,6 +186,7 @@ function isSliceSpec(value: unknown): value is SliceSpec {
   if (!isRecord(value)) return false;
   // hasOnlyKeys is what rejects a slice carrying BOTH "segment" and "namePrefix", or either alongside some other unknown property: without it, `{ segment: 0, namePrefix: true }` reads as a valid SliceBySegment, silently dropping the extra key exactly as readWorkspaceArchitectureOptions' own module doc comment says this whole reader is meant never to do at any level it validates.
   if ('segment' in value) return hasOnlyKeys(value, SLICE_BY_SEGMENT_KEYS) && isNonNegativeInteger(value['segment']);
+
   // No separate "'namePrefix' in value" guard here: `value['namePrefix'] === true` can only ever be true when "namePrefix" genuinely is a key (reading a property that was never set reads undefined, never true), so a guard re-deriving that exact same fact first would be a no-op every real input could ever exercise, not a real branch.
   return hasOnlyKeys(value, SLICE_BY_NAME_PREFIX_KEYS) && value['namePrefix'] === true;
 }
@@ -197,11 +204,13 @@ function isGroupSpec(value: unknown): value is GroupSpec {
   if (rank !== undefined && !isInteger(rank)) return false;
   if (slice !== undefined && !isSliceSpec(slice)) return false;
   if (naming !== undefined && !isNamingStrategy(naming)) return false;
+
   return true;
 }
 
 function asGroupSpecArray(value: unknown): readonly GroupSpec[] {
   if (!Array.isArray(value) || !value.every(isGroupSpec)) fail();
+
   return value;
 }
 
@@ -214,6 +223,7 @@ export function findDuplicateGroupName(groups: readonly GroupSpec[]): string | u
     if (seen.has(group.name)) return group.name;
     seen.add(group.name);
   }
+
   return undefined;
 }
 
@@ -238,6 +248,7 @@ function asOptionalRankRuleArray(value: unknown): readonly RankRule[] | undefine
   if (value === undefined) return undefined;
   if (!Array.isArray(value) || !value.every(isRankRule)) fail();
   validateRankRulePatterns(value);
+
   return value;
 }
 
@@ -246,12 +257,14 @@ function isRankSkipOptions(value: unknown): value is RankSkipOptions {
   if (!hasOnlyKeys(value, RANK_SKIP_KEYS)) return false;
   if (!isNonNegativeInteger(value['maxDistance'])) return false;
   const { exemptRanks } = value;
+
   return Array.isArray(exemptRanks) && exemptRanks.every(isInteger);
 }
 
 function asOptionalRankSkip(value: unknown): RankSkipOptions | undefined {
   if (value === undefined) return undefined;
   if (!isRankSkipOptions(value)) fail();
+
   return value;
 }
 
@@ -262,6 +275,7 @@ function isIsolatedGroupPair(value: unknown): value is readonly [string, string]
 function asOptionalIsolatedGroups(value: unknown): readonly (readonly [string, string])[] | undefined {
   if (value === undefined) return undefined;
   if (!Array.isArray(value) || !value.every(isIsolatedGroupPair)) fail();
+
   return value;
 }
 
@@ -270,12 +284,14 @@ function isNamingOptions(value: unknown): value is NamingOptions {
   if (!hasOnlyKeys(value, NAMING_KEYS)) return false;
   const { scope, separator } = value;
   if (scope !== undefined && typeof scope !== 'string') return false;
+
   return separator === undefined || typeof separator === 'string';
 }
 
 function asOptionalNaming(value: unknown): NamingOptions | undefined {
   if (value === undefined) return undefined;
   if (!isNamingOptions(value)) fail();
+
   return value;
 }
 

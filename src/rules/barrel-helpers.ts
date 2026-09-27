@@ -1,15 +1,20 @@
 import { posix } from 'node:path';
+
 import type { Rule } from 'eslint';
 
 // Shared predicates and the split-statement re-export detector used by the standalone barrel rules (no-non-barrel-reexport, no-side-effects-in-index, no-non-barrel-index, no-index-files, barrel-direct-siblings-only) and the barrel-policy umbrella rule. Centralising these here means a fix to the "what counts as an index file" or "what counts as a direct sibling" question lands once rather than in each rule, and the umbrella composes the identical detection the standalone rules apply — no behavioural drift between the convenience rule and its granular equivalents.
 
-// The three modes the barrel-policy umbrella rule selects between, and that the isPermittedBarrel predicate below keys on. 'banned' = no index files at all; 'single' = exactly src/index.ts may be a barrel; 'siblings' = any index file may be a barrel but its re-exports must come from direct siblings.
+/**
+ * The three modes the barrel-policy umbrella rule selects between, and that the isPermittedBarrel predicate below keys on. 'banned' = no index files at all; 'single' = exactly src/index.ts may be a barrel; 'siblings' = any index file may be a barrel but its re-exports must come from direct siblings.
+ */
 export type BarrelMode = 'banned' | 'single' | 'siblings';
 
 // Reusable across rules: the basename an index file has, matching ts/tsx/js/jsx/mjs/mts/cjs/cts. Identical to no-non-barrel-index's own INDEX_BASENAME — deliberately duplicated as the single declared constant both modules import, rather than each rule re-deriving the regex.
 export const INDEX_BASENAME = /^index\.[cm]?[tj]sx?$/;
 
-// filename.slice(-1 + 1) is filename.slice(0), the whole string, so lastIndexOf('/') returning -1 (no slash) already produces the right answer without a branch — a conditional here would only ever take the branch the unconditional slice already computes.
+/**
+ * filename.slice(-1 + 1) is filename.slice(0), the whole string, so lastIndexOf('/') returning -1 (no slash) already produces the right answer without a branch — a conditional here would only ever take the branch the unconditional slice already computes.
+ */
 export function basenameOf(filename: string): string {
   return filename.slice(filename.lastIndexOf('/') + 1);
 }
@@ -18,15 +23,20 @@ export function isIndexFile(filename: string): boolean {
   return INDEX_BASENAME.test(basenameOf(filename));
 }
 
-// A module specifier's own grammar only ever produces a string literal in source position — ESTree's wider Literal.value union (string | number | boolean | RegExp | bigint | null) exists for literals generally, not for this specific AST position (an ExportNamedDeclaration/ExportAllDeclaration/ImportDeclaration's own `source`). Exported so that guarantee is checked directly against a deliberately non-string literal, rather than trusted on the strength of this comment alone.
+/**
+ * A module specifier's own grammar only ever produces a string literal in source position — ESTree's wider Literal.value union (string | number | boolean | RegExp | bigint | null) exists for literals generally, not for this specific AST position (an ExportNamedDeclaration/ExportAllDeclaration/ImportDeclaration's own `source`). Exported so that guarantee is checked directly against a deliberately non-string literal, rather than trusted on the strength of this comment alone.
+ */
 export function moduleSpecifierValue(literal: { readonly value?: unknown }): string {
   if (typeof literal.value !== 'string') {
     throw new Error(`Unreachable: a module specifier's own grammar only ever produces a string literal, got ${typeof literal.value} instead.`);
   }
+
   return literal.value;
 }
 
-// The single designated barrel in 'single' mode. Mirrors no-non-barrel-index's own carve-out exactly (endsWith('/src/index.ts')), so the umbrella's 'single' mode and the standalone no-non-barrel-index rule agree on which file is the one permitted barrel.
+/**
+ * The single designated barrel in 'single' mode. Mirrors no-non-barrel-index's own carve-out exactly (endsWith('/src/index.ts')), so the umbrella's 'single' mode and the standalone no-non-barrel-index rule agree on which file is the one permitted barrel.
+ */
 export function isMainBarrel(filename: string): boolean {
   return filename.endsWith('/src/index.ts');
 }
@@ -34,33 +44,47 @@ export function isMainBarrel(filename: string): boolean {
 // True for re-export statements only: `export * from '...'` / `export { x } from '...'` / `export type { x } from '...'`. A file restricted to these cannot execute anything at import time — no semantic "does this statement have a side effect" judgement needed, which matters because top-level schema construction (z.object/z.discriminatedUnion/z.codec) throughout every non-barrel module would need special-casing under any naive "no top-level function calls" heuristic.
 export function isPureReexport(statement: { type: string; source?: unknown }): boolean {
   if (statement.type === 'ExportAllDeclaration') return true;
+
   return statement.type === 'ExportNamedDeclaration' && statement.source !== null && statement.source !== undefined;
 }
 
-// True when a re-export's source specifier resolves to a direct sibling of the barrel — `./module` or `./module.ts` (a sibling file or a sibling folder, the latter resolving via its own index). Rejects nested paths (`./a/b`), parent traversal (`../x`, `./..`), bare package specifiers (`foo`, `document-schema.js`), and self (`.`/`./`). node:path's posix.normalize collapses the pathological-but-valid `./a/../b` to `b` (a genuine sibling) rather than rejecting it on a syntactic technicality, which a raw regex like `/^\.\/[^/]+$/` (the approach an earlier repo's selector took) could not do.
+/**
+ * True when a re-export's source specifier resolves to a direct sibling of the barrel — `./module` or `./module.ts` (a sibling file or a sibling folder, the latter resolving via its own index). Rejects nested paths (`./a/b`), parent traversal (`../x`, `./..`), bare package specifiers (`foo`, `document-schema.js`), and self (`.`/`./`). node:path's posix.normalize collapses the pathological-but-valid `./a/../b` to `b` (a genuine sibling) rather than rejecting it on a syntactic technicality, which a raw regex like `/^\.\/[^/]+$/` (the approach an earlier repo's selector took) could not do.
+ */
 export function isDirectSibling(specifier: string): boolean {
-  if (!specifier.startsWith('./')) return false; // bare package or ../ -> not a sibling of this barrel
-  let rest = posix.normalize(specifier.slice(2)); // collapse ./a/../b, ./a/./b, double slashes
-  if (rest.endsWith('/')) rest = rest.slice(0, -1); // tolerate a trailing slash on a sibling folder (./foo/)
+  // bare package or ../ -> not a sibling of this barrel
+  if (!specifier.startsWith('./')) return false;
+  // collapse ./a/../b, ./a/./b, double slashes
+  let rest = posix.normalize(specifier.slice(2));
+  // tolerate a trailing slash on a sibling folder (./foo/)
+  if (rest.endsWith('/')) rest = rest.slice(0, -1);
+
   return rest !== '.' && rest !== '..' && rest !== '' && !rest.includes('/');
 }
 
-// Runtime type guard narrowing ESLint's `any`-typed context.options entry to BarrelMode without an assertion. ESLint validates the enum in a rule's meta.schema before the rule runs, so a well-configured caller never reaches the false branch; the guard exists to satisfy the type-aware lint rules (no-unsafe-argument) that a plain comparison against `any` does not, since comparing `any` to a string literal leaves the value typed as `any` rather than narrowing it.
+/**
+ * Runtime type guard narrowing ESLint's `any`-typed context.options entry to BarrelMode without an assertion. ESLint validates the enum in a rule's meta.schema before the rule runs, so a well-configured caller never reaches the false branch; the guard exists to satisfy the type-aware lint rules (no-unsafe-argument) that a plain comparison against `any` does not, since comparing `any` to a string literal leaves the value typed as `any` rather than narrowing it.
+ */
 export function isBarrelMode(value: unknown): value is BarrelMode {
   return value === 'banned' || value === 'single' || value === 'siblings';
 }
 
-// The umbrella rule's own JSON `mode` option, before 'auto' is resolved down to a concrete BarrelMode. 'auto' has no fourth branch anywhere downstream of readMode in barrel-policy.ts — it always resolves to 'banned' or 'single' via resolveAutoMode (see barrel-auto-detect.ts) before create()'s own mode-dispatch logic ever sees it, so BarrelMode itself stays exactly the three concrete values every existing branch already switches on.
+/**
+ * The umbrella rule's own JSON `mode` option, before 'auto' is resolved down to a concrete BarrelMode. 'auto' has no fourth branch anywhere downstream of readMode in barrel-policy.ts — it always resolves to 'banned' or 'single' via resolveAutoMode (see barrel-auto-detect.ts) before create()'s own mode-dispatch logic ever sees it, so BarrelMode itself stays exactly the three concrete values every existing branch already switches on.
+ */
 export type RawBarrelMode = BarrelMode | 'auto';
 
 export function isRawBarrelMode(value: unknown): value is RawBarrelMode {
   return value === 'auto' || isBarrelMode(value);
 }
 
-// Whether the file at `filename` is a permitted barrel under the given mode. 'banned' permits none; 'single' permits only src/index.ts; 'siblings' permits any index file.
+/**
+ * Whether the file at `filename` is a permitted barrel under the given mode. 'banned' permits none; 'single' permits only src/index.ts; 'siblings' permits any index file.
+ */
 export function isPermittedBarrel(filename: string, mode: BarrelMode): boolean {
   if (mode === 'banned') return false;
   if (mode === 'single') return isMainBarrel(filename);
+
   return isIndexFile(filename);
 }
 
@@ -72,6 +96,7 @@ interface AncestorNode {
 function isAncestorNode(value: unknown): value is AncestorNode {
   if (typeof value !== 'object' || value === null) return false;
   if (!('type' in value)) return false;
+
   return typeof value.type === 'string';
 }
 
@@ -82,6 +107,7 @@ export function isInsideAmbientModuleDeclaration(node: unknown): boolean {
     if (current.type === 'TSModuleDeclaration') return true;
     current = current.parent;
   }
+
   return false;
 }
 
@@ -102,7 +128,9 @@ export function hasSource(node: ExportNamedDeclarationNode): node is ExportNamed
   return node.source !== null && node.source !== undefined;
 }
 
-// The bare ESTree node types above carry no `.parent`, so they don't satisfy Rule.Node — but fixer.remove/sourceCode.getRange need only their own parameter type, derived here from the real methods (the same "don't hand-type it" convention every rule in this package follows).
+/**
+ * The bare ESTree node types above carry no `.parent`, so they don't satisfy Rule.Node — but fixer.remove/sourceCode.getRange need only their own parameter type, derived here from the real methods (the same "don't hand-type it" convention every rule in this package follows).
+ */
 export type SyntaxElement = Parameters<Rule.RuleFixer['remove']>[0];
 export type ReferenceIdentifier = ReturnType<Rule.RuleContext['sourceCode']['getDeclaredVariables']>[number]['references'][number]['identifier'];
 
@@ -129,7 +157,8 @@ export function createSplitReexportDetector(): {
       }
     },
     visitExportNamed(node) {
-      if (node.source !== null && node.source !== undefined) return; // the single-statement form — detected separately, not here.
+      // the single-statement form — detected separately, not here.
+      if (node.source !== null && node.source !== undefined) return;
       for (const specifier of node.specifiers) {
         bareExportSpecifiers.push({ declaration: node, specifier });
       }
@@ -153,6 +182,7 @@ export function createSplitReexportDetector(): {
         if (trackedImport === undefined) continue;
         out.push({ kind: 'default', declaration: declarationNode, identifierNode, name: identifierNode.name, trackedImport });
       }
+
       return out;
     },
   };

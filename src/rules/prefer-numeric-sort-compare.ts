@@ -1,13 +1,16 @@
 import { AST_NODE_TYPES, ESLintUtils } from '@typescript-eslint/utils';
+
 import type { TSESTree } from '@typescript-eslint/utils';
+
 import * as ts from 'typescript';
+
 import { asExpression, asTypeReference, lastTokenOrThrow } from './ts-node-guards';
 
-// @typescript-eslint/require-array-sort-compare already flags any '.sort()'/'.toSorted()' call with no compare function, except on a plain string array — and ships with no fix or suggestion at all, correctly, since the right compare function in general depends on intent (ascending/descending/locale-aware/by-key) that can't be derived from the code. This rule is a deliberately narrow addition alongside it, not a replacement: both rules fire on the same call for a number array, and that overlap is intentional.
-//
-// The one case singled out here is the one where a specific fix is actually defensible as a suggestion: when the array's element type is definitively 'number' (every element type is NumberLike, not a union with any other type, and not 'any'/'unknown'), a bare '.sort()'/'.toSorted()' is essentially always a bug. The default comparator is lexicographic string comparison — confirmed directly: `[1, 2, 3, 10, 20, 30].sort()` produces `[1, 10, 2, 20, 3, 30]`, not ascending numeric order — and ascending numeric order is the overwhelmingly common intent for a bare numeric sort.
-//
-// This is a SUGGESTION, not a full autofix (no 'fixable: code', no top-level 'fix' on the report): auto-applying ascending order on every matching call could still be wrong for code that genuinely wants descending order, which is a real, if less common, alternative. A suggestion the developer explicitly reviews and accepts is appropriate; silently rewriting behaviour on every save is not.
+/* @typescript-eslint/require-array-sort-compare already flags any '.sort()'/'.toSorted()' call with no compare function, except on a plain string array — and ships with no fix or suggestion at all, correctly, since the right compare function in general depends on intent (ascending/descending/locale-aware/by-key) that can't be derived from the code. This rule is a deliberately narrow addition alongside it, not a replacement: both rules fire on the same call for a number array, and that overlap is intentional.
+   
+   The one case singled out here is the one where a specific fix is actually defensible as a suggestion: when the array's element type is definitively 'number' (every element type is NumberLike, not a union with any other type, and not 'any'/'unknown'), a bare '.sort()'/'.toSorted()' is essentially always a bug. The default comparator is lexicographic string comparison — confirmed directly: `[1, 2, 3, 10, 20, 30].sort()` produces `[1, 10, 2, 20, 3, 30]`, not ascending numeric order — and ascending numeric order is the overwhelmingly common intent for a bare numeric sort.
+   
+   This is a SUGGESTION, not a full autofix (no 'fixable: code', no top-level 'fix' on the report): auto-applying ascending order on every matching call could still be wrong for code that genuinely wants descending order, which is a real, if less common, alternative. A suggestion the developer explicitly reviews and accepts is appropriate; silently rewriting behaviour on every save is not. */
 
 const createRule = ESLintUtils.RuleCreator(
   (name) => `https://github.com/ExaDev/eslint-config/blob/main/src/rules/${name}.ts`,
@@ -20,6 +23,7 @@ function isDefinitelyNumberType(type: ts.Type): boolean {
   if (type.isUnion()) {
     return type.types.every((constituent) => isDefinitelyNumberType(constituent));
   }
+
   return (type.flags & ts.TypeFlags.NumberLike) !== 0;
 }
 
@@ -46,7 +50,8 @@ const preferNumericSortCompare = createRule({
 
     return {
       CallExpression(node: TSESTree.CallExpression) {
-        if (node.arguments.length > 0) return; // a compare function is already provided — nothing to suggest
+        // a compare function is already provided — nothing to suggest
+        if (node.arguments.length > 0) return;
 
         const { callee } = node;
         if (callee.type !== AST_NODE_TYPES.MemberExpression || callee.computed) return;
@@ -69,6 +74,7 @@ const preferNumericSortCompare = createRule({
               messageId: 'addAscendingCompare',
               fix(fixer) {
                 const closingParen = lastTokenOrThrow(context.sourceCode, node);
+
                 return fixer.insertTextBefore(closingParen, '(a, b) => a - b');
               },
             },

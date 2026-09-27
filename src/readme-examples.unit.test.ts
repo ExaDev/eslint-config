@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+
 import { plugin } from './index';
+
 import {
   buildViaManualRules,
   buildViaPluginConfigsReactAndNextjs,

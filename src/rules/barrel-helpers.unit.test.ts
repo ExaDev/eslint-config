@@ -1,7 +1,11 @@
 import { RuleTester } from 'eslint';
+
 import type { Rule } from 'eslint';
+
 import tseslint from 'typescript-eslint';
+
 import { describe, expect, it } from 'vitest';
+
 import {
   basenameOf,
   createSplitReexportDetector,
@@ -13,12 +17,14 @@ import {
   isPureReexport,
   moduleSpecifierValue,
 } from './barrel-helpers';
+
 import type { ExportNamedDeclarationNode, ExportSpecifierNode, ImportDeclarationNode } from './barrel-helpers';
 
 function definedOrThrow<T>(value: T | undefined): T {
   if (value === undefined) {
     throw new Error('Unreachable: expected the probe rule below to have captured this value.');
   }
+
   return value;
 }
 

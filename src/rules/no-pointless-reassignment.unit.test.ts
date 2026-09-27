@@ -1,7 +1,11 @@
 import type { Rule, Scope } from 'eslint';
+
 import { RuleTester } from 'eslint';
+
 import { describe, expect, it } from 'vitest';
+
 import tseslint from 'typescript-eslint';
+
 import rule, { asVariableDeclaration, findTopLevelScope, hasEnclosingShorthandBoundary, isConstDeclarator, isExportedAlias, resolveFrom, variableInScope } from './no-pointless-reassignment';
 
 describe('rule metadata', () => {

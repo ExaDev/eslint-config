@@ -1,4 +1,5 @@
 import type { Rule } from 'eslint';
+
 import { classifyTestFile } from './test-file-helpers';
 
 const DEFAULT_KINDS: readonly string[] = ['unit', 'integration', 'e2e'];
@@ -7,7 +8,9 @@ export interface TestFileKindOptions {
   readonly kinds?: readonly string[];
 }
 
-// Extracts and validates the `kinds` option. A standalone function (not inline in create) so ESLint's `any`-typed `context.options[0]` is funneled through an `unknown` parameter boundary — passing `any` into `unknown` is safe, whereas inline member access on `any` (`options.kinds`) propagates `any` through every later use and trips the type-aware lint rules. Inside the function `options` is `unknown`, so the narrowing composes cleanly without an assertion. Exported so its own throws — a safety net behind the rule's schema and `defaultOptions`, which ESLint's own Linter/RuleTester already enforce before create() is ever called with anything else — can be exercised directly rather than left permanently unreachable through real linting.
+/**
+ * Extracts and validates the `kinds` option. A standalone function (not inline in create) so ESLint's `any`-typed `context.options[0]` is funneled through an `unknown` parameter boundary — passing `any` into `unknown` is safe, whereas inline member access on `any` (`options.kinds`) propagates `any` through every later use and trips the type-aware lint rules. Inside the function `options` is `unknown`, so the narrowing composes cleanly without an assertion. Exported so its own throws — a safety net behind the rule's schema and `defaultOptions`, which ESLint's own Linter/RuleTester already enforce before create() is ever called with anything else — can be exercised directly rather than left permanently unreachable through real linting.
+ */
 export function readKinds(options: unknown): readonly string[] {
   if (typeof options !== 'object' || options === null) {
     throw new Error("Unreachable: exadev/test-file-kind requires options[0] to be an object, which its own schema and defaultOptions guarantee before create() ever runs.");
@@ -17,6 +20,7 @@ export function readKinds(options: unknown): readonly string[] {
   if (!Array.isArray(kinds) || !kinds.every((kind): kind is string => typeof kind === 'string')) {
     throw new Error("Unreachable: exadev/test-file-kind requires options.kinds to be a string array, which its own schema guarantees before create() ever runs.");
   }
+
   return kinds;
 }
 
