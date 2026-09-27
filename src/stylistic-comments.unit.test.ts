@@ -71,7 +71,7 @@ describe('spaced-comment (the /*! license/banner marker)', () => {
   });
 });
 
-// A real --fix run, not just the config shape asserted above: proves multiline-comment-style is genuinely not enabled at all (see this file's own header comment on why), not merely scoped away from some files, by running the config against the exact shapes that would break under the installed v5.10.0's own directive-comment gap if the rule were on.
+// A real --fix run, not just the config shape asserted above: proves multiline-comment-style is genuinely not enabled at all (see this file's own header comment on why), not merely scoped away from some files, by running the config against the exact shapes that would break under the installed release's own directive-comment gap if the rule were on.
 describe('multiline-comment-style (deliberately not enabled, in any file)', () => {
   const linter = new LinterClass();
   // The exact shape TypeScript itself generates for a Next.js project's own next-env.d.ts: two consecutive `/// <reference ... />` lines with no blank line between them, and nothing else above the statement they sit over.
