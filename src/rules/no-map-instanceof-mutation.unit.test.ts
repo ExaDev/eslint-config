@@ -31,8 +31,8 @@ ruleTester.run('no-map-instanceof-mutation', rule, {
     'function f(input: Map<string, number>): void { if (input instanceof Map) { input.set("a", 1); } }',
     // Narrowed via instanceof Map but only read, never mutated — get/has/forEach are not in the mutating set.
     'function f(input: ReadonlyMap<string, number> | number): void { if (input instanceof Map) { input.get("a"); input.has("a"); input.forEach(() => {}); } }',
-    /* Mutated, but with no instanceof Map guard anywhere in scope — out of scope for THIS rule specifically. This snippet would not actually type-check under tsc (input.set is not callable on an
-       un-narrowed `ReadonlyMap<string, number> | number` union), but detection here is guard-gated regardless of whether the call site itself compiles. */
+    // Mutated, but with no instanceof Map guard anywhere in scope — out of scope for THIS rule specifically. This snippet would not actually type-check under tsc (input.set is not callable on an
+    // un-narrowed `ReadonlyMap<string, number> | number` union), but detection here is guard-gated regardless of whether the call site itself compiles.
     'function f(input: ReadonlyMap<string, number> | number): void { input.set("a", 1); }',
     // Guarded, but the mutating call targets a differently-named variable, not the narrowed parameter itself.
     'function f(input: ReadonlyMap<string, number> | number): void { if (input instanceof Map) { const other: Map<string, number> = new Map(); other.set("a", 1); } }',

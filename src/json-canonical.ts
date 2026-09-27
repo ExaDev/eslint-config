@@ -21,9 +21,9 @@ function requireConfig(name: 'recommended' | 'contentOnlyJsonc'): Linter.Config 
 const recommended = requireConfig('recommended');
 const contentOnlyJsonc = requireConfig('contentOnlyJsonc');
 
-/* Bundled unconditionally, the same way jsdocAndTsdoc is: eslint-plugin-json-canonical is a plain dependency of this package (see package.json), so every consumer already has it the moment they depend on this package at all — no peer to resolve, no tri-state option. `configs.recommended` (content canonicalization plus pretty-printing, as of eslint-plugin-json-canonical v2) applies to every JSON file except the JSONC-shaped families below and package.json's own key order (see the second block).
-
-   tsconfig*.json/turbo.json/*.jsonc genuinely carry comments (TypeScript and turbo both accept them; *.jsonc says so in its own extension) — @eslint/json's plain json/json language, which configs.recommended hard-codes, has no concept of a comment and fails to parse any of them. configs.contentOnlyJsonc is the matching json/jsonc variant: content canonicalization only, since neither pretty-format nor no-insignificant-whitespace has a JSONC counterpart (both rewrite a document's whitespace wholesale, with no well-defined answer for a comment's own attachment to a specific member once that happens). */
+// Bundled unconditionally, the same way jsdocAndTsdoc is: eslint-plugin-json-canonical is a plain dependency of this package (see package.json), so every consumer already has it the moment they depend on this package at all — no peer to resolve, no tri-state option. `configs.recommended` (content canonicalization plus pretty-printing, as of eslint-plugin-json-canonical v2) applies to every JSON file except the JSONC-shaped families below and package.json's own key order (see the second block).
+//
+// tsconfig*.json/turbo.json/*.jsonc genuinely carry comments (TypeScript and turbo both accept them; *.jsonc says so in its own extension) — @eslint/json's plain json/json language, which configs.recommended hard-codes, has no concept of a comment and fails to parse any of them. configs.contentOnlyJsonc is the matching json/jsonc variant: content canonicalization only, since neither pretty-format nor no-insignificant-whitespace has a JSONC counterpart (both rewrite a document's whitespace wholesale, with no well-defined answer for a comment's own attachment to a specific member once that happens).
 const jsonCanonicalConfig: ConfigArrayValue = [
   {
     files: ['**/*.json'],

@@ -59,9 +59,9 @@ describe('js.configs.recommended composition', () => {
   });
 
   it('does not flag an interface method-signature parameter as unused under the base no-unused-vars rule', () => {
-    /* This is the exact regression this test guards against: js.configs.recommended sets the base no-unused-vars, which has no TypeScript awareness and treats an interface method signature's parameter names as real bindings that must be "used" — they are type positions, not bindings. strictTypeChecked deliberately turns the base rule off in favour of the TS-aware
-       @typescript-eslint/no-unused-vars, but only if it is composed AFTER js.configs.recommended in
-       the array; composed in the wrong order (or omitted entirely and left to the consumer), the base rule wins and fires here. Confirmed as a real, not merely theoretical, failure against a live consumer (json-operators) before this fix. */
+    // This is the exact regression this test guards against: js.configs.recommended sets the base no-unused-vars, which has no TypeScript awareness and treats an interface method signature's parameter names as real bindings that must be "used" — they are type positions, not bindings. strictTypeChecked deliberately turns the base rule off in favour of the TS-aware
+    // @typescript-eslint/no-unused-vars, but only if it is composed AFTER js.configs.recommended in
+    // the array; composed in the wrong order (or omitted entirely and left to the consumer), the base rule wins and fires here. Confirmed as a real, not merely theoretical, failure against a live consumer (json-operators) before this fix.
     const diagnostics = lintFull(
       'export interface Resolvers {\n  resolveValue: (key: string, context: unknown) => Promise<string>;\n}\n',
       'src/foo.ts',
