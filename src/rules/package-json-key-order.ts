@@ -1,5 +1,6 @@
 import type { ArrayNode, ElementNode, MemberNode, ObjectNode, StringNode, ValueNode } from '@humanwhocodes/momoa';
 import type { JSONRuleDefinition, JSONRuleVisitor } from '@eslint/json';
+import { getMemberKeyName } from './json-member-key';
 
 export type PackageJsonKeyOrderMessageIds = 'outOfOrder';
 
@@ -98,24 +99,6 @@ function isIdentityPermutation(permutation: readonly number[]): boolean {
 
 function isStringNode(node: ValueNode): node is StringNode {
   return node.type === 'String';
-}
-
-// momoa's own MemberNode.name is typed as StringNode | IdentifierNode because momoa's grammar also covers JSON5 (unquoted identifier keys) — but this rule's own meta.languages is only ever `json/json`/`json/jsonc` (see the rule definition below), and confirmed directly that an unquoted key is a genuine parse error under both ("Unexpected character... found"), never a value this function is asked to name. Narrowed to a minimal structural parameter (just the `.name` shape actually read) rather than the full MemberNode, so a test fixture can satisfy it directly with a plain object literal. Exported so that guarantee is checked directly against a deliberately IdentifierNode-shaped input, rather than trusted on the strength of this comment alone.
-interface StringNamed {
-  readonly type: 'String';
-  readonly value: string;
-}
-
-function isStringNamed(name: { readonly type: string }): name is StringNamed {
-  return name.type === 'String';
-}
-
-export function getMemberKeyName(member: { readonly name: { readonly type: string } }): string {
-  const { name } = member;
-  if (!isStringNamed(name)) {
-    throw new Error(`Unreachable: package-json-key-order only supports json/json and json/jsonc, where an unquoted (Identifier) member name is a parse error — got a "${name.type}" name instead.`);
-  }
-  return name.value;
 }
 
 interface Ranged {
