@@ -611,6 +611,23 @@ describe('readDeclaredManifest', () => {
     };
     expect(() => readDeclaredManifest(fs, '/root/core/unreadable', ['dependencies'])).toThrow(readError);
   });
+
+  it('reports a wholly absent manifest, not a usable one with every field undefined, when the manifest parses to an array rather than an object', () => {
+    // A package.json that parses to an array is not a usable JSON object at all: it has no "name" field (arrays have no string-keyed properties of that name) and nothing this graph could sensibly read as "dependencies", so it must be dropped from the graph the same way a manifest with no name at all is NOT dropped, but a wholly non-object manifest IS. Confirms the fix for the bug where an array manifest passed a local isRecord that omitted the !Array.isArray check, silently collecting its own numeric indices as dependency names.
+    const fs = fakeFs({ '/root/core/a/package.json': JSON.stringify(['not', 'an', 'object']) }, {});
+    expect(readDeclaredManifest(fs, '/root/core/a', ['dependencies'])).toBeUndefined();
+  });
+
+  it('reports a wholly absent manifest when it parses to null', () => {
+    const fs = fakeFs({ '/root/core/a/package.json': JSON.stringify(null) }, {});
+    expect(readDeclaredManifest(fs, '/root/core/a', ['dependencies'])).toBeUndefined();
+  });
+
+  it('collects no dependency names when a configured dependency field itself holds an array rather than an object', () => {
+    // "dependencies" is documented, and every real package.json in the wild, as an object mapping name to version range; an array value there is not a usable dependency map, so it must contribute no dependency names at all rather than have its own indices ("0", "1", ...) collected as though they were package names.
+    const fs = fakeFs({ '/root/core/a/package.json': JSON.stringify({ name: 'a', dependencies: ['b', 'c'] }) }, {});
+    expect(readDeclaredManifest(fs, '/root/core/a', ['dependencies'])).toEqual({ name: 'a', dependencyNames: [] });
+  });
 });
 
 describe('getWorkspaceGraph / resetWorkspaceGraphCache', () => {
