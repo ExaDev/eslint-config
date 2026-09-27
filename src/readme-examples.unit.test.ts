@@ -59,20 +59,29 @@ describe('README defineConfig examples', () => {
   });
 
   it('the "lighter option" tseslint.config() example wires its own file glob and plugin, and pulls in plugin.configs.recommended by name', () => {
-    const [config] = buildViaTseslintPluginConfigsRecommended();
-    expect(config?.files).toEqual(['**/*.ts']);
-    expect(config?.plugins?.['exadev']).toBe(plugin);
-    expect(config?.rules?.['exadev/barrel-policy']).toEqual(['error', { mode: 'banned' }]);
+    // tseslint.config()'s own extends handling flattens plugin.configs.recommended's object into a SEPARATE entry (this file's own `files`/`plugins` intersected onto it), so the two entries below are not the same object: the recommended-rules entry carries plugin.configs.recommended's OWN `plugins` field, and this example's own `files: ['**/*.ts']`/`plugins: { exadev: plugin }` line surface only on the other, rules-less entry.
+    const viaTseslintConfig = buildViaTseslintPluginConfigsRecommended();
+    expect(viaTseslintConfig).toHaveLength(2);
+    const ownEntry = viaTseslintConfig.find((entry) => entry.rules === undefined);
+    expect(ownEntry?.files).toEqual(['**/*.ts']);
+    expect(ownEntry?.plugins?.['exadev']).toBe(plugin);
+    const recommendedEntry = viaTseslintConfig.find((entry) => entry.rules !== undefined);
+    expect(recommendedEntry?.files).toEqual(['**/*.ts']);
+    expect(recommendedEntry?.rules?.['exadev/barrel-policy']).toEqual(['error', { mode: 'banned' }]);
   });
 
-  it('the "Optional features" example wires plugin.configs.react and plugin.configs.nextjs by name, each pulling in its own real plugin', () => {
-    // No requireFn override: this repo's own real devDependencies (eslint-plugin-react/-hooks, eslint-plugin-jsx-a11y, @next/eslint-plugin-next) resolve for real, so plugin.configs.react/.nextjs each throw nothing and return their genuine upstream config blocks, which defineConfig() then flattens (each entry's own `extends` array becomes further top-level entries) rather than nesting them under the two entries this example itself declares.
+  it('the "Optional features" example wires plugin.configs.react and plugin.configs.nextjs by name, each to its own exact file glob', () => {
+    // No requireFn override: this repo's own real devDependencies (eslint-plugin-react/-hooks, eslint-plugin-jsx-a11y, @next/eslint-plugin-next) resolve for real, so plugin.configs.react/.nextjs each throw nothing and return their genuine upstream config blocks, which defineConfig() then flattens (each entry's own `extends` array becomes further top-level entries) rather than nesting them under the two entries this example itself declares. Each of those two entries' own remaining `files`/`plugins` still surfaces as its own entry here (the same flattening the tseslint.config() example above relies on), identified by carrying `plugins: { exadev: plugin }` with no `rules` of its own.
     const viaReactAndNextjs = buildViaPluginConfigsReactAndNextjs();
     const pluginKeys = new Set(viaReactAndNextjs.flatMap((entry) => Object.keys(entry.plugins ?? {})));
     expect(pluginKeys.has('react')).toBe(true);
     expect(pluginKeys.has('react-hooks')).toBe(true);
     expect(pluginKeys.has('jsx-a11y')).toBe(true);
     expect(pluginKeys.has('@next/next')).toBe(true);
-    expect(pluginKeys.has('exadev')).toBe(true);
+
+    const ownEntries = viaReactAndNextjs.filter((entry) => entry.plugins?.['exadev'] === plugin && entry.rules === undefined);
+    expect(ownEntries).toHaveLength(2);
+    expect(ownEntries.find((entry) => JSON.stringify(entry.files) === JSON.stringify(['**/*.tsx']))).toBeDefined();
+    expect(ownEntries.find((entry) => JSON.stringify(entry.files) === JSON.stringify(['**/*.ts', '**/*.tsx']))).toBeDefined();
   });
 });
