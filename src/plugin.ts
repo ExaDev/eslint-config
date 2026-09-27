@@ -1,63 +1,33 @@
 import type { TSESLint } from '@typescript-eslint/utils';
-
 import type { ConfigValue, PublicPlugin } from './config-types';
-
 import { version } from '../package.json';
-
 import { buildNextjsConfig } from './nextjs';
-
 import { buildReactConfig } from './react';
-
 import { toPublicPlugin } from './to-public-plugin';
-
 import barrelDirectSiblingsOnly from './rules/barrel-direct-siblings-only';
-
 import barrelPolicy from './rules/barrel-policy';
-
 import noArrayIsarrayMutation from './rules/no-array-isarray-mutation';
-
 import noControlFlow from './rules/no-control-flow';
-
 import noDependencyCycle from './rules/no-dependency-cycle';
-
 import noEnumNumberWidening from './rules/no-enum-number-widening';
-
 import noEnumReverseLookupWidening from './rules/no-enum-reverse-lookup-widening';
-
 import noIndexFiles from './rules/no-index-files';
-
 import noMapInstanceofMutation from './rules/no-map-instanceof-mutation';
-
 import noMutableUnionArrayParam from './rules/no-mutable-union-array-param';
-
 import noNonBarrelIndex from './rules/no-non-barrel-index';
-
 import noNonBarrelReexport from './rules/no-non-barrel-reexport';
-
 import noObjectAssign from './rules/no-object-assign';
-
 import noPointlessReassignment from './rules/no-pointless-reassignment';
-
 import noSetInstanceofMutation from './rules/no-set-instanceof-mutation';
-
 import noSideEffectsInIndex from './rules/no-side-effects-in-index';
-
 import noUphillDependency from './rules/no-uphill-dependency';
-
 import packageJsonKeyOrder from './rules/package-json-key-order';
-
 import packageNameMirrorsPath from './rules/package-name-mirrors-path';
-
 import preferNumericSortCompare from './rules/prefer-numeric-sort-compare';
-
 import preferDocComment from './rules/prefer-doc-comment';
-
 import preferOptionsObjectParam from './rules/prefer-options-object-param';
-
 import preferReadonlyArrayParam from './rules/prefer-readonly-array-param';
-
 import preferReadonlyObjectParam from './rules/prefer-readonly-object-param';
-
 import testFileKind from './rules/test-file-kind';
 
 /* @typescript-eslint/utils's own FlatConfig.Plugin type is used here rather than eslint's own ESLint.Plugin (which an earlier version of this file used) or a hand-written interface — see the "don't hand-type external libraries" convention this plugin's own rules were built under. eslint's Rule.RuleModule declares a concrete, non-generic `create(context: RuleContext): RuleListener` that only structurally matches rules built directly against the plain `eslint` package's own types; a rule built with ESLintUtils.RuleCreator (needed for typed TSESTree node access and, for type-aware rules, type-checker access) is not assignable to it, even though both shapes are the exact same runtime `{ meta, create }` contract ESLint actually calls. FlatConfig.Plugin's `rules` field is typed as `Record<string, LooseRuleDefinition>` specifically to hold both authoring styles in one plugin, which this package now does. meta.namespace is what a consumer's `plugins: { exadev }` registration turns into the rule-reference prefix ('exadev/no-non-barrel-reexport'); it is not inferred from the package name automatically, so it is stated explicitly here to match. meta.version is imported from package.json rather than hardcoded, since semantic-release rewrites that file's own version on every release and a duplicated literal here would silently drift out of sync with it.

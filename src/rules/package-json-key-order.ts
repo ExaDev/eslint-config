@@ -1,7 +1,5 @@
 import type { ArrayNode, ElementNode, MemberNode, ObjectNode, StringNode, ValueNode } from '@humanwhocodes/momoa';
-
 import type { JSONRuleDefinition, JSONRuleVisitor } from '@eslint/json';
-
 import { getMemberKeyName } from './json-member-key';
 
 export type PackageJsonKeyOrderMessageIds = 'outOfOrder';

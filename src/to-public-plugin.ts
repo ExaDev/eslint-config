@@ -1,5 +1,4 @@
 import type { TSESLint } from '@typescript-eslint/utils';
-
 import type { PublicPlugin } from './config-types';
 
 /**

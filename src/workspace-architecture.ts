@@ -1,13 +1,8 @@
 import type { ConfigArrayValue, PublicConfigArray } from './config-types';
-
 import { resolveJsonPlugin } from './json-plugin';
-
 import { tryRequire, type RequireFn } from './optional-plugin';
-
 import plugin from './plugin';
-
 import { readWorkspaceArchitectureOptions, type WorkspaceArchitectureOptions } from './rules/workspace-options';
-
 import { toPublicConfigArray } from './to-public-config-array';
 
 export interface WorkspaceArchitectureConfigOptions extends WorkspaceArchitectureOptions {

@@ -1,7 +1,5 @@
 import type { WorkspacePackageInfo } from './workspace-graph';
-
 import type { GroupSpec, NamingOptions, NamingStrategy, RankSkipOptions } from './workspace-options';
-
 import { splitPathSegments } from './workspace-path';
 
 // The pure decisions every workspace-architecture rule reports, kept independent of ESLint/momoa so each can be unit-tested directly against fabricated graph data, matching the split the monorepo-template and hive originals already used (their own checkDependencies, dependencyPathExists, expectedPackageName).

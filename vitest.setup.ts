@@ -1,7 +1,5 @@
 import { RuleTester } from 'eslint';
-
 import { RuleTester as TypeAwareRuleTester } from '@typescript-eslint/rule-tester';
-
 import { afterAll, describe, it } from 'vitest';
 
 // RuleTester.run() calls describe/it itself rather than returning anything a test runner can hook into, so it needs a real describe/it wired in -- Vitest's own, not globals, so this stays opt-in per test file rather than requiring `test.globals: true` project-wide.

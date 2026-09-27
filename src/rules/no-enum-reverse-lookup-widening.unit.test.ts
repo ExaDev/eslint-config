@@ -1,7 +1,5 @@
 import { RuleTester } from '@typescript-eslint/rule-tester';
-
 import { describe, expect, it } from 'vitest';
-
 import rule from './no-enum-reverse-lookup-widening';
 
 describe('rule metadata', () => {

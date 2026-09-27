@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-
 import { buildNextjsConfig } from './nextjs';
 
 const throwingRequireFn = () => {

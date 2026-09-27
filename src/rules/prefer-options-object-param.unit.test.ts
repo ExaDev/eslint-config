@@ -1,9 +1,6 @@
 import { RuleTester } from '@typescript-eslint/rule-tester';
-
 import tseslint from 'typescript-eslint';
-
 import { describe, expect, it } from 'vitest';
-
 import rule, { firstAndLastOrThrow } from './prefer-options-object-param';
 
 describe('firstAndLastOrThrow', () => {

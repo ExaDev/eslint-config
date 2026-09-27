@@ -1,9 +1,6 @@
 import { existsSync } from 'node:fs';
-
 import { join } from 'node:path';
-
 import { includeIgnoreFile } from '@eslint/config-helpers';
-
 import type { ConfigArrayValue } from './config-types';
 
 export interface GitignoreConfigOptions {

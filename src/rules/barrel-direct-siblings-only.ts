@@ -1,5 +1,4 @@
 import type { Rule } from 'eslint';
-
 import { isDirectSibling, isIndexFile, moduleSpecifierValue } from './barrel-helpers';
 
 /* The 'siblings' barrel policy's defining constraint: an index file may re-export, but only from a direct sibling file or folder (`./module` / `./module.ts`), never from a nested path (`./a/b`), a parent (`../x`), or a bare package specifier (`document-schema.js`). This keeps each barrel a flat, local aggregation of its own directory's contents — a reader can see at a glance exactly what a folder exposes and where each piece lives, with no transitive reach through arbitrary depths of the tree. A sibling folder is permitted because it resolves via its own index, which itself falls under the same constraint.

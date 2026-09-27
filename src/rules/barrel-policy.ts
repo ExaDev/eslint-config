@@ -1,7 +1,5 @@
 import type { Rule } from 'eslint';
-
 import { findNearestPackageJson, resolveAutoMode, type ReadPackageJsonFn } from './barrel-auto-detect';
-
 import {
   createSplitReexportDetector,
   hasSource,

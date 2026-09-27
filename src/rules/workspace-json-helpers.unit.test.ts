@@ -1,11 +1,7 @@
 import { parse } from '@humanwhocodes/momoa';
-
 import type { ObjectNode } from '@humanwhocodes/momoa';
-
 import { describe, expect, it } from 'vitest';
-
 import { collectTopLevelDependencies, readDeclaredName } from './workspace-json-helpers';
-
 import { getMemberKeyName } from './json-member-key';
 
 function rootObjectOf(json: string): ObjectNode {

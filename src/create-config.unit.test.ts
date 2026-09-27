@@ -1,15 +1,9 @@
 import type { TSESLint } from '@typescript-eslint/utils';
-
 import { describe, expect, it } from 'vitest';
-
 import { exadevConfig } from './create-config';
-
 import jsdocAndTsdoc from './jsdoc';
-
 import jsonCanonicalConfig from './json-canonical';
-
 import recommendedTypeChecked from './recommended-type-checked';
-
 import stylisticCommentsConfig from './stylistic-comments';
 
 describe('exadevConfig', () => {

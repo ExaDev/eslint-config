@@ -1,7 +1,5 @@
 import { AST_NODE_TYPES, AST_TOKEN_TYPES, ESLintUtils, type TSESLint, type TSESTree } from '@typescript-eslint/utils';
-
 import { TSDocParser } from '@microsoft/tsdoc';
-
 import { firstAndLastOrThrow } from './prefer-options-object-param';
 
 // This package's own convention (see jsdoc.ts's own header comment) already distinguishes a symbol with a real public contract, which gets a doc comment, from one that doesn't, which gets a plain comment or nothing at all. eslint-plugin-jsdoc's own `require-jsdoc` family is deliberately turned off (jsdoc.ts) rather than demanding a doc comment appear from nothing, since forcing every function everywhere to carry a JSDoc block is a different, much larger policy this package isn't making. This rule fills the one gap that leaves: a public symbol that already HAS a substantial leading comment, just not in the `/** ... */` shape eslint-plugin-jsdoc/eslint-plugin-tsdoc can actually validate. It never demands documentation that doesn't already exist in some form; it only upgrades the format of documentation that does, and only for a symbol this package's own convention already says warrants one (an exported declaration).

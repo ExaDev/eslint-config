@@ -1,7 +1,5 @@
 import { defineConfig } from 'eslint/config';
-
 import tseslint from 'typescript-eslint';
-
 import { defaultConfig, exadevConfig } from './create-config';
 
 /* Not imported by index.ts (see tsdown.config.ts's entry -- only src/index.ts is bundled), so this file contributes nothing to the published package. Its only job is to be included in `tsc -p tsconfig.json` (see tsconfig.json's own `include`), so `pnpm typecheck` fails the moment either consumption pattern below stops compiling -- a real regression test for PublicConfigArray's own compatibility claim (see config-types.ts), not just a comment asserting it.

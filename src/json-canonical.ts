@@ -1,7 +1,5 @@
 import jsonCanonical from 'eslint-plugin-json-canonical';
-
 import type { Linter } from 'eslint';
-
 import type { ConfigArrayValue } from './config-types';
 
 /**

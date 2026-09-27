@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
-
 import { checkDependencies, dependencyPathExists, expectedPackageName, last } from './workspace-checks';
-
 import type { WorkspacePackageInfo } from './workspace-graph';
-
 import type { GroupSpec } from './workspace-options';
 
 function pkg(overrides: Partial<WorkspacePackageInfo> & { readonly name: string }): WorkspacePackageInfo {

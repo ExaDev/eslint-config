@@ -1,7 +1,5 @@
 import jsdoc from 'eslint-plugin-jsdoc';
-
 import tsdoc from 'eslint-plugin-tsdoc';
-
 import type { ConfigArrayValue } from './config-types';
 
 // Neither jsdoc.configs['flat/recommended-tsdoc-error'] nor eslint-plugin-tsdoc's own rules carry a `files` key (confirmed directly against both packages) -- a doc-comment rule only makes sense against JS/TS source, but left unscoped it still gets matched against every other language a consumer lints in the same array (JSON, Markdown), which is at best a silent no-op and at worst a parser mismatch. Matches the identical fix and reasoning in recommended-type-checked.ts.

@@ -1,7 +1,5 @@
 import { RuleTester } from 'eslint';
-
 import tseslint from 'typescript-eslint';
-
 import rule from './no-non-barrel-index';
 
 const ruleTester = new RuleTester({

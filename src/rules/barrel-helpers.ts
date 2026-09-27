@@ -1,5 +1,4 @@
 import { posix } from 'node:path';
-
 import type { Rule } from 'eslint';
 
 // Shared predicates and the split-statement re-export detector used by the standalone barrel rules (no-non-barrel-reexport, no-side-effects-in-index, no-non-barrel-index, no-index-files, barrel-direct-siblings-only) and the barrel-policy umbrella rule. Centralising these here means a fix to the "what counts as an index file" or "what counts as a direct sibling" question lands once rather than in each rule, and the umbrella composes the identical detection the standalone rules apply — no behavioural drift between the convenience rule and its granular equivalents.

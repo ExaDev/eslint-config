@@ -1,27 +1,15 @@
 import type { TSESLint } from '@typescript-eslint/utils';
-
 import type { ConfigArrayValue, PublicConfigArray } from './config-types';
-
 import { buildGitignoreConfig } from './gitignore';
-
 import jsdocAndTsdoc from './jsdoc';
-
 import jsonCanonicalConfig from './json-canonical';
-
 import { buildNextjsConfig } from './nextjs';
-
 import { buildPackageJsonKeyOrderConfig } from './package-json-key-order';
-
 import { buildReactConfig } from './react';
-
 import recommendedTypeChecked from './recommended-type-checked';
-
 import stylisticCommentsConfig from './stylistic-comments';
-
 import { toPublicConfigArray } from './to-public-config-array';
-
 import { buildWorkspaceArchitectureConfig } from './workspace-architecture';
-
 import type { WorkspaceArchitectureOptions } from './rules/workspace-options';
 
 export interface ExadevConfigOptions {

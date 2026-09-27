@@ -1,7 +1,5 @@
 import { RuleTester } from '@typescript-eslint/rule-tester';
-
 import type { TSESLint } from '@typescript-eslint/utils';
-
 import tseslintPlugin from 'typescript-eslint';
 
 // typescript-eslint's own `plugin` export is typed as `CompatiblePlugin`, which declares only `meta` -- deliberately minimal for cross-ESLint-version compatibility -- even though the real runtime object also carries `rules`. Narrowed here with an `in` guard rather than an `as` assertion, since the property genuinely may be absent under the declared type.

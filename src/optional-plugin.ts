@@ -1,7 +1,5 @@
 import { createRequire } from 'node:module';
-
 import type { TSESLint } from '@typescript-eslint/utils';
-
 import { isRecord } from './is-record';
 
 // A specifier resolved this way is never a string literal at the call site — always a runtime-computed argument — so no bundler's static import graph can see or attempt to resolve it. This is what lets eslint-plugin-react/eslint-plugin-react-hooks/eslint-plugin-jsx-a11y/@next/eslint-plugin-next stay genuinely optional: unlike typescript-eslint (required unconditionally the moment anything is imported from this package's root module, see recommended-type-checked.ts's own comment on that cost), these four are the first genuinely optional dependency this package has ever had. createRequire, not a dynamic import(), is what makes "attempt to load, tolerate absence" possible while keeping every existing export a plain, synchronously-available array — import() always returns a Promise, which would force every consumer into top-level await just to spread this package's default export, a real ergonomics regression for zero benefit.

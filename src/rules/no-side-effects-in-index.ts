@@ -1,5 +1,4 @@
 import type { Rule } from 'eslint';
-
 import { isIndexFile, isPureReexport } from './barrel-helpers';
 
 /* Structural counterpart to no-non-barrel-reexport: that rule says re-exports belong only in a barrel; this one says a barrel may contain only re-exports. A file restricted to nothing but `export * from '...'` / `export { x } from '...'` / `export type { x } from '...'` cannot execute anything at import time — no semantic "does this statement have a side effect" judgement is needed, which matters because this codebase's own top-level `z.object(...)`/`z.discriminatedUnion(...)`/`z.codec(...)` schema construction (present throughout every non-barrel module) would need special-casing under any naive "no top-level function calls" heuristic.

@@ -1,7 +1,5 @@
 import { AST_NODE_TYPES, ESLintUtils, type TSESTree } from '@typescript-eslint/utils';
-
 import { isPropertyReadonlyInType } from 'ts-api-utils';
-
 import * as ts from 'typescript';
 
 /* @typescript-eslint/prefer-readonly-parameter-types flags ANY non-readonly object/array/tuple parameter by type shape alone, and ships with no autofix, because its general case also covers arbitrarily nested object types, which need genuine deep-readonly type synthesis to fix correctly — wrapping in a single `Readonly<T>` only shallow-readonlies one level, insufficient once a property is itself mutable (see prefer-readonly-array-param.ts's own header for the array/tuple half of this story, and this fact confirmed directly against the real rule). This rule is the OTHER safely-fixable subset the array/tuple sibling doesn't cover: a "flat" object type, where every property (and every index-signature value, if present) is itself immune to what a shallow wrapper misses — a primitive, a literal/union of primitives, or a callback. For a type like this, `Readonly<T>` (TypeScript's own shallow utility type) IS fully sufficient, because there is no nested mutable state one level down for a shallow wrapper to fail to protect.
