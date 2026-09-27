@@ -14,6 +14,8 @@ export interface WorkspaceArchitectureConfigOptions extends WorkspaceArchitectur
  * Wires the three workspace-architecture rules (no-uphill-dependency, no-dependency-cycle, and, when the shared `naming` option is given, package-name-mirrors-path) onto `**\/package.json`, all three sharing the one options object given here. Internal: consumed by create-config.ts as one more `ConfigArrayValue` entry among the rest of `exadevConfig`'s own internally-typed build (see recommendedTypeChecked, buildReactConfig, buildNextjsConfig et al. for the same shape), before that whole array is converted once at `exadevConfig`'s own outer boundary. Never exported directly; a standalone consumer wants `workspaceArchitectureConfig` below instead.
  *
  * Unlike buildPackageJsonKeyOrderConfig, this has no auto-detecting tri-state: workspace architecture rules require real configuration (`groups` has no sensible default), so this is off unless a consumer calls it at all, and, once called, always requires `@eslint/json` to be resolvable (there is no "silently do nothing" case to fall back to the way an unconfigured, purely auto-detected feature can).
+ *
+ * Takes `WorkspaceArchitectureConfigOptions` (the `requireFn` test seam included) rather than the public `workspaceArchitectureConfig` export's own `WorkspaceArchitectureOptions`, so this internal builder's own tests (workspace-architecture.unit.test.ts) can still simulate an unresolvable `@eslint/json` directly, without the seam ever reaching the public function's parameter type or dist/index.d.ts.
  */
 export function buildWorkspaceArchitectureConfig(options: WorkspaceArchitectureConfigOptions): ConfigArrayValue {
   const { requireFn, ...ruleOptions } = options;
@@ -44,7 +46,9 @@ export function buildWorkspaceArchitectureConfig(options: WorkspaceArchitectureC
  * The named export a repo not using the full `exadevConfig()`/default-export bundle (hive, which builds its own `eslint.config.ts` from `plugin` directly) wires in on its own, exactly the same way `plugin`'s own recommended/barrel configs serve a consumer of the lighter `plugin` export.
  *
  * Returns `PublicConfigArray` (ESLint core's own `Config[]`), not the `ConfigArrayValue` buildWorkspaceArchitectureConfig above assembles internally, for the same reason `exadevConfig`'s own return type does (see PublicConfigArray's comment in config-types.ts): this is the one export besides `exadevConfig`/`defaultConfig` a consumer spreads directly into `defineConfig(...)` (`...workspaceArchitectureConfig(options)`, the README's own standalone usage), so it needs the identical cast at the identical boundary, or exactOptionalPropertyTypes rejects the spread with TS2345 (ExaDev/eslint-config#39): monorepo-template and hive both build their config with defineConfig under a tsconfig that sets exactOptionalPropertyTypes.
+ *
+ * Takes the plain `WorkspaceArchitectureOptions` (no `requireFn`), not `WorkspaceArchitectureConfigOptions` above: `requireFn` is a test seam for this file's own `buildWorkspaceArchitectureConfig`, never meant to reach a real consumer, and a public function whose parameter type includes it would emit that seam straight into dist/index.d.ts. Omitting it here from the exported signature is what keeps the seam genuinely internal; passing `options` straight through still satisfies `buildWorkspaceArchitectureConfig`'s own (structurally wider) parameter type, since a `WorkspaceArchitectureOptions` simply carries no `requireFn` key rather than one whose type conflicts.
  */
-export function workspaceArchitectureConfig(options: WorkspaceArchitectureConfigOptions): PublicConfigArray {
+export function workspaceArchitectureConfig(options: WorkspaceArchitectureOptions): PublicConfigArray {
   return toPublicConfigArray(buildWorkspaceArchitectureConfig(options));
 }
