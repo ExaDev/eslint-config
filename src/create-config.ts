@@ -8,7 +8,7 @@ import { buildPackageJsonKeyOrderConfig } from './package-json-key-order';
 import { buildReactConfig } from './react';
 import recommendedTypeChecked from './recommended-type-checked';
 import { toPublicConfigArray } from './to-public-config-array';
-import { workspaceArchitectureConfig } from './workspace-architecture';
+import { buildWorkspaceArchitectureConfig } from './workspace-architecture';
 import type { WorkspaceArchitectureOptions } from './rules/workspace-options';
 
 export interface ExadevConfigOptions {
@@ -34,7 +34,7 @@ export function exadevConfig(options: ExadevConfigOptions = {}, ...userConfigs: 
     ...buildReactConfig({ enabled: options.react }),
     ...buildNextjsConfig({ enabled: options.nextjs }),
     ...buildPackageJsonKeyOrderConfig({ enabled: options.packageJsonKeyOrder }),
-    ...(options.workspaceArchitecture !== undefined ? workspaceArchitectureConfig(options.workspaceArchitecture) : []),
+    ...(options.workspaceArchitecture !== undefined ? buildWorkspaceArchitectureConfig(options.workspaceArchitecture) : []),
     ...userConfigs,
   ];
   return toPublicConfigArray(built);
