@@ -275,6 +275,12 @@ ruleTester.run('prefer-doc-comment', rule, {
       output: '/**\n * Explanation line one.\n * Explanation line two.\n */\n// TODO: revisit\nexport function d3(): void {}',
       errors: [{ messageId: 'preferDocComment' }],
     },
+    // An `eslint-enable` directive directly above the export, with substantial explanation above it: only the explanation converts; `// eslint-enable no-console` is left completely untouched directly above the export, still a real re-enable for the rule the matching `eslint-disable` further up switched off, never silently removed by being folded into the new doc comment's own prose.
+    {
+      code: '// Explains why this function exists and\n// what callers must guarantee.\n// eslint-enable no-console\nexport function f() {}',
+      output: '/**\n * Explains why this function exists and\n * what callers must guarantee.\n */\n// eslint-enable no-console\nexport function f() {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
     // A directive in the MIDDLE of a run, with substantial explanation both above and below it: only the lines strictly above the directive are converted; the directive line and every line from it onward, including the trailing explanation, are left completely untouched.
     {
       code: '// Explanation line one.\n// Explanation line two.\n// TODO: revisit\n// Explanation line three.\nexport function d4(): void {}',
