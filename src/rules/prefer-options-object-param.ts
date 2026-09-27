@@ -44,17 +44,18 @@ const FUNCTION_LIKE_SELECTOR = [
   'TSMethodSignature',
 ].join(', ');
 
-// A parameter is optional exactly when it carries a `?` marker or a default value — a TSParameterProperty is optional exactly when the parameter it wraps is, and a bare RestElement/ArrayPattern/ObjectPattern (with no default) never is, since none of those three can carry either marker.
-function isOptionalParam(param: TSESTree.Parameter): boolean {
+// A parameter is optional exactly when it carries a `?` marker or a default value — a TSParameterProperty is optional exactly when the parameter it wraps is, and a bare RestElement/ArrayPattern/ObjectPattern (with no default) never is, since none of those three can carry either marker. Exported so this can be tested directly against fabricated parameter nodes.
+export function isOptionalParam(param: TSESTree.Parameter): boolean {
   if (param.type === AST_NODE_TYPES.TSParameterProperty) return isOptionalParam(param.parameter);
   if (param.type === AST_NODE_TYPES.AssignmentPattern) return true;
   if (param.type === AST_NODE_TYPES.Identifier) return param.optional;
   return false;
 }
 
-// The maximal run of trailing optional parameters, skipping a single trailing rest parameter first if one is present (a rest parameter is never itself optional, but its mere presence does not break the run of optional parameters immediately before it — `function f(a, b?, c?, ...rest)` still has a genuine 2-parameter trailing optional run, even though `...rest` is the parameter list's own final entry).
-function getTrailingOptionalRun(params: readonly TSESTree.Parameter[]): TSESTree.Parameter[] {
-  const hasTrailingRest = params.length > 0 && params[params.length - 1]?.type === AST_NODE_TYPES.RestElement;
+// The maximal run of trailing optional parameters, skipping a single trailing rest parameter first if one is present (a rest parameter is never itself optional, but its mere presence does not break the run of optional parameters immediately before it — `function f(a, b?, c?, ...rest)` still has a genuine 2-parameter trailing optional run, even though `...rest` is the parameter list's own final entry). Exported so this can be tested directly against fabricated parameter lists, independent of any particular RuleTester fixture.
+export function getTrailingOptionalRun(params: readonly TSESTree.Parameter[]): TSESTree.Parameter[] {
+  // No separate `params.length > 0` guard: `params[params.length - 1]` already reads `params[-1]` (itself `undefined`, never a throw) for an empty array, and `undefined?.type` is safely `undefined` too, so an empty array already resolves `hasTrailingRest` to `false` on its own terms.
+  const hasTrailingRest = params[params.length - 1]?.type === AST_NODE_TYPES.RestElement;
   const run: TSESTree.Parameter[] = [];
   for (let i = params.length - (hasTrailingRest ? 2 : 1); i >= 0; i--) {
     const param = params[i];
@@ -70,9 +71,8 @@ interface ResolvedParamInfo {
   readonly defaultExpression: TSESTree.Expression | undefined;
 }
 
-// Resolves a single trailing-optional-run parameter down to everything the fixer needs to move it into the new options object, or `undefined` when doing so would not be safe/mechanical — folding several of the rule's own bail-out conditions (a parameter property, a destructured parameter with no single bindable name, a parameter with no explicit type annotation of its own, and a decorated parameter) into one "can this parameter be moved" question, since none of them need to be distinguished from one another in the reported message. Only ever called on a parameter isOptionalParam has already confirmed optional, so the final `: undefined` fallback below (neither an AssignmentPattern nor an Identifier) can never actually be reached through real linting — a bare RestElement/ArrayPattern/ObjectPattern is never itself optional — but is kept as a plain, non-throwing fallback rather than an "Unreachable" throw, since a hypothetical future caller passing a genuinely non-optional parameter should still get back a graceful "not fixable" rather than a crash.
+// Resolves a single trailing-optional-run parameter down to everything the fixer needs to move it into the new options object, or `undefined` when doing so would not be safe/mechanical — folding several of the rule's own bail-out conditions (a parameter property, a destructured parameter with no single bindable name, a parameter with no explicit type annotation of its own, and a decorated parameter) into one "can this parameter be moved" question, since none of them need to be distinguished from one another in the reported message. Only ever called on a parameter isOptionalParam has already confirmed optional, so the final `: undefined` fallback below (neither an AssignmentPattern nor an Identifier) can never actually be reached through real linting — a bare RestElement/ArrayPattern/ObjectPattern is never itself optional — but is kept as a plain, non-throwing fallback rather than an "Unreachable" throw, since a hypothetical future caller passing a genuinely non-optional parameter should still get back a graceful "not fixable" rather than a crash. No separate `param.type === TSParameterProperty` guard: a parameter property's own `.type` is never `AssignmentPattern` nor `Identifier` either, so the ternary below already falls through to `identifierNode === undefined` for it on its own terms, the same bail-out the "no single bindable name" cases below reach.
 function resolveFixableParam(param: TSESTree.Parameter): ResolvedParamInfo | undefined {
-  if (param.type === AST_NODE_TYPES.TSParameterProperty) return undefined;
   const identifierNode =
     param.type === AST_NODE_TYPES.AssignmentPattern
       ? param.left.type === AST_NODE_TYPES.Identifier
@@ -106,8 +106,8 @@ export function firstAndLastOrThrow<T>(items: readonly T[]): readonly [T, T] {
   return [first, last];
 }
 
-// A function/method/constructor label for the reported message. TSConstructSignatureDeclaration and TSMethodSignature are labelled directly from their own node type (an interface/type-literal member, never wrapped in a MethodDefinition); a concrete function-like node's own label instead comes from its parent — a class method/constructor (MethodDefinition/TSAbstractMethodDefinition, using that parent's own `kind`) or an object-literal method (a `Property` with `method: true`) — falling back to a plain 'function' for everything else (a function declaration/expression, an arrow function, or a standalone function type/call signature).
-function describeFunctionKind(node: FunctionLikeWithParams): string {
+// A function/method/constructor label for the reported message. TSConstructSignatureDeclaration and TSMethodSignature are labelled directly from their own node type (an interface/type-literal member, never wrapped in a MethodDefinition); a concrete function-like node's own label instead comes from its parent — a class method/constructor (MethodDefinition/TSAbstractMethodDefinition, using that parent's own `kind`) or an object-literal method (a `Property` with `method: true`) — falling back to a plain 'function' for everything else (a function declaration/expression, an arrow function, or a standalone function type/call signature). Exported so this can be tested directly against fabricated parent shapes, independent of any particular RuleTester fixture.
+export function describeFunctionKind(node: FunctionLikeWithParams): string {
   if (node.type === AST_NODE_TYPES.TSConstructSignatureDeclaration) return 'constructor';
   if (node.type === AST_NODE_TYPES.TSMethodSignature) return 'method';
   const { parent } = node;
@@ -133,8 +133,8 @@ const LIFTABLE_JSDOC_PARENTS: ReadonlySet<AST_NODE_TYPES> = new Set([
   AST_NODE_TYPES.ExportDefaultDeclaration,
 ]);
 
-// A function-like node's own leading JSDoc block comment, walking up through the handful of wrapper nodes a real declaration commonly sits under (a `const f = (...) => {}`'s own VariableDeclarator/VariableDeclaration, a class method's MethodDefinition, an `export`) until either a genuine block comment starting with `*` (the `/**` convention) is found immediately before the current node, or the parent chain reaches a node the JSDoc convention would never attach to.
-function getLeadingJSDocComment(sourceCode: TSESLint.SourceCode, node: TSESTree.Node): TSESTree.Comment | undefined {
+// A function-like node's own leading JSDoc block comment, walking up through the handful of wrapper nodes a real declaration commonly sits under (a `const f = (...) => {}`'s own VariableDeclarator/VariableDeclaration, a class method's MethodDefinition, an `export`) until either a genuine block comment starting with `*` (the `/**` convention) is found immediately before the current node, or the parent chain reaches a node the JSDoc convention would never attach to. Exported so its own comment-shape and parent-climbing decisions can be tested directly against fabricated source, independent of any particular RuleTester fixture.
+export function getLeadingJSDocComment(sourceCode: TSESLint.SourceCode, node: TSESTree.Node): TSESTree.Comment | undefined {
   let current: TSESTree.Node = node;
   for (;;) {
     const jsdocComment = sourceCode
@@ -148,15 +148,15 @@ function getLeadingJSDocComment(sourceCode: TSESLint.SourceCode, node: TSESTree.
   }
 }
 
-// Whether a JSDoc block comment's own text documents `name` via an `@param` tag — matching the common forms (`@param name`, `@param {Type} name`, `@param [name]` for the optional-parameter convention, each optionally followed by a description) without requiring a full JSDoc parser, since this only ever needs to answer "does an existing doc comment already name this exact parameter", not validate or extract the tag's own structure.
-function jsDocMentionsParam(commentValue: string, name: string): boolean {
+// Whether a JSDoc block comment's own text documents `name` via an `@param` tag — matching the common forms (`@param name`, `@param {Type} name`, `@param [name]` for the optional-parameter convention, each optionally followed by a description) without requiring a full JSDoc parser, since this only ever needs to answer "does an existing doc comment already name this exact parameter", not validate or extract the tag's own structure. `name` is escaped before being interpolated into the pattern, since it is echoed verbatim from a real parameter's own identifier text, which can contain a regex-special character (`$` is a valid, if unusual, leading character in a JS identifier). Exported so both the escaping and the tag-matching can be tested directly, independent of any particular RuleTester fixture.
+export function jsDocMentionsParam(commentValue: string, name: string): boolean {
   const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const paramTagPattern = new RegExp(`@param\\s+(?:\\{[^}]*\\}\\s+)?\\[?${escapedName}\\b`);
   return paramTagPattern.test(commentValue);
 }
 
-// A collision exists when some variable in the function's own scope is named `options` (the synthetic parameter name this rule introduces) unless every one of that variable's own identifier occurrences belongs to the trailing run being collapsed — a run parameter that happens to already be named `options` is not itself a collision, since it disappears in the same edit that introduces the new one, but any OTHER binding of that name (an earlier kept parameter, a body-local `const`/`let`/function declaration) is.
-function hasOptionsNameCollision(scope: TSESLint.Scope.Scope, exemptIdentifiers: ReadonlySet<TSESTree.Identifier>): boolean {
+// A collision exists when some variable in the function's own scope is named `options` (the synthetic parameter name this rule introduces) unless every one of that variable's own identifier occurrences belongs to the trailing run being collapsed — a run parameter that happens to already be named `options` is not itself a collision, since it disappears in the same edit that introduces the new one, but any OTHER binding of that name (an earlier kept parameter, a body-local `const`/`let`/function declaration) is. Exported so this can be tested directly against a fabricated scope, independent of any particular RuleTester fixture (real-scope construction, via a genuine variable re-declaration, is otherwise awkward to arrange on demand).
+export function hasOptionsNameCollision(scope: TSESLint.Scope.Scope, exemptIdentifiers: ReadonlySet<TSESTree.Identifier>): boolean {
   return scope.variables.some(
     (variable) => variable.name === 'options' && !variable.identifiers.every((identifier) => exemptIdentifiers.has(identifier)),
   );
@@ -207,7 +207,8 @@ const preferOptionsObjectParam = createRule<Options, MessageIds>({
       const hasRestParam = node.params.some((param) => param.type === AST_NODE_TYPES.RestElement);
       const body = getBlockBody(node);
 
-      let isFixable = allResolvable && !hasRestParam && body !== undefined;
+      // No `body !== undefined` conjunct here: the guard clause below (`if (!isFixable || body === undefined)`) already re-checks `body === undefined` independently and unconditionally, so a declaration-only signature is reported without a suggestion regardless of what this initial value computes; folding the same check in here again would only change how much of the jsdoc/collision work below runs for a signature that was always going to bail anyway, never the outcome.
+      let isFixable = allResolvable && !hasRestParam;
       if (isFixable) {
         const jsdocComment = getLeadingJSDocComment(sourceCode, node);
         const jsDocBail =
