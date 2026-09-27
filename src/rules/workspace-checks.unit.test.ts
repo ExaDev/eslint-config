@@ -214,19 +214,19 @@ describe('expectedPackageName', () => {
     expect(expectedPackageName('test/database', test, { scope: '@novus' })).toBe('@novus/test-database');
   });
 
-  it("'keep-group' derives the group's own name from the LAST segment of its path when that path nests more than one directory deep, not from every container segment above it", () => {
+  it("'keep-group' uses the group's own name regardless of how deep its path nests, when the two happen to agree", () => {
     const nestedTestGroup: GroupSpec = { name: 'test', path: 'packages/test', naming: 'keep-group' };
     expect(expectedPackageName('packages/test/e2e', nestedTestGroup, { scope: '@x' })).toBe('@x/test-e2e');
   });
 
-  it("'keep-group' uses the group's own NAME, not its path's last segment, when path nests only one directory deep", () => {
+  it("'keep-group' uses the group's own name when its path nests only one directory deep", () => {
     const singleSegmentPathGroup: GroupSpec = { name: 'test', path: 'tests', naming: 'keep-group' };
     expect(expectedPackageName('tests/e2e', singleSegmentPathGroup, { scope: '@x' })).toBe('@x/test-e2e');
   });
 
-  it("'keep-group' ignores the group's own name in favour of its nested path's last segment once that path is more than one directory deep", () => {
+  it("'keep-group' uses the group's own NAME, never a path segment standing in for it, even when its path nests more than one directory deep and the two disagree", () => {
     const nameDiffersFromNestedPathGroup: GroupSpec = { name: 'e2e', path: 'packages/test', naming: 'keep-group' };
-    expect(expectedPackageName('packages/test/e2e', nameDiffersFromNestedPathGroup, { scope: '@x' })).toBe('@x/test-e2e');
+    expect(expectedPackageName('packages/test/smoke', nameDiffersFromNestedPathGroup, { scope: '@x' })).toBe('@x/e2e-smoke');
   });
 
   it("'basename' uses only the final path segment", () => {

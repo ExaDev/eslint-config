@@ -120,16 +120,16 @@ export function last<T>(array: readonly T[]): T {
  * The three per-group naming strategies' own segment selection, keyed by NamingStrategy's own three literal members rather than a chain of ternaries: `Record<NamingStrategy, ...>` requires every member to have its own entry, which is what makes 'drop-group' a genuine, independently-typed branch, not merely "whatever the ternary chain falls through to when nothing else matched". Stryker's own typescript checker rejects a mutant that replaces the `?? 'drop-group'` fallback with some other string, since indexing this record with a value outside NamingStrategy is a type error, caught before any test even runs.
  *
  * - **'drop-group'**: drop the group's own root path segments, keep what remains.
- * - **'keep-group'**: keep the group's OWN name (or, when its root path nests more than one segment deep, only that path's own last segment) ahead of `rest`, not every segment of `relativeDir` including whatever container directories sit above the group's own root: a group declared as `{ path: 'packages/test' }` derives "test-e2e" for `packages/test/e2e`, never "packages-test-e2e", the same way a group with no nested path at all already would. A test group whose packages are named "test-<feature>", mirroring the feature they test, needs its own "test" segment kept, just not any further container segment above it.
+ * - **'keep-group'**: keep the group's OWN `name` ahead of `rest`, always, regardless of how deep its own `path` nests: a group declared `{ name: 'test', path: 'tests' }` derives "test-e2e" for `tests/e2e`, and one declared `{ name: 'test', path: 'packages/tests' }` derives "test-e2e" for `packages/tests/e2e` too, never "tests-e2e" (the group's declared identity, not whatever path segment sits above it). A test group whose packages are named "test-<feature>", mirroring the feature they test, needs its own "test" name kept, regardless of how many container directories its `path` nests under.
  * - **'basename'**: use only `relativeDir`'s own final segment, ignoring every intermediate directory, for a group whose intermediate structure exists purely for filesystem organisation and carries no naming intent of its own.
  */
-// A single { segments, rest, groupNameSegment } options object, not three positional parameters: 'drop-group' only ever needs `rest`, 'basename' only ever needs `segments`, so a plain positional signature would leave each with unused parameters, prefixed `_x` to silence that unused-parameter warning rather than actually removing it, exactly what this project's own no-unused-parameter convention (drop it from the signature) exists to catch instead of paper over. Each function destructures only the field its own strategy actually reads.
+// A single { segments, rest, group } options object, not three positional parameters: 'drop-group' only ever needs `rest`, 'basename' only ever needs `segments`, so a plain positional signature would leave each with unused parameters, prefixed `_x` to silence that unused-parameter warning rather than actually removing it, exactly what this project's own no-unused-parameter convention (drop it from the signature) exists to catch instead of paper over. Each function destructures only the field its own strategy actually reads.
 const NAME_SEGMENTS_BY_STRATEGY: Record<
   NamingStrategy,
-  (parts: { readonly segments: readonly string[]; readonly rest: readonly string[]; readonly groupNameSegment: string }) => readonly string[]
+  (parts: { readonly segments: readonly string[]; readonly rest: readonly string[]; readonly group: GroupSpec }) => readonly string[]
 > = {
   basename: ({ segments }) => [last(segments)],
-  'keep-group': ({ rest, groupNameSegment }) => [groupNameSegment, ...rest],
+  'keep-group': ({ rest, group }) => [group.name, ...rest],
   'drop-group': ({ rest }) => rest,
 };
 
@@ -141,10 +141,8 @@ export function expectedPackageName(relativeDir: string, group: GroupSpec, namin
   const segments = splitPathSegments(relativeDir);
   const groupPathSegments = splitPathSegments(group.path ?? group.name);
   const rest = segments.slice(groupPathSegments.length);
-  // The group's own name, unless its path nests more than one directory deep, in which case that nested path's own last segment stands in for it (see the 'keep-group' doc comment above): a group declared `{ name: 'test', path: 'tests' }` keeps 'test', not the path's 'tests'; one declared `{ name: 'e2e', path: 'packages/test' }` keeps 'test', not 'e2e'.
-  const groupNameSegment = groupPathSegments.length > 1 ? last(groupPathSegments) : group.name;
 
-  const nameSegments = NAME_SEGMENTS_BY_STRATEGY[group.naming ?? 'drop-group']({ segments, rest, groupNameSegment });
+  const nameSegments = NAME_SEGMENTS_BY_STRATEGY[group.naming ?? 'drop-group']({ segments, rest, group });
 
   const joined = nameSegments.join(separator);
   return naming.scope === undefined ? joined : `${naming.scope}/${joined}`;
