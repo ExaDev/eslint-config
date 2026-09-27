@@ -351,5 +351,11 @@ ruleTester.run('prefer-doc-comment', rule, {
       output: '/**\r\n * first line\r\n * second line\r\n */\r\nexport function crlf() {}',
       errors: [{ messageId: 'preferDocComment' }],
     },
+    // The exact shape that regressed: an ALREADY-BARE-BLOCK comment whose own internal line break is bare `\n` (the shape @stylistic/eslint-plugin's own multiline-comment-style bare-block fixer hard-codes, regardless of the file's real convention), sitting in a file whose REAL line breaks, both before the block and between it and the export, are `\r\n`. Reading the terminator from firstComment.range[0] (the old, buggy call site) would find this internal `\n` first and wrongly adopt it; reading from lastComment.range[1] (right after the block's own closing `*/`, in real untouched source) correctly finds `\r\n` instead, so the fixer's own new doc comment uses `\r\n` throughout, matching the surrounding file exactly, with no mixed line endings.
+    {
+      code: '/* first line\n   second line */\r\nexport function crlfBareBlock() {}',
+      output: '/**\r\n * first line\r\n * second line\r\n */\r\nexport function crlfBareBlock() {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
   ],
 });
