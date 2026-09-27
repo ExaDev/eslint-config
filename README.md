@@ -213,6 +213,11 @@ React support pairs `eslint-plugin-react`'s `flat/recommended` with its own `fla
       plugins: { exadev: plugin },
       extends: [plugin.configs.react], // throws if eslint-plugin-react isn't installed
     },
+    {
+      files: ['**/*.ts', '**/*.tsx'],
+      plugins: { exadev: plugin },
+      extends: [plugin.configs.nextjs], // throws if @next/eslint-plugin-next isn't installed
+    },
   );
   ```
 - **`exadevConfig({ react, nextjs })`** — see the tri-state table below.
