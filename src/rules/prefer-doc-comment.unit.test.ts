@@ -183,6 +183,18 @@ ruleTester.run('prefer-doc-comment', rule, {
       output: '/**\n * first line\n * second line\n */\nexport default class C {}',
       errors: [{ messageId: 'preferDocComment' }],
     },
+    // An exported class decorated BEFORE the `export` keyword (`@dec\nexport class ...`), TypeScript's other valid placement for a decorated exported class declaration alongside the one below: getExportWrapper's own wrapper starts at `export`, but the decorator's own range sits strictly before it, so getCommentsBefore(wrapper) alone would find nothing at all (the decorator, a real code token, sits directly between the comment and the wrapper); getDecoratedAnchor redirects the search to anchor on the decorator instead, so the genuine leading comment is still found. `@dec` and `export class Decorated {}` are both left completely untouched; only the comment above the decorator is converted.
+    {
+      code: '// Describes the decorated class in two\n// lines of prose.\n@dec\nexport class Decorated {}',
+      output: '/**\n * Describes the decorated class in two\n * lines of prose.\n */\n@dec\nexport class Decorated {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // The OTHER valid decorator placement, AFTER the `export` keyword (`export @dec class ...`, confirmed directly by compiling both orderings with the installed `typescript`, neither a syntax error): here the decorator's own range sits INSIDE the wrapper's own range, so getCommentsBefore(wrapper) already finds the real leading comment correctly on its own, and getDecoratedAnchor's own `firstDecorator.range[0] < wrapper.range[0]` check must return `wrapper` unchanged rather than the decorator, converging on the identical output the pre-existing "export default class" case above already produces for an undecorated class, proving this ordering behaves exactly like an ordinary exported class.
+    {
+      code: '// first line\n// second line\nexport @dec class Decorated {}',
+      output: '/**\n * first line\n * second line\n */\nexport @dec class Decorated {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
     // An exported default function declaration.
     {
       code: '// first line\n// second line\nexport default function foo() {}',
