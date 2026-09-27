@@ -1,0 +1,55 @@
+import stylistic from '@stylistic/eslint-plugin';
+
+import type { ConfigArrayValue } from './config-types';
+
+import { JSX_FILE_PATTERNS } from './react';
+
+import plugin from './plugin';
+
+/* @stylistic/eslint-plugin (the unified successor to the split @stylistic/eslint-plugin-js/-ts/-jsx packages) is bundled unconditionally here, the same way jsdoc.ts and json-canonical.ts are: it is a plain dependency of this package (see package.json), so every consumer already has it the moment they depend on this package at all, and every rule wired below matches purely on comment/statement/JSX shape, never on formatting (indentation, quotes, semicolons, trailing commas, line wrapping, bracket spacing), which stays Prettier's job in every consumer of this package. Only a hand-picked subset of the plugin's roughly 100 rules is enabled below (never a spread `stylistic.configs.recommended`/`.all`), mirroring jsdoc.ts's own plain-rules-object precedent: most of this plugin's own surface (indent, quotes, semi, comma-dangle, and the rest) genuinely is Prettier's job and would fight it directly, and eslint-config-prettier's own disabled-rules list (github.com/prettier/eslint-config-prettier, `index.js`) was checked directly against every rule id enabled below to confirm none of them appears there: each one enabled here is a rule Prettier has no opinion on at all (comment shape/position, blank-line placement between statements/class members, JSX prop-value conventions), not a formatting rule Prettier already owns.
+   
+   Every rule/option pair below was verified directly against the installed package's own rule source under node_modules/@stylistic/eslint-plugin/dist/rules/ (schema, defaultOptions, and fixer behaviour), not assumed from memory or a docs summary. See each rule's own comment for what that inspection found. `curly-newline`, `jsx-function-call-newline`, `exp-jsx-props-style` (the actual installed id behind the task's "jsx-props-style"), and `exp-list-style` (behind "list-style") are all deliberately not enabled: each is narrow/obscure enough (an `exp-` prefix in this plugin's own rule ids denotes an experimental rule, still finding its final shape) that it isn't worth this package's own consumers picking up unasked.
+   
+   A rule genuinely covering JSX's shorthand-boolean-prop convention (`<Foo enabled />` vs `<Foo enabled={true} />`) or shorthand-fragment syntax (`<>...</>` vs `<React.Fragment>...</React.Fragment>`) does not exist anywhere in @stylistic/eslint-plugin, confirmed directly against the installed package's full `Object.keys(rules)` list (97 rules, none matching `boolean`/`fragment` in id or, checked via the built dist source, in description either). Those two conventions are instead `eslint-plugin-react`'s own `react/jsx-boolean-value` and `react/jsx-fragments`, an entirely different package this file does not touch. `src/react.ts`'s own optional-peer-dependency gate is the correct, and only, place either could ever be added, and doing so is explicitly out of scope for this change. */
+const JS_TS_FILE_PATTERNS = '**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}';
+
+const stylisticCommentsConfig: ConfigArrayValue = [
+  {
+    files: [JS_TS_FILE_PATTERNS],
+    plugins: { '@stylistic': stylistic, exadev: plugin },
+    rules: {
+      // 'bare-block' merges a run of consecutive `//` lines immediately above a statement into one plain `/* ... */` block (no padding stars). Verified directly against the rule's own source: its `bare-block` checker explicitly skips any comment group `isJSDocComment` or `isExclamationComment` already identifies (a genuine `/** ... */` doc block, or a `/*! ... */` license/banner block), so it never fights eslint-plugin-jsdoc/eslint-plugin-tsdoc's own validation of an existing doc comment (jsdoc.ts). It also never merges a lone single-physical-line comment (the rule's own top-level `Program` handler explicitly skips any comment group of length 1 that is itself single-line), and it explicitly recognises `/// <reference ... />`/`/// <amd-... />` triple-slash directives and a shebang line as exempt in its sibling `spaced-comment` rule below. `multiline-comment-style` itself, though, has no equivalent exemption for TWO OR MORE consecutive triple-slash directives specifically (a rare shape: consecutive `/// <reference path="..." />` lines with no blank line between them), which its own adjacency grouping would merge into one bare block, breaking TypeScript's own requirement that each stay a standalone `//`-shaped line. This is a genuine, narrow gap in the upstream rule, not something this package's own config can special-case (the rule has no per-content exemption option), flagged here rather than silently accepted. A project using triple-slash directives at all is already unusual for anything targeting this shared config's own module-based consumers.
+      '@stylistic/multiline-comment-style': ['error', 'bare-block'],
+      // Bare default options (`'always'`, requiring a space after `//`/`/*`). Verified directly against the rule's own source that this does not fight eslint-plugin-jsdoc/tsdoc: its default `markers` list always includes `'*'` (`parseMarkersOption` unconditionally appends it), so a `/**`-opening doc block is itself treated as an allowed "marker" comment and only ever needs a space/newline after that leading `*`, never additionally after the `/*`, exactly what a real `/** @remarks ... */`-style TSDoc block already looks like. Triple-slash reference/AMD directives (`node.value.startsWith('/ <reference'` / `'/ <amd'`, since a `//`-stripped `///` comment's own `.value` starts with a lone leftover `/`) and shebang lines are both explicitly exempted in the rule's own `checkCommentForSpace`/`Program` handlers, so neither is broken by this rule either.
+      '@stylistic/spaced-comment': 'error',
+      // Bare default options (`'always'`, `{ exceptAfterOverload: true, exceptAfterSingleLine: false }`). This repository's own source has no class declarations outside test fixtures to check against a real fixture, so a small one was traced through the rule's own source instead: it fires once per adjacent pair of class members lacking (or having, under `'never'`) a blank line between them, is unconditionally fixable (`fixable: 'whitespace'`), and the `exceptAfterOverload` default specifically means a run of `.d.ts`-style TS method-overload signatures (each an empty-bodied `TSAbstractMethodDefinition`/`MethodDefinition`) is exempt from the blank-line requirement between each other, the shape that would otherwise be the most likely to genuinely conflict with hand-written overload blocks.
+      '@stylistic/lines-between-class-members': 'error',
+      // 'above': this project wants a `//` comment positioned above the code it describes, never trailing beside it on the same line. Verified directly against the rule's own source that this has no autofix at all (no `fixable` key in its `meta`, confirmed by inspecting the installed rule module directly, not assumed from its name alongside every other rule here that is `fixable`), and that it already exempts the same `eslint`/`jshint`/`istanbul`/... directive-comment family `spaced-comment`'s default `markers` shares (via the identical `COMMENTS_IGNORE_PATTERN`) plus a dedicated `falls?\s?through` exemption for a switch-case fallthrough comment, so a same-line `// eslint-disable-line ...`/`// falls through` is never force-relocated above its statement.
+      '@stylistic/line-comment-position': ['error', 'above'],
+      // Exactly the three entries the task specifies, in this order. Verified directly against the rule's own source that match order does not matter for correctness here even though `getPaddingType` scans the options array from its last entry backward (a later array entry outranks an earlier one on a tie): all three entries below request the identical `blankLine: 'always'`, so whichever one matches first can never disagree with whichever would have matched second. There is no configuration order where these three fight each other. `'directive'` matches a top-of-scope prologue (`"use strict"` and the like); `['cjs-import', 'import']` matches either a `const x = require('y')` CommonJS-style import or a real ESM `import` statement; `'return'` matches any `return` statement.
+      '@stylistic/padding-line-between-statements': [
+        'error',
+        { blankLine: 'always', prev: 'directive', next: '*' },
+        { blankLine: 'always', prev: ['cjs-import', 'import'], next: '*' },
+        { blankLine: 'always', prev: '*', next: 'return' },
+      ],
+      // This package's own bespoke doc-comment-upgrade rule. See src/rules/prefer-doc-comment.ts for its full design. Wired here, alongside the stylistic-plugin rules above, rather than in plugin.ts's own `recommended`/`barrel` configs, since it belongs to this same "comment discipline" bundle and is unconditional for every consumer exactly like jsdoc.ts/json-canonical.ts, not an opt-in tier a consumer selects piecemeal.
+      'exadev/prefer-doc-comment': 'error',
+    },
+  },
+  {
+    // Scoped to real JSX files only, the identical justification react.ts's own JSX_FILE_PATTERNS block already uses: even though none of these three rules has any dependency (direct or peer) on eslint-plugin-react or React itself (confirmed directly against @stylistic/eslint-plugin's own package.json, whose only `peerDependencies` entry is `eslint` itself), each one's own AST selector only ever matches a JSXElement/JSXOpeningElement/JSXFragment node, so it is a structural no-op on every non-JSX file regardless of scoping. The `files` scoping here exists only to avoid ESLint computing rule state against a merged config for a file the rule set could never fire on, matching this same file's own JS_TS_FILE_PATTERNS block one step further.
+    files: [...JSX_FILE_PATTERNS],
+    plugins: { '@stylistic': stylistic },
+    rules: {
+      // Bare default options (`{ props: 'never', children: 'never', propElementValues: 'ignore' }`). Bans a redundant `{'literal text'}` JSX curly-brace wrapper around a prop value or child that could just as well be plain text/a plain attribute string, a real, autofixable anti-pattern Prettier has no opinion on at all (Prettier reformats whatever curly-brace-or-not shape it's handed; it never adds or removes the braces themselves).
+      '@stylistic/jsx-curly-brace-presence': 'error',
+      // Bare default options (`{ allowAllCaps: false, allowLeadingUnderscore: false, allowNamespace: false }`). Requires a JSX component name to be PascalCase (`<MyComponent />`, never `<myComponent />`), the naming convention that is also what lets JSX itself distinguish a user component from a lowercase built-in HTML tag.
+      '@stylistic/jsx-pascal-case': 'error',
+      // Bare default options (`{ component: true, html: true }`). Requires `<Foo />` over `<Foo></Foo>` for both a user component and a plain HTML element with no children, a real content/shape choice (not a whitespace/formatting one) Prettier leaves entirely alone.
+      '@stylistic/jsx-self-closing-comp': 'error',
+    },
+  },
+];
+
+export default stylisticCommentsConfig;

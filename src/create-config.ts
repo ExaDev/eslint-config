@@ -1,14 +1,27 @@
 import type { TSESLint } from '@typescript-eslint/utils';
+
 import type { ConfigArrayValue, PublicConfigArray } from './config-types';
+
 import { buildGitignoreConfig } from './gitignore';
+
 import jsdocAndTsdoc from './jsdoc';
+
 import jsonCanonicalConfig from './json-canonical';
+
 import { buildNextjsConfig } from './nextjs';
+
 import { buildPackageJsonKeyOrderConfig } from './package-json-key-order';
+
 import { buildReactConfig } from './react';
+
 import recommendedTypeChecked from './recommended-type-checked';
+
+import stylisticCommentsConfig from './stylistic-comments';
+
 import { toPublicConfigArray } from './to-public-config-array';
+
 import { buildWorkspaceArchitectureConfig } from './workspace-architecture';
+
 import type { WorkspaceArchitectureOptions } from './rules/workspace-options';
 
 export interface ExadevConfigOptions {
@@ -22,21 +35,25 @@ export interface ExadevConfigOptions {
   readonly workspaceArchitecture?: WorkspaceArchitectureOptions;
 }
 
-// jsdocAndTsdoc and jsonCanonicalConfig are bundled unconditionally, the same way recommendedTypeChecked itself is -- unlike react/nextjs below, neither is a consumer framework choice with its own optional peer dependency to resolve; eslint-plugin-jsdoc, eslint-plugin-tsdoc, and eslint-plugin-json-canonical are all plain dependencies of this package (see package.json), so every consumer already has them the moment they depend on this package at all.
-//
-// The tri-state per feature threads straight into each builder's own `enabled` option -- true forces on (throwing if the underlying peer isn't resolvable), false forces off (skipping resolution entirely), undefined auto-detects (silently empty if unresolvable, or if an equivalent tool -- syncpack, for packageJsonKeyOrder, or a project's own .gitignore, for gitignore -- already does the job). One resolution pass per feature; no separate pre-check gate that would resolve twice.
+/**
+ * jsdocAndTsdoc, jsonCanonicalConfig, and stylisticCommentsConfig are all bundled unconditionally, the same way recommendedTypeChecked itself is. Unlike react/nextjs below, none of the three is a consumer framework choice with its own optional peer dependency to resolve: eslint-plugin-jsdoc, eslint-plugin-tsdoc, eslint-plugin-json-canonical, and the stylistic comment/JSX plugin stylistic-comments.ts wires in are all plain dependencies of this package (see package.json), so every consumer already has them the moment they depend on this package at all.
+ *
+ * The tri-state per feature threads straight into each builder's own `enabled` option: true forces on (throwing if the underlying peer isn't resolvable), false forces off (skipping resolution entirely), undefined auto-detects (silently empty if unresolvable, or if an equivalent tool, syncpack for packageJsonKeyOrder, or a project's own .gitignore for gitignore, already does the job). One resolution pass per feature; no separate pre-check gate that would resolve twice.
+ */
 export function exadevConfig(options: ExadevConfigOptions = {}, ...userConfigs: readonly TSESLint.FlatConfig.Config[]): PublicConfigArray {
   const built: ConfigArrayValue = [
     ...buildGitignoreConfig({ enabled: options.gitignore }),
     ...recommendedTypeChecked,
     ...jsdocAndTsdoc,
     ...jsonCanonicalConfig,
+    ...stylisticCommentsConfig,
     ...buildReactConfig({ enabled: options.react }),
     ...buildNextjsConfig({ enabled: options.nextjs }),
     ...buildPackageJsonKeyOrderConfig({ enabled: options.packageJsonKeyOrder }),
     ...(options.workspaceArchitecture !== undefined ? buildWorkspaceArchitectureConfig(options.workspaceArchitecture) : []),
     ...userConfigs,
   ];
+
   return toPublicConfigArray(built);
 }
 
