@@ -1,9 +1,15 @@
 import type { JSONRuleDefinition, JSONRuleVisitor } from '@eslint/json';
+
 import type { ObjectNode } from '@humanwhocodes/momoa';
+
 import { loadWorkspaceGraph, manifestRelativeDir, type WorkspaceRuleDeps } from './workspace-graph';
+
 import { readWorkspaceArchitectureOptions, resolveDependencyFields, workspaceArchitectureOptionsSchema, type WorkspaceArchitectureOptions } from './workspace-options';
+
 import { checkDependencies } from './workspace-checks';
+
 import { collectTopLevelDependencies, readDeclaredName, type NamedDependency } from './workspace-json-helpers';
+
 import { realWorkspaceFs } from './workspace-fs';
 
 /**
@@ -14,6 +20,7 @@ export function findDependencyEntry(dependencies: readonly NamedDependency[], na
   if (entry === undefined) {
     throw new Error(`Unreachable: no dependency entry named "${name}" among this manifest's own collected dependencies.`);
   }
+
   return entry;
 }
 
@@ -29,6 +36,7 @@ export type NoUphillDependencyRuleDefinition = JSONRuleDefinition<{
  */
 export function createNoUphillDependencyRule(deps: WorkspaceRuleDeps = {}): NoUphillDependencyRuleDefinition {
   const { loadGraph = loadWorkspaceGraph, fs = realWorkspaceFs } = deps;
+
   return {
     meta: {
       type: 'problem',

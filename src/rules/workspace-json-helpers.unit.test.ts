@@ -1,7 +1,11 @@
 import { parse } from '@humanwhocodes/momoa';
+
 import type { ObjectNode } from '@humanwhocodes/momoa';
+
 import { describe, expect, it } from 'vitest';
+
 import { collectTopLevelDependencies, readDeclaredName } from './workspace-json-helpers';
+
 import { getMemberKeyName } from './json-member-key';
 
 function rootObjectOf(json: string): ObjectNode {
@@ -9,6 +13,7 @@ function rootObjectOf(json: string): ObjectNode {
   if (document.body.type !== 'Object') {
     throw new Error('Unreachable: every fixture here is a top-level JSON object.');
   }
+
   return document.body;
 }
 

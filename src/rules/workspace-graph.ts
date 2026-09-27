@@ -1,10 +1,17 @@
 import { dirname, join, relative, resolve, sep } from 'node:path';
+
 import { realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
+
 import { resolveWorkspacePackageDirs } from './workspace-glob';
+
 import { splitPathSegments } from './workspace-path';
+
 import { readWorkspacePackages } from './workspace-yaml';
+
 import { resolveDependencyFields, type GroupSpec, type WorkspaceArchitectureOptions } from './workspace-options';
+
 import { assertIsError, jsonParseContext } from './workspace-errors';
+
 import { isRecord } from '../is-record';
 
 /**
@@ -73,12 +80,14 @@ export function deriveRank(declaredName: string | undefined, group: GroupSpec, o
  */
 function sliceBySegment(relativeDir: string, group: GroupSpec, segmentIndex: number): string | undefined {
   const rest = splitPathSegments(relativeDir).slice(groupPrefixSegments(group).length);
+
   return rest[segmentIndex];
 }
 
 // Strips a leading npm scope ("@scope/") from a declared package name before name-prefix slice matching: a scoped workspace's own declared names ("@x/store-cli") carry a prefix that is never part of any slice value, so matching the full declared name would never find a prefix at all under a scoped naming convention. Exported for direct testing of the anchor (a scope must start the name, not merely appear somewhere inside it) and the "one or more" scope-name length (a real scope is rarely a single character) independently of sliceByNamePrefix's own longest-match behaviour.
 export function stripScope(declaredName: string): string {
   const scopeMatch = /^@[^/]+\//u.exec(declaredName);
+
   return scopeMatch === null ? declaredName : declaredName.slice(scopeMatch[0].length);
 }
 
@@ -88,6 +97,7 @@ export function stripScope(declaredName: string): string {
 function sliceByNamePrefix(declaredName: string, knownSlices: ReadonlySet<string>): string | undefined {
   const unscoped = stripScope(declaredName);
   const matches = [...knownSlices].filter((candidate) => unscoped === candidate || unscoped.startsWith(`${candidate}-`));
+
   return matches.sort((a, b) => b.length - a.length)[0];
 }
 
@@ -154,6 +164,7 @@ export function resolveWorkspaceRoot(fs: WorkspaceFs, filename: string, rootOpti
 export function manifestRelativeDir(fs: WorkspaceFs, root: string, filename: string): string {
   const realRoot = fs.realpathSync(resolve(root));
   const realManifestDir = fs.realpathSync(dirname(resolve(filename)));
+
   return relative(realRoot, realManifestDir).split(sep).join('/');
 }
 
@@ -162,6 +173,7 @@ function readPackagesFromYaml(fs: WorkspaceFs, root: string): readonly string[] 
   if (!fs.existsSync(yamlPath)) {
     throw new Error(`@exadev/eslint-config: no "pnpm-workspace.yaml" found at workspace root "${root}", and no "packages" option was given.`);
   }
+
   return readWorkspacePackages(fs.readFileSync(yamlPath));
 }
 
@@ -175,6 +187,7 @@ export function resolveWorkspacePackagePatterns(fs: WorkspaceFs, root: string, p
       `@exadev/eslint-config: the resolved workspace "packages" glob list is empty (root "${root}"), which would make every workspace-architecture rule a silent no-op. Add a "packages:" block sequence to pnpm-workspace.yaml, or pass a non-empty "packages" rule option.`,
     );
   }
+
   return patterns;
 }
 
@@ -208,6 +221,7 @@ function collectCandidates(fs: WorkspaceFs, root: string, options: WorkspaceArch
     const declaredName = manifest.name ?? relativeDir;
     candidates.push({ relativeDir, group, declaredName, name: manifest.name, dependencyNames: manifest.dependencyNames });
   }
+
   return candidates;
 }
 
@@ -219,6 +233,7 @@ function collectKnownSlices(candidates: readonly Candidate[]): ReadonlySet<strin
     const value = sliceBySegment(candidate.relativeDir, candidate.group, slice.segment);
     if (value !== undefined) knownSlices.add(value);
   }
+
   return knownSlices;
 }
 
@@ -226,6 +241,7 @@ function deriveSlice(candidate: Candidate, knownSlices: ReadonlySet<string>): st
   const { slice } = candidate.group;
   if (slice === undefined) return undefined;
   if ('segment' in slice) return sliceBySegment(candidate.relativeDir, candidate.group, slice.segment);
+
   // A 'namePrefix' slice matches a KNOWN slice value against the package's own declared name; a nameless package (candidate.name undefined, pnpm allows omitting it) has no name for that prefix match to run against at all, so it resolves to no slice, rather than matching against its declaredName's own relativeDir fallback the way deriveRank's nameRanks would otherwise be tempted to (the same inconsistency this candidate.name/declaredName split exists to prevent).
   return candidate.name === undefined ? undefined : sliceByNamePrefix(candidate.name, knownSlices);
 }
@@ -265,9 +281,9 @@ export function buildWorkspaceGraph(fs: WorkspaceFs, root: string, options: Work
   return { root, packagesByName, dependencyNamesByName };
 }
 
-// Keyed by root plus the resolved options themselves, not a single module-level variable: the monorepo-template original's own cache ignored which root it was first built from, so a second, genuinely different workspace scanned in the same process (a monorepo with more than one pnpm-workspace.yaml, or a test suite exercising several fixture trees) silently kept serving the first tree's graph. JSON.stringify is not a canonical serialisation (key order could in principle differ between two logically-identical option objects built by different code paths), but that only costs a cache miss, never a wrong answer: a miss just rebuilds the graph.
-//
-// KNOWN LIMITATION, inherited unchanged from both prior local implementations this package supersedes (Novus hive's and the monorepo-template's own workspace rule sets): once built for a given root+options key, an entry is never invalidated for the rest of the process's life. A long-running ESLint process (an editor's language server, most notably) that edits a package.json's own declared name or dependencies after that root+options key's first lint keeps serving the STALE graph built before the edit; a rename in particular goes silently unnoticed (`graph.packagesByName.get(declared.name)` simply misses the new name), so every workspace-architecture rule quietly stops checking that package until the process restarts or resetWorkspaceGraphCache is called. A real fix needs more than a per-manifest mtime check: a NEW or REMOVED package directory changes which manifests exist at all, which only a fresh directory-glob rescan (resolveWorkspacePackageDirs) can detect, and the WorkspaceFs seam this module is built on has no stat/mtime operation of its own to build a narrower check on top of. Tracked here as a known limitation rather than solved by half a fix.
+/* Keyed by root plus the resolved options themselves, not a single module-level variable: the monorepo-template original's own cache ignored which root it was first built from, so a second, genuinely different workspace scanned in the same process (a monorepo with more than one pnpm-workspace.yaml, or a test suite exercising several fixture trees) silently kept serving the first tree's graph. JSON.stringify is not a canonical serialisation (key order could in principle differ between two logically-identical option objects built by different code paths), but that only costs a cache miss, never a wrong answer: a miss just rebuilds the graph.
+   
+   KNOWN LIMITATION, inherited unchanged from both prior local implementations this package supersedes (Novus hive's and the monorepo-template's own workspace rule sets): once built for a given root+options key, an entry is never invalidated for the rest of the process's life. A long-running ESLint process (an editor's language server, most notably) that edits a package.json's own declared name or dependencies after that root+options key's first lint keeps serving the STALE graph built before the edit; a rename in particular goes silently unnoticed (`graph.packagesByName.get(declared.name)` simply misses the new name), so every workspace-architecture rule quietly stops checking that package until the process restarts or resetWorkspaceGraphCache is called. A real fix needs more than a per-manifest mtime check: a NEW or REMOVED package directory changes which manifests exist at all, which only a fresh directory-glob rescan (resolveWorkspacePackageDirs) can detect, and the WorkspaceFs seam this module is built on has no stat/mtime operation of its own to build a narrower check on top of. Tracked here as a known limitation rather than solved by half a fix. */
 const graphCache = new Map<string, WorkspaceGraph>();
 
 function cacheKey(root: string, options: WorkspaceArchitectureOptions): string {
@@ -281,6 +297,7 @@ export function getWorkspaceGraph(fs: WorkspaceFs, root: string, options: Worksp
 
   const graph = buildWorkspaceGraph(fs, root, options);
   graphCache.set(key, graph);
+
   return graph;
 }
 
@@ -294,6 +311,7 @@ export type LoadWorkspaceGraphFn = (filename: string, options: WorkspaceArchitec
 /** The production default LoadWorkspaceGraphFn: resolves the root and package globs from the real filesystem, then loads (or builds) the graph through the shared cache above. Rule tests inject a stub returning a fabricated graph directly instead, so a rule's own reporting logic is exercised with zero real filesystem I/O. */
 export function loadWorkspaceGraph(filename: string, options: WorkspaceArchitectureOptions): WorkspaceGraph {
   const root = resolveWorkspaceRoot(realWorkspaceFs, filename, options.root);
+
   return getWorkspaceGraph(realWorkspaceFs, root, options);
 }
 

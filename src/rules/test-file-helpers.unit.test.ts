@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { classifyTestFile, TEST_FILE_EXTENSIONS } from './test-file-helpers';
 
 describe('TEST_FILE_EXTENSIONS', () => {

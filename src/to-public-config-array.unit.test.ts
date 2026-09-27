@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+
 import type { ConfigArrayValue } from './config-types';
+
 import { toPublicConfigArray } from './to-public-config-array';
 
 describe('toPublicConfigArray', () => {

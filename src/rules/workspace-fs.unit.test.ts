@@ -1,5 +1,7 @@
 import { realpathSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
+
 import { listSubdirectories, realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
 
 function fakeFs(tree: Record<string, readonly string[]>): WorkspaceFs {
@@ -11,6 +13,7 @@ function fakeFs(tree: Record<string, readonly string[]>): WorkspaceFs {
     readdirSync: (path) => {
       const entries = tree[path];
       if (entries === undefined) throw new Error(`ENOENT: ${path}`);
+
       return entries.map((name) => ({ name, isDirectory: () => !name.includes('.') }));
     },
     realpathSync: () => {

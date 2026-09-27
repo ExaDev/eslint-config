@@ -21,5 +21,6 @@ export function classifyTestFile(filename: string): TestFileClassification {
   if (extension === undefined || !TEST_FILE_EXTENSIONS.includes(extension) || (testOrSpec !== 'test' && testOrSpec !== 'spec')) {
     return { isTestFile: false, kind: undefined };
   }
+
   return { isTestFile: true, kind: segments.length >= SEGMENT_COUNT_WITH_A_REAL_KIND_TAG ? segments.at(KIND_INDEX) : undefined };
 }

@@ -1,8 +1,13 @@
 import type { Rule } from 'eslint';
+
 import { RuleTester } from 'eslint';
+
 import tseslint from 'typescript-eslint';
+
 import { describe, expect, it } from 'vitest';
+
 import type { ExportSpecifierNode, ImportDeclarationNode, ReferenceIdentifier, SyntaxElement } from './barrel-helpers';
+
 import { importIsOnlyUsedByThisExport, removeListMember } from './no-non-barrel-reexport';
 
 // A bare (source-less) export specifier's own `local` is always an Identifier in real syntax; this narrows the wider ExportSpecifierNode['local'] type (Identifier | Literal, the latter only ever produced by a WITH-source re-export) down to what this specific probe fixture always actually captures.
@@ -10,6 +15,7 @@ function asIdentifierOrThrow(node: ExportSpecifierNode['local']): ReferenceIdent
   if (node.type !== 'Identifier') {
     throw new Error(`Unreachable: expected an Identifier, got ${node.type} instead.`);
   }
+
   return node;
 }
 
@@ -17,6 +23,7 @@ function definedOrThrow<T>(value: T | undefined): T {
   if (value === undefined) {
     throw new Error('Unreachable: expected the probe rule below to have captured this value.');
   }
+
   return value;
 }
 
@@ -46,6 +53,7 @@ const probe: Rule.RuleModule = {
           message: 'probe',
           fix(fixer) {
             realFixer = fixer;
+
             return null;
           },
         });

@@ -1,9 +1,15 @@
 import type { JSONRuleDefinition, JSONRuleVisitor } from '@eslint/json';
+
 import type { ObjectNode } from '@humanwhocodes/momoa';
+
 import { loadWorkspaceGraph, manifestRelativeDir, type WorkspaceRuleDeps } from './workspace-graph';
+
 import { readWorkspaceArchitectureOptions, workspaceArchitectureOptionsSchema, type GroupSpec, type WorkspaceArchitectureOptions } from './workspace-options';
+
 import { expectedPackageName } from './workspace-checks';
+
 import { readDeclaredName } from './workspace-json-helpers';
+
 import { realWorkspaceFs } from './workspace-fs';
 
 /**
@@ -14,6 +20,7 @@ export function findGroupSpec(groups: readonly GroupSpec[], groupName: string): 
   if (group === undefined) {
     throw new Error(`Unreachable: the workspace graph resolved group "${groupName}", which is not among this same rule invocation's own "groups" option.`);
   }
+
   return group;
 }
 
@@ -31,6 +38,7 @@ export type PackageNameMirrorsPathRuleDefinition = JSONRuleDefinition<{
  */
 export function createPackageNameMirrorsPathRule(deps: WorkspaceRuleDeps = {}): PackageNameMirrorsPathRuleDefinition {
   const { loadGraph = loadWorkspaceGraph, fs = realWorkspaceFs } = deps;
+
   return {
     meta: {
       type: 'problem',
@@ -70,6 +78,7 @@ export function createPackageNameMirrorsPathRule(deps: WorkspaceRuleDeps = {}): 
 
           if (declared === undefined) {
             context.report({ loc: node.loc, messageId: 'missingName', data: { dir: self.relativeDir, expected } });
+
             return;
           }
 

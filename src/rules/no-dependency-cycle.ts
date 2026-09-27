@@ -1,9 +1,15 @@
 import type { JSONRuleDefinition, JSONRuleVisitor } from '@eslint/json';
+
 import type { ObjectNode } from '@humanwhocodes/momoa';
+
 import { loadWorkspaceGraph, manifestRelativeDir, type WorkspaceRuleDeps } from './workspace-graph';
+
 import { readWorkspaceArchitectureOptions, resolveDependencyFields, workspaceArchitectureOptionsSchema, type WorkspaceArchitectureOptions } from './workspace-options';
+
 import { dependencyPathExists } from './workspace-checks';
+
 import { collectTopLevelDependencies, readDeclaredName } from './workspace-json-helpers';
+
 import { realWorkspaceFs } from './workspace-fs';
 
 export type NoDependencyCycleMessageIds = 'cycle';
@@ -20,6 +26,7 @@ export type NoDependencyCycleRuleDefinition = JSONRuleDefinition<{
  */
 export function createNoDependencyCycleRule(deps: WorkspaceRuleDeps = {}): NoDependencyCycleRuleDefinition {
   const { loadGraph = loadWorkspaceGraph, fs = realWorkspaceFs } = deps;
+
   return {
     meta: {
       type: 'problem',

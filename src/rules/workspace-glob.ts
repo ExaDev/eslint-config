@@ -1,5 +1,7 @@
 import { join } from 'node:path';
+
 import { listSubdirectories, type WorkspaceFs } from './workspace-fs';
+
 import { requireChar, splitPathSegments } from './workspace-path';
 
 // Reimplements pnpm-workspace.yaml's own "packages:" glob dialect directly against the real directory tree, rather than via Node's fs.globSync: that API only stabilised in Node 22, below this package's own >=20 engines floor. The current pnpm CLI (verified against the installed 12.4.1 binary: it is a compiled Rust executable, not the older TypeScript CLI, and its strings hold no "fast-glob" at all) does not literally resolve these globs through the fast-glob JS library; what stays true, checked against the same binary's own embedded exclusion string, is the documented DIALECT (https://pnpm.io/pnpm-workspace_yaml) this matcher follows: brace expansion ('{core,lib}/*' is two patterns, not one literal path), a wildcard segment never matching a name starting with "." ("A '*' never matches a name beginning with a dot, so 'packages/*' skips 'packages/.cache'"), and a "./" prefix or "." / ".." segment normalising the same way path.posix.normalize would ("./packages/*" and "packages//*" select the same projects). Every "packages:" glob is a directory glob (it names where a package's own directory lives, never a file), so this matcher only ever walks real subdirectories: '**' matches zero or more whole path segments; every other segment (a bare '*', a '[...]' character class, a literal name, or a partial pattern mixing literal text with '*'/'?'/'[...]' such as 'app-*' or '[a-z]-web') is matched against one real directory name at a time via segmentToRegExp below. node_modules and bower_components are never descended into or matched, mirroring the exact two-entry exclusion list ("**/node_modules/**", "**/bower_components/**") the installed pnpm binary itself embeds: a hoisted or npm-nested node_modules, or a bower_components left over from an older tool, is real content in the tree, never a workspace package.
@@ -10,7 +12,9 @@ const REGEXP_SPECIAL_CHARS = /[.+^${}()|\]\\]/gu;
 // The FULL set of regex metacharacters, unlike REGEXP_SPECIAL_CHARS above: an escaped character (the one immediately after a glob "\\") deliberately bypasses '*'/'?'/'['s own dedicated branches, specifically so an escaped wildcard never carries its usual meaning, so it needs '*', '?' and '[' escaped here too, characters the default branch's own escape set can safely omit only because its own callers never let one of them reach it un-escaped.
 const ESCAPE_ANY_REGEXP_CHAR = /[.*+?^${}()|[\]\\]/gu;
 
-// Builds the one-segment matcher behind every non-'**' pattern segment: '*' becomes zero-or-more characters, '?' becomes exactly one, a balanced '[...]' becomes a regex character class (a leading '!' or '^' negated the glob way, translated to the single '^' regex negation understands), a backslash escapes the very next character (turning off whatever special meaning it would otherwise carry), and every other character is escaped so a literal segment (no wildcard or class at all) matches only its own exact name, same as before this function existed. Exported so its own 'u' flag (needed for the same reason deriveRank's nameRanks patterns carry one, see workspace-graph.unit.test.ts) can be asserted directly, independent of any particular directory name this module is ever exercised against.
+/**
+ * Builds the one-segment matcher behind every non-'**' pattern segment: '*' becomes zero-or-more characters, '?' becomes exactly one, a balanced '[...]' becomes a regex character class (a leading '!' or '^' negated the glob way, translated to the single '^' regex negation understands), a backslash escapes the very next character (turning off whatever special meaning it would otherwise carry), and every other character is escaped so a literal segment (no wildcard or class at all) matches only its own exact name, same as before this function existed. Exported so its own 'u' flag (needed for the same reason deriveRank's nameRanks patterns carry one, see workspace-graph.unit.test.ts) can be asserted directly, independent of any particular directory name this module is ever exercised against.
+ */
 export function segmentToRegExp(segment: string): RegExp {
   let source = '';
   for (let index = 0; index < segment.length; ) {
@@ -60,6 +64,7 @@ export function segmentToRegExp(segment: string): RegExp {
     source += char.replace(REGEXP_SPECIAL_CHARS, '\\$&');
     index += 1;
   }
+
   return new RegExp(`^${source}$`, 'u');
 }
 
@@ -85,6 +90,7 @@ function walkPattern(fs: WorkspaceFs, root: string, segments: readonly string[],
     for (const child of listRealSubdirectories(fs, currentDir).filter((name) => !name.startsWith('.'))) {
       results.push(...walkPattern(fs, root, segments, [...matchedSoFar, child]));
     }
+
     return results;
   }
 
@@ -95,6 +101,7 @@ function walkPattern(fs: WorkspaceFs, root: string, segments: readonly string[],
   for (const candidate of candidates) {
     results.push(...walkPattern(fs, root, rest, [...matchedSoFar, candidate]));
   }
+
   return results;
 }
 
@@ -108,6 +115,7 @@ function findMatchingBrace(pattern: string, openIndex: number): number {
       if (depth === 0) return index;
     }
   }
+
   return -1;
 }
 
@@ -126,6 +134,7 @@ export function splitTopLevelAlternatives(text: string): readonly string[] {
     }
   }
   alternatives.push(text.slice(start));
+
   return alternatives;
 }
 
@@ -155,6 +164,7 @@ export function expandBraces(pattern: string): readonly string[] {
       }
     }
   }
+
   return results;
 }
 
@@ -169,6 +179,7 @@ function normalizeGlobSegments(segments: readonly string[]): readonly string[] {
     }
     normalized.push(segment);
   }
+
   return normalized;
 }
 
@@ -183,6 +194,7 @@ export function expandGlob(fs: WorkspaceFs, root: string, pattern: string): read
       matches.add(match);
     }
   }
+
   return [...matches];
 }
 

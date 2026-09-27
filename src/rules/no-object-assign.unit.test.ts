@@ -1,6 +1,9 @@
 import { RuleTester } from '@typescript-eslint/rule-tester';
+
 import { describe, expect, it } from 'vitest';
+
 import tseslint from 'typescript-eslint';
+
 import rule from './no-object-assign';
 
 describe('rule metadata', () => {
@@ -37,8 +40,10 @@ ruleTester.run('no-object-assign', rule, {
     // A user-defined object merely named `Object` calling its own `.assign` is not the global — this rule matches syntactically (like the rest of this plugin's rules), so only the exact `Object.assign` shape is flagged; a differently-named or non-member-expression call is out of scope by construction.
     'Objects.assign(target, source);',
     'Object.freeze(target);',
-    'Object.assign;', // reference, not a call
-    'Object["assign"](target, source);', // computed member access — out of scope for this syntactic check
+    // reference, not a call
+    'Object.assign;',
+    // computed member access — out of scope for this syntactic check
+    'Object["assign"](target, source);',
     // A private class field happens to share the name "assign" — non-computed member access syntax only ever carries an Identifier or a PrivateIdentifier as its property, and this rule's own callee.property.type check requires an Identifier specifically, so a PrivateIdentifier property (whose own `.name` is still the bare string "assign", with no leading `#`) must not be mistaken for the genuine `Object.assign` shape.
     'class C { #assign() {} m() { Object.#assign(); } }',
   ],

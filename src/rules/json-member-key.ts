@@ -1,4 +1,6 @@
-// The narrow shape a member's own key name is actually read through: a String node's runtime-relevant fields (its type discriminant and its value), not momoa's full StringNode (which also carries loc and range). Deliberately narrower than StringNode so a test fixture can satisfy it with a plain object literal, and honest about what isStringNamed's own `.type` check can actually prove: a full StringNode claim from a check that only reads `.type` would be false.
+/**
+ * The narrow shape a member's own key name is actually read through: a String node's runtime-relevant fields (its type discriminant and its value), not momoa's full StringNode (which also carries loc and range). Deliberately narrower than StringNode so a test fixture can satisfy it with a plain object literal, and honest about what isStringNamed's own `.type` check can actually prove: a full StringNode claim from a check that only reads `.type` would be false.
+ */
 export interface StringNamed {
   readonly type: 'String';
   readonly value: string;
@@ -16,5 +18,6 @@ export function getMemberKeyName(member: { readonly name: { readonly type: strin
   if (!isStringNamed(name)) {
     throw new Error(`Unreachable: JSON member names are only read under json/json or json/jsonc, where an unquoted (Identifier) member name is a parse error, got a "${name.type}" name instead.`);
   }
+
   return name.value;
 }

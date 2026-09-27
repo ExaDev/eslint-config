@@ -1,5 +1,7 @@
 import { createRequire } from 'node:module';
+
 import type { TSESLint } from '@typescript-eslint/utils';
+
 import { isRecord } from './is-record';
 
 // A specifier resolved this way is never a string literal at the call site — always a runtime-computed argument — so no bundler's static import graph can see or attempt to resolve it. This is what lets eslint-plugin-react/eslint-plugin-react-hooks/eslint-plugin-jsx-a11y/@next/eslint-plugin-next stay genuinely optional: unlike typescript-eslint (required unconditionally the moment anything is imported from this package's root module, see recommended-type-checked.ts's own comment on that cost), these four are the first genuinely optional dependency this package has ever had. createRequire, not a dynamic import(), is what makes "attempt to load, tolerate absence" possible while keeping every existing export a plain, synchronously-available array — import() always returns a Promise, which would force every consumer into top-level await just to spread this package's default export, a real ergonomics regression for zero benefit.
@@ -7,7 +9,9 @@ const nodeRequire = createRequire(import.meta.url);
 
 export type RequireFn = (specifier: string) => unknown;
 
-// Never generic (no tryRequire<T>()): returning unknown unconditionally forces every call site to narrow via a real type guard before use, rather than letting a caller silently assert away the uncertainty this function exists to represent. Node's own NodeRequire call signature returns `any`; assigning that into a return position explicitly typed `unknown` needs no assertion, since `any` flows into `unknown` implicitly under this repo's own strict settings.
+/**
+ * Never generic (no tryRequire<T>()): returning unknown unconditionally forces every call site to narrow via a real type guard before use, rather than letting a caller silently assert away the uncertainty this function exists to represent. Node's own NodeRequire call signature returns `any`; assigning that into a return position explicitly typed `unknown` needs no assertion, since `any` flows into `unknown` implicitly under this repo's own strict settings.
+ */
 export function tryRequire(specifier: string, requireFn: RequireFn = nodeRequire): unknown {
   try {
     return requireFn(specifier);
@@ -21,10 +25,13 @@ function normalizeLegacyParserOptions(record: Record<string, unknown>): Record<s
   if (!('parserOptions' in record)) return record;
   const { parserOptions, languageOptions, ...rest } = record;
   const existingLanguageOptions = isRecord(languageOptions) ? languageOptions : {};
+
   return { ...rest, languageOptions: { ...existingLanguageOptions, parserOptions } };
 }
 
-// Walks `path` through `module` one property at a time, using isRecord at each intermediate hop, so a missing or non-object-shaped step anywhere along the way (a renamed export, an unexpected major-version restructure upstream) fails closed — undefined, not a thrown TypeError reaching a consumer's own lint run.
+/**
+ * Walks `path` through `module` one property at a time, using isRecord at each intermediate hop, so a missing or non-object-shaped step anywhere along the way (a renamed export, an unexpected major-version restructure upstream) fails closed — undefined, not a thrown TypeError reaching a consumer's own lint run.
+ */
 export function readFlatConfig(module: unknown, path: readonly string[]): TSESLint.FlatConfig.Config | undefined {
   let current: unknown = module;
   for (const key of path) {
@@ -32,6 +39,7 @@ export function readFlatConfig(module: unknown, path: readonly string[]): TSESLi
     current = current[key];
   }
   if (!isRecord(current)) return undefined;
+
   // TSESLint.FlatConfig.Config's own fields are all optional, so a plain Record<string, unknown> — everything normalizeLegacyParserOptions can return — is already directly assignable to it: no further narrowing, guard, or assertion needed.
   return normalizeLegacyParserOptions(current);
 }

@@ -1,5 +1,7 @@
 import type { ArrayNode, ElementNode, MemberNode, ObjectNode, StringNode, ValueNode } from '@humanwhocodes/momoa';
+
 import type { JSONRuleDefinition, JSONRuleVisitor } from '@eslint/json';
+
 import { getMemberKeyName } from './json-member-key';
 
 export type PackageJsonKeyOrderMessageIds = 'outOfOrder';
@@ -29,6 +31,7 @@ export function at<T>(array: readonly T[], index: number): T {
   if (value === undefined) {
     throw new Error(`Unreachable: index ${String(index)} is out of bounds for an array of length ${String(array.length)}.`);
   }
+
   return value;
 }
 
@@ -38,6 +41,7 @@ type CharCategory = 0 | 1 | 2;
 function categorize(char: string): CharCategory {
   if (char >= '0' && char <= '9') return 1;
   if (/[a-z]/iu.test(char)) return 2;
+
   return 0;
 }
 
@@ -56,6 +60,7 @@ export function compareSyncpackKey(a: string, b: string): number {
     if (foldedA < foldedB) return -1;
     if (foldedA > foldedB) return 1;
   }
+
   return a.length - b.length;
 }
 
@@ -68,6 +73,7 @@ export function isValidTopLevelOrder(prev: string, curr: string, sortFirst: read
   if (prevIndex !== -1 && currIndex !== -1) return prevIndex < currIndex;
   if (prevIndex !== -1) return true;
   if (currIndex !== -1) return false;
+
   return compareSyncpackKey(prev, curr) <= 0;
 }
 
@@ -83,11 +89,13 @@ export function isValidSortAzOrder(prev: string, curr: string): boolean {
  */
 export function computeOrderPermutation(keys: readonly string[], isValidOrder: (prev: string, curr: string) => boolean): number[] {
   const indices = keys.map((_, index) => index);
+
   return indices
     .map((index) => ({ key: at(keys, index), index }))
     .sort((a, b) => {
       // Returning 0 for a genuine tie relies on Array.prototype.sort's own ES2019 stability guarantee to keep the pair in original relative order — no need to break the tie by hand via the two entries' own indices.
       if (isValidOrder(a.key, b.key) && isValidOrder(b.key, a.key)) return 0;
+
       return isValidOrder(a.key, b.key) ? -1 : 1;
     })
     .map((entry) => entry.index);
@@ -110,6 +118,7 @@ export function rangeOf(node: Ranged): readonly [number, number] {
   if (node.range === undefined) {
     throw new Error('Unreachable: every node reaching this function was produced by a JSON language that always requests range tracking.');
   }
+
   return node.range;
 }
 
@@ -121,6 +130,7 @@ export function objectParentOrThrow(parent: ObjectParent | undefined): ObjectPar
   if (parent === undefined) {
     throw new Error('Unreachable: the Object visitor is never invoked for the traversal root, which is always the Document node.');
   }
+
   return parent;
 }
 
@@ -175,6 +185,7 @@ export const packageJsonKeyOrder: PackageJsonKeyOrderRuleDefinition = {
     function hasAdjacentComment(node: MemberNode | ValueNode): boolean {
       const before = sourceCode.getTokenBefore(node, { includeComments: true });
       const after = sourceCode.getTokenAfter(node, { includeComments: true });
+
       return (before !== null && commentTypes.has(before.type)) || (after !== null && commentTypes.has(after.type));
     }
 
@@ -183,10 +194,12 @@ export const packageJsonKeyOrder: PackageJsonKeyOrderRuleDefinition = {
       // `nodes.slice(0, -1)` drops only the last element, so `nodes[index + 1]` is always within bounds for every remaining index.
       const separators = nodes.slice(0, -1).map((node, index) => {
         const next = at(nodes, index + 1);
+
         return sourceCode.text.slice(rangeOf(node)[1], rangeOf(next)[0]);
       });
       // A non-identity permutation (the only case reaching this function) always has at least two entries, so `.reduce()` without an initial value — starting the accumulator at the first entry's own text and folding in every subsequent one — never hits the empty-array case `.reduce()` would otherwise throw on.
       const texts = permutation.map((originalIndex) => sourceCode.getText(at(nodes, originalIndex)));
+
       return texts.reduce((result, text, position) => `${result}${at(separators, position - 1)}${text}`);
     }
 
@@ -217,6 +230,7 @@ export const packageJsonKeyOrder: PackageJsonKeyOrderRuleDefinition = {
           const firstRange = at(ranges, 0);
           const lastRange = at(ranges, ranges.length - 1);
           const rewritten = buildReorderedText(nodes, permutation);
+
           return fixer.replaceTextRange([firstRange[0], lastRange[1]], rewritten);
         },
       });
@@ -246,6 +260,7 @@ export const packageJsonKeyOrder: PackageJsonKeyOrderRuleDefinition = {
         const parent = objectParentOrThrow(rawParent);
         if (parent.type === 'Document') {
           checkMembers(node.members, (prev, curr) => isValidTopLevelOrder(prev, curr, sortFirst));
+
           return;
         }
         if (parent.type === 'Member') {

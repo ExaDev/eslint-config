@@ -1,6 +1,9 @@
 import type { Linter } from 'eslint';
+
 import { Linter as LinterClass } from 'eslint';
+
 import { describe, expect, it } from 'vitest';
+
 import { buildReactConfig, JSX_FILE_PATTERNS } from './react';
 
 const throwingRequireFn = () => {
@@ -93,6 +96,7 @@ describe('buildReactConfig — file-glob scoping proof (the false-positive-activ
       { files: ['**'], languageOptions: { sourceType: 'module', ecmaVersion: 2022, parserOptions: { ecmaFeatures: { jsx: true } } } },
       ...buildReactConfig(),
     ] as Linter.Config[];
+
     return linter.verify(code, config, filename).map((message) => message.ruleId);
   }
 

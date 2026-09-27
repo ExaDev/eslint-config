@@ -1,20 +1,21 @@
 import { AST_NODE_TYPES, AST_TOKEN_TYPES, ESLintUtils, type TSESLint, type TSESTree } from '@typescript-eslint/utils';
+
 import { firstTokenOrThrow } from './ts-node-guards';
 
-// TypeScript disallows a required parameter after an optional one in a single declaration (compiler error 1016), so every optional (`?`-marked or default-valued) parameter in a valid signature is already part of one contiguous run at the tail of the parameter list, immediately before an optional trailing rest parameter if one is present — there is no "optional then required" interleaving to worry about. A caller who needs only the LAST parameter in that run must still pass `undefined` for every earlier one (`new WireMeshTransport(a, b, undefined, undefined, undefined, undefined, undefined, undefined, undefined, gatewayTrust)` is the real motivating case this rule was written for). `max-params` alone cannot catch this: it only fires once the *total* parameter count crosses a threshold, but the actual pain is having 2+ *trailing optional* parameters at all, independent of how many required parameters precede them — a 3-parameter function with 2 trailing optional ones already has this problem. This rule fires once a function/method/constructor's trailing optional run reaches a configurable length (`{ minTrailingOptional }`, default 2) and offers to bundle that run into a single destructured `options` parameter.
-//
-// `hasSuggestions: true`, not `fixable: 'code'` — this is the key call. `fixable` is applied silently by `--fix` with no review gate. no-pointless-reassignment.ts's own history (a far simpler identifier-swap fixer) already shipped real bugs this way (code that didn't parse, a deleted load-bearing type annotation), and this rule's own fixer is riskier still: it rewrites a parameter list AND inserts a new statement into the function body. prefer-numeric-sort-compare.ts already uses `hasSuggestions` in this exact package for the identical reason — a suggestion the developer explicitly reviews and accepts is appropriate; silently rewriting behaviour on every save is not. Call sites are deliberately never rewritten: the signature edit alone turns every stale positional call site into a real TypeScript compile error, which is the correct, sufficient signal for a human/agent to fix each one — ESLint's own fixer can only ever edit the single file it is linting, so it could never safely coordinate an edit to the declaration with edits to call sites scattered across other files in the same pass anyway.
-//
-// Every param-list/type-text extraction below uses a verbatim `sourceCode.getText()` slice of the parameter's own type-annotation node, never a checker-based reconstruction (a printer, not a source-text echo, that can silently diverge from what was actually written) — this is why the rule needs no type-checker access at all: every check it performs (is this parameter optional, does it already carry an explicit type annotation, is it a parameter property, is it decorated) is answerable from the parameter's own TSESTree shape, and the fixer only ever echoes source text it already has. Because of that, it is registered in BOTH `plugin.configs.recommended` (src/plugin.ts) and the type-checked bundle (src/recommended-type-checked.ts), matching `no-mutable-union-array-param`/`prefer-readonly-array-param`/`test-file-kind`/`max-params` — unlike its own `prefer-*` siblings `prefer-readonly-object-param` and `prefer-numeric-sort-compare`, which genuinely need the checker (to resolve a parameter's own property types, and to confirm an array's element type, respectively) and so cannot be offered in the lighter, non-type-checked bundle at all.
-//
-// Every bail-out below still reports the diagnostic (a caller still deserves to be told about the anti-pattern) but withholds the suggestion (`suggest` omitted from the report) whenever collapsing the run mechanically would be unsafe or lossy:
-// - a parameter property (`constructor(private x?: T)`) in the run — a parameter property auto-assigns `this.x` as a side effect of being a parameter at all; a destructured local binding cannot replicate that assignment.
-// - a parameter in the run with no simple resolvable name and explicit type annotation — covers a destructured parameter (`{ a }: T = {}`, which has no single bindable name to move into the new destructure) and a parameter genuinely missing its own type annotation (including one typed only through an outer, separately-declared function-type alias — e.g. `const h: Handler = (a, b?, c?) => {...}` — since the arrow's own parameters carry no annotation of their own to echo into the new options type).
-// - a decorated parameter (`@Body() x?: T`) — a parameter decorator's own runtime behaviour is defined against that exact parameter's position and identity; moving it into a destructured object property changes what it decorates.
-// - a rest parameter anywhere in the full parameter list (not just the trailing run) — the fixer's insertion point assumes the new `options` parameter is safe to treat as an ordinary parameter, and a trailing rest parameter after it is an added interaction this rule does not attempt to reason about.
-// - an arrow function with an expression body, or any function-like shape with no `BlockStatement` body at all (a declaration-only ambient/overload signature, an interface method signature, a call/construct signature, a standalone function type, or an abstract/ambient class method) — there is no block to insert the destructuring statement into. This is also exactly what makes an ambient `.d.ts` signature (which always parses as one of these body-less shapes) still reported but never fixed, with no separate filename-based check needed.
-// - a `@param` JSDoc tag naming any parameter in the run — an existing doc comment describing that parameter by name would go stale the moment the parameter itself disappears from the signature.
-// - a parameter or function-scope-local variable already named `options` — colliding with the synthetic `options` parameter this rule introduces. A parameter that is ITSELF part of the run being collapsed is exempted from this check (it disappears in the same edit), but any other same-named binding is not.
+/* TypeScript disallows a required parameter after an optional one in a single declaration (compiler error 1016), so every optional (`?`-marked or default-valued) parameter in a valid signature is already part of one contiguous run at the tail of the parameter list, immediately before an optional trailing rest parameter if one is present — there is no "optional then required" interleaving to worry about. A caller who needs only the LAST parameter in that run must still pass `undefined` for every earlier one (`new WireMeshTransport(a, b, undefined, undefined, undefined, undefined, undefined, undefined, undefined, gatewayTrust)` is the real motivating case this rule was written for). `max-params` alone cannot catch this: it only fires once the *total* parameter count crosses a threshold, but the actual pain is having 2+ *trailing optional* parameters at all, independent of how many required parameters precede them — a 3-parameter function with 2 trailing optional ones already has this problem. This rule fires once a function/method/constructor's trailing optional run reaches a configurable length (`{ minTrailingOptional }`, default 2) and offers to bundle that run into a single destructured `options` parameter.
+   
+   `hasSuggestions: true`, not `fixable: 'code'` — this is the key call. `fixable` is applied silently by `--fix` with no review gate. no-pointless-reassignment.ts's own history (a far simpler identifier-swap fixer) already shipped real bugs this way (code that didn't parse, a deleted load-bearing type annotation), and this rule's own fixer is riskier still: it rewrites a parameter list AND inserts a new statement into the function body. prefer-numeric-sort-compare.ts already uses `hasSuggestions` in this exact package for the identical reason — a suggestion the developer explicitly reviews and accepts is appropriate; silently rewriting behaviour on every save is not. Call sites are deliberately never rewritten: the signature edit alone turns every stale positional call site into a real TypeScript compile error, which is the correct, sufficient signal for a human/agent to fix each one — ESLint's own fixer can only ever edit the single file it is linting, so it could never safely coordinate an edit to the declaration with edits to call sites scattered across other files in the same pass anyway.
+   
+   Every param-list/type-text extraction below uses a verbatim `sourceCode.getText()` slice of the parameter's own type-annotation node, never a checker-based reconstruction (a printer, not a source-text echo, that can silently diverge from what was actually written) — this is why the rule needs no type-checker access at all: every check it performs (is this parameter optional, does it already carry an explicit type annotation, is it a parameter property, is it decorated) is answerable from the parameter's own TSESTree shape, and the fixer only ever echoes source text it already has. Because of that, it is registered in BOTH `plugin.configs.recommended` (src/plugin.ts) and the type-checked bundle (src/recommended-type-checked.ts), matching `no-mutable-union-array-param`/`prefer-readonly-array-param`/`test-file-kind`/`max-params` — unlike its own `prefer-*` siblings `prefer-readonly-object-param` and `prefer-numeric-sort-compare`, which genuinely need the checker (to resolve a parameter's own property types, and to confirm an array's element type, respectively) and so cannot be offered in the lighter, non-type-checked bundle at all.
+   
+   Every bail-out below still reports the diagnostic (a caller still deserves to be told about the anti-pattern) but withholds the suggestion (`suggest` omitted from the report) whenever collapsing the run mechanically would be unsafe or lossy:
+   - a parameter property (`constructor(private x?: T)`) in the run — a parameter property auto-assigns `this.x` as a side effect of being a parameter at all; a destructured local binding cannot replicate that assignment.
+   - a parameter in the run with no simple resolvable name and explicit type annotation — covers a destructured parameter (`{ a }: T = {}`, which has no single bindable name to move into the new destructure) and a parameter genuinely missing its own type annotation (including one typed only through an outer, separately-declared function-type alias — e.g. `const h: Handler = (a, b?, c?) => {...}` — since the arrow's own parameters carry no annotation of their own to echo into the new options type).
+   - a decorated parameter (`@Body() x?: T`) — a parameter decorator's own runtime behaviour is defined against that exact parameter's position and identity; moving it into a destructured object property changes what it decorates.
+   - a rest parameter anywhere in the full parameter list (not just the trailing run) — the fixer's insertion point assumes the new `options` parameter is safe to treat as an ordinary parameter, and a trailing rest parameter after it is an added interaction this rule does not attempt to reason about.
+   - an arrow function with an expression body, or any function-like shape with no `BlockStatement` body at all (a declaration-only ambient/overload signature, an interface method signature, a call/construct signature, a standalone function type, or an abstract/ambient class method) — there is no block to insert the destructuring statement into. This is also exactly what makes an ambient `.d.ts` signature (which always parses as one of these body-less shapes) still reported but never fixed, with no separate filename-based check needed.
+   - a `@param` JSDoc tag naming any parameter in the run — an existing doc comment describing that parameter by name would go stale the moment the parameter itself disappears from the signature.
+   - a parameter or function-scope-local variable already named `options` — colliding with the synthetic `options` parameter this rule introduces. A parameter that is ITSELF part of the run being collapsed is exempted from this check (it disappears in the same edit), but any other same-named binding is not. */
 
 const createRule = ESLintUtils.RuleCreator(
   (name) => `https://github.com/ExaDev/eslint-config/blob/main/src/rules/${name}.ts`,
@@ -55,10 +56,13 @@ export function isOptionalParam(param: TSESTree.Parameter): boolean {
   ) {
     return param.optional;
   }
+
   return false;
 }
 
-// The maximal run of trailing optional parameters, skipping a single trailing rest parameter first if one is present (a rest parameter is never itself optional, but its mere presence does not break the run of optional parameters immediately before it — `function f(a, b?, c?, ...rest)` still has a genuine 2-parameter trailing optional run, even though `...rest` is the parameter list's own final entry). Exported so this can be tested directly against fabricated parameter lists, independent of any particular RuleTester fixture.
+/**
+ * The maximal run of trailing optional parameters, skipping a single trailing rest parameter first if one is present (a rest parameter is never itself optional, but its mere presence does not break the run of optional parameters immediately before it — `function f(a, b?, c?, ...rest)` still has a genuine 2-parameter trailing optional run, even though `...rest` is the parameter list's own final entry). Exported so this can be tested directly against fabricated parameter lists, independent of any particular RuleTester fixture.
+ */
 export function getTrailingOptionalRun(params: readonly TSESTree.Parameter[]): TSESTree.Parameter[] {
   // No separate `params.length > 0` guard: `params[params.length - 1]` already reads `params[-1]` (itself `undefined`, never a throw) for an empty array, and `undefined?.type` is safely `undefined` too, so an empty array already resolves `hasTrailingRest` to `false` on its own terms.
   const hasTrailingRest = params[params.length - 1]?.type === AST_NODE_TYPES.RestElement;
@@ -68,6 +72,7 @@ export function getTrailingOptionalRun(params: readonly TSESTree.Parameter[]): T
     if (param === undefined || !isOptionalParam(param)) break;
     run.unshift(param);
   }
+
   return run;
 }
 
@@ -91,6 +96,7 @@ function resolveFixableParam(param: TSESTree.Parameter): ResolvedParamInfo | und
   const typeNode = identifierNode.typeAnnotation?.typeAnnotation;
   if (typeNode === undefined) return undefined;
   if (identifierNode.decorators.length > 0) return undefined;
+
   return {
     identifierNode,
     typeNode,
@@ -109,10 +115,13 @@ export function firstAndLastOrThrow<T>(items: readonly T[]): readonly [T, T] {
   if (first === undefined || last === undefined) {
     throw new Error('Unreachable: expected at least one element (the caller already confirmed a minimum run length).');
   }
+
   return [first, last];
 }
 
-// A function/method/constructor label for the reported message. TSConstructSignatureDeclaration and TSMethodSignature are labelled directly from their own node type (an interface/type-literal member, never wrapped in a MethodDefinition); a concrete function-like node's own label instead comes from its parent — a class method/constructor (MethodDefinition/TSAbstractMethodDefinition, using that parent's own `kind`) or an object-literal method (a `Property` with `method: true`) — falling back to a plain 'function' for everything else (a function declaration/expression, an arrow function, or a standalone function type/call signature). Exported so this can be tested directly against fabricated parent shapes, independent of any particular RuleTester fixture.
+/**
+ * A function/method/constructor label for the reported message. TSConstructSignatureDeclaration and TSMethodSignature are labelled directly from their own node type (an interface/type-literal member, never wrapped in a MethodDefinition); a concrete function-like node's own label instead comes from its parent — a class method/constructor (MethodDefinition/TSAbstractMethodDefinition, using that parent's own `kind`) or an object-literal method (a `Property` with `method: true`) — falling back to a plain 'function' for everything else (a function declaration/expression, an arrow function, or a standalone function type/call signature). Exported so this can be tested directly against fabricated parent shapes, independent of any particular RuleTester fixture.
+ */
 export function describeFunctionKind(node: FunctionLikeWithParams): string {
   if (node.type === AST_NODE_TYPES.TSConstructSignatureDeclaration) return 'constructor';
   if (node.type === AST_NODE_TYPES.TSMethodSignature) return 'method';
@@ -121,6 +130,7 @@ export function describeFunctionKind(node: FunctionLikeWithParams): string {
     return parent.kind === 'constructor' ? 'constructor' : 'method';
   }
   if (parent.type === AST_NODE_TYPES.Property && parent.method) return 'method';
+
   return 'function';
 }
 
@@ -158,10 +168,13 @@ export function getLeadingJSDocComment(sourceCode: TSESLint.SourceCode, node: TS
 export function jsDocMentionsParam(commentValue: string, name: string): boolean {
   const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const paramTagPattern = new RegExp(`@param\\s+(?:\\{[^}]*\\}\\s+)?\\[?${escapedName}\\b`);
+
   return paramTagPattern.test(commentValue);
 }
 
-// A collision exists when some variable in the function's own scope is named `options` (the synthetic parameter name this rule introduces) unless every one of that variable's own identifier occurrences belongs to the trailing run being collapsed — a run parameter that happens to already be named `options` is not itself a collision, since it disappears in the same edit that introduces the new one, but any OTHER binding of that name (an earlier kept parameter, a body-local `const`/`let`/function declaration) is. Exported so this can be tested directly against a fabricated scope, independent of any particular RuleTester fixture (real-scope construction, via a genuine variable re-declaration, is otherwise awkward to arrange on demand).
+/**
+ * A collision exists when some variable in the function's own scope is named `options` (the synthetic parameter name this rule introduces) unless every one of that variable's own identifier occurrences belongs to the trailing run being collapsed — a run parameter that happens to already be named `options` is not itself a collision, since it disappears in the same edit that introduces the new one, but any OTHER binding of that name (an earlier kept parameter, a body-local `const`/`let`/function declaration) is. Exported so this can be tested directly against a fabricated scope, independent of any particular RuleTester fixture (real-scope construction, via a genuine variable re-declaration, is otherwise awkward to arrange on demand).
+ */
 export function hasOptionsNameCollision(scope: TSESLint.Scope.Scope, exemptIdentifiers: ReadonlySet<TSESTree.Identifier>): boolean {
   return scope.variables.some(
     (variable) => variable.name === 'options' && !variable.identifiers.every((identifier) => exemptIdentifiers.has(identifier)),
@@ -227,6 +240,7 @@ const preferOptionsObjectParam = createRule<Options, MessageIds>({
 
       if (!isFixable || body === undefined) {
         context.report({ node, messageId: 'tooManyTrailingOptional', data });
+
         return;
       }
 

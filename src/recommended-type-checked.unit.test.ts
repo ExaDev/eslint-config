@@ -1,8 +1,13 @@
 import type { Linter } from 'eslint';
+
 import { Linter as LinterClass } from 'eslint';
+
 import json from '@eslint/json';
+
 import tseslint from 'typescript-eslint';
+
 import { describe, expect, it } from 'vitest';
+
 import recommendedTypeChecked from './recommended-type-checked';
 
 // Exercises this package's own test-file relaxation directly against the real exported array (the last two entries: the outright-strictness rules, then the test-file override), rather than a re-implementation — proving the shipped config, not a description of intent. `projectService.allowDefaultProject` below gives every inline snippet a genuine ad hoc single-file TS project (the same pattern this repo's own type-aware rule tests use), so every rule in the shared block — type-aware or not — runs exactly as it would in production, with no rules turned off to work around a missing project service. No runtime Array.isArray narrowing needed here — recommendedTypeChecked's own ConfigArrayValue type (Extract<ConfigValue, unknown[]>) already proves this at compile time.
@@ -29,6 +34,7 @@ function lint(code: string, filename: string) {
     },
     ...strictnessConfigs,
   ] as Linter.Config[];
+
   return linter.verify(code, config, filename).map((message) => message.ruleId);
 }
 
@@ -48,6 +54,7 @@ function lintFull(code: string, filename: string) {
     },
     ...recommendedTypeChecked,
   ] as Linter.Config[];
+
   return linter.verify(code, config, filename).map((message) => message.ruleId);
 }
 
@@ -57,9 +64,9 @@ describe('js.configs.recommended composition', () => {
   });
 
   it('does not flag an interface method-signature parameter as unused under the base no-unused-vars rule', () => {
-    // This is the exact regression this test guards against: js.configs.recommended sets the base no-unused-vars, which has no TypeScript awareness and treats an interface method signature's parameter names as real bindings that must be "used" — they are type positions, not bindings. strictTypeChecked deliberately turns the base rule off in favour of the TS-aware
-    // @typescript-eslint/no-unused-vars, but only if it is composed AFTER js.configs.recommended in
-    // the array; composed in the wrong order (or omitted entirely and left to the consumer), the base rule wins and fires here. Confirmed as a real, not merely theoretical, failure against a live consumer (json-operators) before this fix.
+    /* This is the exact regression this test guards against: js.configs.recommended sets the base no-unused-vars, which has no TypeScript awareness and treats an interface method signature's parameter names as real bindings that must be "used" — they are type positions, not bindings. strictTypeChecked deliberately turns the base rule off in favour of the TS-aware
+       @typescript-eslint/no-unused-vars, but only if it is composed AFTER js.configs.recommended in
+       the array; composed in the wrong order (or omitted entirely and left to the consumer), the base rule wins and fires here. Confirmed as a real, not merely theoretical, failure against a live consumer (json-operators) before this fix. */
     const diagnostics = lintFull(
       'export interface Resolvers {\n  resolveValue: (key: string, context: unknown) => Promise<string>;\n}\n',
       'src/foo.ts',
@@ -206,6 +213,7 @@ const MAX_PARAMS = 4;
 function generateFunctionWithParamCount(count: number): string {
   const params = Array.from({ length: count }, (_, index) => `p${String(index)}: number`).join(', ');
   const sum = Array.from({ length: count }, (_, index) => `p${String(index)}`).join(' + ');
+
   return `function withParams(${params}): number {\n  return ${sum};\n}\n`;
 }
 
@@ -245,6 +253,7 @@ describe('file scoping against a non-JS/TS language in the same config array', (
         plugins: { json },
       },
     ] as Linter.Config[];
+
     return linter.verify(code, config, 'src/foo.json');
   }
 
@@ -257,6 +266,7 @@ describe('file scoping against a non-JS/TS language in the same config array', (
     const messages = lintJsonAlongsideRecommended('{"a": 1, "a": 2}');
     const jsScopedRuleId = messages.find((message) => {
       const ruleId = message.ruleId ?? '';
+
       return (
         ruleId.startsWith('@typescript-eslint/')
         || ruleId.startsWith('exadev/')

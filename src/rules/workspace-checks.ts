@@ -1,5 +1,7 @@
 import type { WorkspacePackageInfo } from './workspace-graph';
+
 import type { GroupSpec, NamingOptions, NamingStrategy, RankSkipOptions } from './workspace-options';
+
 import { splitPathSegments } from './workspace-path';
 
 // The pure decisions every workspace-architecture rule reports, kept independent of ESLint/momoa so each can be unit-tested directly against fabricated graph data, matching the split the monorepo-template and hive originals already used (their own checkDependencies, dependencyPathExists, expectedPackageName).
@@ -12,7 +14,9 @@ export interface WorkspaceViolation {
   readonly data: Readonly<Record<string, string>>;
 }
 
-// The dependency graph plus the two configurable checks bundled into one parameter (rather than four separate ones), keeping checkDependencies below at four parameters total under this package's own max-params limit.
+/**
+ * The dependency graph plus the two configurable checks bundled into one parameter (rather than four separate ones), keeping checkDependencies below at four parameters total under this package's own max-params limit.
+ */
 export interface CheckDependenciesContext {
   readonly graph: ReadonlyMap<string, WorkspacePackageInfo>;
   readonly rankSkip?: RankSkipOptions;
@@ -22,6 +26,7 @@ export interface CheckDependenciesContext {
 // Absence handled here, at the one place that actually decides isolation, rather than a `?? []` fallback at the call site: "no isolatedGroups configured" and "isolatedGroups configured but this particular pair is not in it" are the same real answer (never isolated), so the explicit undefined check states that directly instead of manufacturing an empty array purely to make .some() have something to iterate over.
 function isIsolatedPair(groupA: string, groupB: string, isolatedGroups: readonly (readonly [string, string])[] | undefined): boolean {
   if (isolatedGroups === undefined) return false;
+
   return isolatedGroups.some(([first, second]) => (first === groupA && second === groupB) || (first === groupB && second === groupA));
 }
 
@@ -113,6 +118,7 @@ export function last<T>(array: readonly T[]): T {
   if (value === undefined) {
     throw new Error('Unreachable: expectedPackageName is only ever called with a real, non-empty package directory path.');
   }
+
   return value;
 }
 
@@ -145,5 +151,6 @@ export function expectedPackageName(relativeDir: string, group: GroupSpec, namin
   const nameSegments = NAME_SEGMENTS_BY_STRATEGY[group.naming ?? 'drop-group']({ segments, rest, group });
 
   const joined = nameSegments.join(separator);
+
   return naming.scope === undefined ? joined : `${naming.scope}/${joined}`;
 }

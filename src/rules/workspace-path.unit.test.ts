@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { requireChar, splitPathSegments } from './workspace-path';
 
 describe('splitPathSegments', () => {

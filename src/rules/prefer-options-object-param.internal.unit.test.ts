@@ -1,14 +1,20 @@
 import { AST_NODE_TYPES, ESLintUtils } from '@typescript-eslint/utils';
+
 import type { TSESLint, TSESTree } from '@typescript-eslint/utils';
+
 import { RuleTester } from '@typescript-eslint/rule-tester';
+
 import tseslint from 'typescript-eslint';
+
 import { beforeAll, describe, expect, it } from 'vitest';
+
 import { describeFunctionKind, hasOptionsNameCollision, isOptionalParam } from './prefer-options-object-param';
 
 function definedOrThrow<T>(value: T | undefined): T {
   if (value === undefined) {
     throw new Error('Unreachable: expected the probe rule below to have captured this value.');
   }
+
   return value;
 }
 

@@ -1,5 +1,7 @@
 import { defineConfig } from 'eslint/config';
+
 import js from '@eslint/js';
+
 import { exadevConfig } from './src/index';
 
 // defineConfig() over a plain array or the now-@deprecated tseslint.config(): exadevConfig()'s return type is PublicConfigArray (see src/config-types.ts), typed against @eslint/core's own ConfigObject specifically so it satisfies defineConfig()'s parameter type directly -- this file is the first real proof of that, dogfooding the fix on the same repo that ships it.
