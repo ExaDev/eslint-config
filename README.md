@@ -366,13 +366,10 @@ Every group states its own `rank` directly; `test` keeps its own group name in t
 ```ts
 // eslint.config.ts
 import { defineConfig } from 'eslint/config';
-import { plugin, workspaceArchitectureConfig } from '@exadev/eslint-config';
+import { workspaceArchitectureConfig } from '@exadev/eslint-config';
 
 export default defineConfig(
   // ...your own config...
-  {
-    plugins: { exadev: plugin },
-  },
   ...workspaceArchitectureConfig({
     groups: [
       { name: 'core', rank: 0 },
@@ -385,6 +382,8 @@ export default defineConfig(
   }),
 );
 ```
+
+`workspaceArchitectureConfig()`'s own returned config block already registers `plugins: { exadev: plugin }` itself (see its own source), so a consumer using only this standalone export never wires the plugin by hand; that manual line is needed only alongside the "lighter option" section above, where nothing else in the array registers the plugin.
 
 ### Example: a name-ranked repo
 
