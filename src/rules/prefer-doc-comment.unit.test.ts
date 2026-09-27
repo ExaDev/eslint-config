@@ -130,6 +130,8 @@ ruleTester.run('prefer-doc-comment', rule, {
     '/* eslint\n  no-console: off,\n  no-alert: off\n*/\nexport function f() {}',
     // The identical shape for a `/* global ... */` block, ESLint's own config-comment marking a variable as an intentional global rather than suppressing a rule at all: recognised the same way, left completely untouched.
     '/* global\n  foo,\n  bar\n*/\nexport function f() {}',
+    // A `#region` editor folding marker at the TOP of the run, with substantial prose directly below it, directly above the export: found at index 0 of the extracted lines, so nothing is reported at all, the same way the leading `///` case just below never gets reported either. Never corrupted into `/**\n * #region helpers\n * Explains ...\n */`, the exact regression this fixture pins.
+    '// #region helpers\n// Explains the helper.\nexport function f() {}',
     // A `///` triple-slash reference directive at the TOP of the run, with substantial prose directly below it, directly above the export: the directive is found at index 0 of the extracted lines, so "the lines strictly above it" (checkAnchor's own directiveIndex slicing) is empty, and nothing is reported at all, the same way a mid-run directive already leaves the prose AFTER it untouched (see the "d4" invalid case below). Never corrupted into `/**\n * / <reference ... */`, the exact regression this fixture pins.
     '/// <reference types="vite/client" />\n// Explains why this exists and\n// what callers must guarantee.\nexport function f() {}',
   ],
@@ -283,6 +285,12 @@ ruleTester.run('prefer-doc-comment', rule, {
     {
       code: '// Explains why this function exists and\n// what callers must guarantee.\n// eslint-enable no-console\nexport function f() {}',
       output: '/**\n * Explains why this function exists and\n * what callers must guarantee.\n */\n// eslint-enable no-console\nexport function f() {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A `#endregion` editor folding marker directly above the export, with substantial explanation above it: only the explanation converts; `// #endregion` is left completely untouched directly above the export, still a real fold boundary for the editor, never silently removed by being folded into the new doc comment's own prose.
+    {
+      code: '// Explains why this exists and\n// what callers must guarantee.\n// #endregion\nexport function f() {}',
+      output: '/**\n * Explains why this exists and\n * what callers must guarantee.\n */\n// #endregion\nexport function f() {}',
       errors: [{ messageId: 'preferDocComment' }],
     },
     // A directive in the MIDDLE of a run, with substantial explanation both above and below it: only the lines strictly above the directive are converted; the directive line and every line from it onward, including the trailing explanation, are left completely untouched.

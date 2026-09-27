@@ -258,6 +258,11 @@ describe('isDirectiveComment', () => {
     'istanbul ignore if',
     // Two spaces between the tool name and "ignore", not one: pins the `+` quantifier on `\s+` specifically (a mutant weakening it to a bare `\s`, exactly one whitespace character, would fail to match this input, unlike the zero-or-more-vs-one-or-more distinction the "c8ignore" case below already pins).
     'c8  ignore next',
+    // VS Code's and JetBrains' own shared editor-folding marker convention.
+    '#region',
+    '#region helpers',
+    '#endregion',
+    '#endregion helpers',
   ])('recognises %s as a directive', (text) => {
     expect(isDirectiveComment(text)).toBe(true);
   });
