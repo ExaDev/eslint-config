@@ -194,6 +194,8 @@ function collectCandidates(fs: WorkspaceFs, root: string, options: WorkspaceArch
 
   const candidates: Candidate[] = [];
   for (const relativeDir of relativeDirs) {
+    // A "." entry in pnpm-workspace.yaml's own "packages:" list (or the "packages" rule option) resolves here to the workspace root itself, relative to itself, the empty string: pnpm allows this so the root package.json can opt into workspace-wide tooling (scripts, devDependencies) without becoming a publishable member of any group. The root package.json is never itself a workspace-architecture package (no configured group's own "path" could ever cover an empty relativeDir), so it is dropped here rather than reaching findOwningGroup below and throwing on every workspace that lists it.
+    if (relativeDir === '') continue;
     const group = findOwningGroup(relativeDir, options.groups);
     if (group === undefined) {
       throw new Error(
