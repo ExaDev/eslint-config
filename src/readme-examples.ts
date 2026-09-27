@@ -1,4 +1,5 @@
 import { defineConfig } from 'eslint/config';
+import tseslint from 'typescript-eslint';
 import { exadevConfig, plugin, workspaceArchitectureConfig } from './index';
 
 // Not imported by index.ts (see tsdown.config.ts's own entry, only src/index.ts is bundled), so this file contributes nothing to the published package. Its only job is to be included in `tsc -p tsconfig.json` (see tsconfig.json's own `include`), so `pnpm typecheck` fails the moment any of README.md's own defineConfig() examples that reference the named `plugin` export stops compiling, the same regression-test role consumer-compatibility.ts already plays for the default export (see its own comment). Reproduces ExaDev/eslint-config#39/#42's own real failure: `plugin` (a plain object) satisfied @typescript-eslint/utils' own FlatConfig.Plugin type but not @eslint/core's Plugin type that defineConfig()'s own ConfigObject requires for its `plugins` field, under `exactOptionalPropertyTypes`.
@@ -26,6 +27,33 @@ export function buildViaStringExtends() {
       extends: ['exadev/recommended'],
     },
   ]);
+}
+
+// README's "lighter option" section, the tseslint.config() pattern for a consumer who hasn't migrated to defineConfig() yet: tseslint.config() has no string `extends`, so the config value (plugin.configs.recommended, read by name off the named `plugin` export) is passed directly instead.
+export function buildViaTseslintPluginConfigsRecommended() {
+  return tseslint.config(
+    {
+      files: ['**/*.ts'],
+      plugins: { exadev: plugin },
+      extends: [plugin.configs.recommended], // or plugin.configs.barrel
+    },
+  );
+}
+
+// README's "Optional features" section, the explicit-tier-selection pattern: `plugin.configs.react`/`.nextjs` read by name off the named `plugin` export, mirroring `plugin.configs.recommended`/`.barrel` above but for the optional React and Next.js rule blocks.
+export function buildViaPluginConfigsReactAndNextjs() {
+  return defineConfig(
+    {
+      files: ['**/*.tsx'],
+      plugins: { exadev: plugin },
+      extends: [plugin.configs.react], // throws if eslint-plugin-react isn't installed
+    },
+    {
+      files: ['**/*.ts', '**/*.tsx'],
+      plugins: { exadev: plugin },
+      extends: [plugin.configs.nextjs], // throws if @next/eslint-plugin-next isn't installed
+    },
+  );
 }
 
 // README's "Example: a group-ranked repo" workspace architecture section, spread straight into defineConfig() alongside exadevConfig() the way a consumer combining both would.
