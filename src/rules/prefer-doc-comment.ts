@@ -115,13 +115,33 @@ export function parsesAsValidTsDoc(candidateText: string): boolean {
 type ExportWrapper = TSESTree.ExportDefaultDeclaration | TSESTree.ExportNamedDeclaration;
 
 /**
- * `node`'s own immediate parent, narrowed to an export wrapper, when `node` is written as a direct/inline export (`export function f() {}`, `export default class {}`). See this file's own header comment for why a name exported later via a separate `export { x }` statement is deliberately out of scope, rather than handled here too.
+ * Whether `moduleDeclaration` (a namespace/module `node` sits inside, per isAtPublicSurface below) is itself exported, checked recursively so a doubly-nested namespace (`export namespace A { export namespace B { ... } }`) requires every enclosing namespace to be exported too, not merely the innermost one. A `declare global { ... }` augmentation is never itself wrapped in an export (there is no such syntax as `export declare global`), so its own TSModuleDeclaration always fails this check, exactly like a plain non-exported `namespace Internal { ... }`: neither ever reaches the `ExportNamedDeclaration` branch below, and anything inside either is correctly never treated as part of the module's public surface.
+ */
+function isNamespaceExported(moduleDeclaration: TSESTree.TSModuleDeclaration): boolean {
+  const { parent } = moduleDeclaration;
+  if (parent.type === AST_NODE_TYPES.ExportNamedDeclaration) return isAtPublicSurface(parent);
+
+  return false;
+}
+
+/**
+ * Whether `wrapper` (an export wrapper already found by getExportWrapper below) genuinely sits at the module's public surface, rather than inside a namespace that is not itself exported: either directly at Program level, or inside a `TSModuleBlock` whose own enclosing `TSModuleDeclaration` is itself exported (isNamespaceExported above, applied recursively for a nested namespace). `namespace Internal { export function hidden() {} }`'s own inner `export function hidden` has an immediate `ExportNamedDeclaration` wrapper exactly like a real top-level export does, but that wrapper's own parent is the namespace's `TSModuleBlock`, not `Program`, and `Internal` itself is never exported, so this returns `false` for it, matching the README's own promise that a non-exported declaration is never reported regardless of its comment.
+ */
+function isAtPublicSurface(wrapper: ExportWrapper): boolean {
+  const { parent } = wrapper;
+  // A single boolean expression, not a third `if`/`return false` branch: `export ...` is only ever legal directly at Program level or directly inside a namespace/module body (TSModuleBlock), never anywhere else, so a third, `neither`, branch is unreachable through any real parse and would be dead code no test could ever exercise.
+
+  return parent.type === AST_NODE_TYPES.Program || (parent.type === AST_NODE_TYPES.TSModuleBlock && isNamespaceExported(parent.parent));
+}
+
+/**
+ * `node`'s own immediate parent, narrowed to an export wrapper, when `node` is written as a direct/inline export (`export function f() {}`, `export default class {}`) AND that wrapper genuinely sits at the module's public surface (isAtPublicSurface above), never merely inside some enclosing namespace that is not itself exported. See this file's own header comment for why a name exported later via a separate `export { x }` statement is deliberately out of scope, rather than handled here too.
  */
 export function getExportWrapper(node: TSESTree.Node): ExportWrapper | undefined {
   const { parent } = node;
   // `parent` is only ever nullish here for a Program node (the one node type with no parent at all), which this function is never called with in practice: every real caller below passes a declaration/class-body-member node, never the Program itself. A plain truthiness check, not `=== undefined`: `parent` is declared as `Node | undefined` in typescript-eslint's own types, but confirmed directly that ESLint's real traversal sets it to `null` at runtime for a genuine Program node, not `undefined` (a real type/runtime mismatch, the same class of lying field type no-enum-reverse-lookup-widening.ts's own comment on `Type.symbol` already documents elsewhere in this codebase); a direct `=== null` comparison against the declared type is flagged as impossible by this repo's own no-unnecessary-condition, where the equivalent truthiness check is not, since it reads as a check against the type's own `undefined` branch while still catching the real runtime `null` value too.
   if (!parent) return undefined;
-  if (parent.type === AST_NODE_TYPES.ExportNamedDeclaration || parent.type === AST_NODE_TYPES.ExportDefaultDeclaration) return parent;
+  if ((parent.type === AST_NODE_TYPES.ExportNamedDeclaration || parent.type === AST_NODE_TYPES.ExportDefaultDeclaration) && isAtPublicSurface(parent)) return parent;
 
   return undefined;
 }
