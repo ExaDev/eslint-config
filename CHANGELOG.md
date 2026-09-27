@@ -1,3 +1,36 @@
+## [2.22.2](https://github.com/ExaDev/eslint-config/compare/v2.22.1...v2.22.2) (2026-09-27)
+
+
+### Bug Fixes
+
+* **barrel-auto-detect:** document and pin the array-manifest collapse ([17de93a](https://github.com/ExaDev/eslint-config/commit/17de93a45066b8c202a18340963b729dd99c3192))
+* **comments:** state each invariant directly, not its prior history ([716dfd2](https://github.com/ExaDev/eslint-config/commit/716dfd26952212ec841ba8361b4e29147e16d755))
+* **eslint.config:** remove a spaced double hyphen used as a dash ([10f73e0](https://github.com/ExaDev/eslint-config/commit/10f73e03dda48a90d15d9ff235bcba318d58206b))
+* **is-record:** include the typeof check in the guard's invariant ([e29d700](https://github.com/ExaDev/eslint-config/commit/e29d7003d2a6754e4b39dc26add849f2fbaf8fc8))
+* **is-record:** state the guard's invariant, not its history ([9631de8](https://github.com/ExaDev/eslint-config/commit/9631de89c717b02c76c9bc1a4347c5829c923167))
+* **no-dependency-cycle:** correct the indirect-cycle comment's direction ([8581a45](https://github.com/ExaDev/eslint-config/commit/8581a45c694c978218c5b12572c2de91985b64d7))
+* **no-dependency-cycle:** reword the message for an indirect cycle ([f4b78bc](https://github.com/ExaDev/eslint-config/commit/f4b78bc8cd435ffd3ed1b359c29de0f431e0133b))
+* **no-dependency-cycle:** state the indirect-cycle fixture's invariant ([338533b](https://github.com/ExaDev/eslint-config/commit/338533bf70172ff3ecaf686e91eab69562b851bf))
+* **package-name-mirrors-path:** fall back to the group's own name at its own root ([00c7559](https://github.com/ExaDev/eslint-config/commit/00c755951950a14fad99844a1cccf5bf69ad3901))
+* **plugin:** type PublicPlugin.configs with the four literal keys it actually has ([8cbace3](https://github.com/ExaDev/eslint-config/commit/8cbace32175a0393e845942e8f04f76f8a44ac25))
+* **plugin:** type the public plugin export as @eslint/core's own Plugin ([4f5ee73](https://github.com/ExaDev/eslint-config/commit/4f5ee73d4e1a26658e23595a8ae37d80eecad625)), closes [#39](https://github.com/ExaDev/eslint-config/issues/39)
+* **prefer-options-object-param:** correct a mutation-killing claim that never held ([84ed427](https://github.com/ExaDev/eslint-config/commit/84ed427853bf1e49b147f96ab2578a2d6d7f339f))
+* **prefer-options-object-param:** correct isOptionalParam's own comment ([96ae9fe](https://github.com/ExaDev/eslint-config/commit/96ae9fe11da9c216c199f720baac142cd94463d3))
+* **prefer-options-object-param:** correct resolveFixableParam's own fallback comment ([b9387ed](https://github.com/ExaDev/eslint-config/commit/b9387ed656831fc6486cea8f51aff59bda8c1132))
+* **prefer-options-object-param:** fix contradictory fallback comment ([498a224](https://github.com/ExaDev/eslint-config/commit/498a2244a72f1f4b25ca482bae55798a1d8ef126))
+* **prefer-options-object-param:** recognise optional destructured patterns ([4c31c2c](https://github.com/ExaDev/eslint-config/commit/4c31c2c6d368f6dce9322259eb7ebc6a6c5afdc2))
+* **prefer-options-object-param:** remove dead guards, cover remaining branches ([669bbc1](https://github.com/ExaDev/eslint-config/commit/669bbc1237ef19a11ce16e2aa4af107d4732d99f))
+* **readme:** call each README example builder inside its own test ([e382875](https://github.com/ExaDev/eslint-config/commit/e3828755497dd7a6811db854f931498ec990da40))
+* **to-public-config-array:** drop the unnecessary unknown escape hatch ([c61279a](https://github.com/ExaDev/eslint-config/commit/c61279a4375a3f1cda308a4ed6ccc2ff1c452450))
+* **workspace-architecture:** drop the requireFn test seam from the public parameter type ([ecd1f14](https://github.com/ExaDev/eslint-config/commit/ecd1f14871582ebf2ff19047c111706b65cb4d8a))
+* **workspace-architecture:** keep the public doc comment to the contract ([6b910e8](https://github.com/ExaDev/eslint-config/commit/6b910e8f44802f327c359f5841b2adc823de8544))
+* **workspace-architecture:** return ESLint core's own Config[] from workspaceArchitectureConfig ([44839cf](https://github.com/ExaDev/eslint-config/commit/44839cf8be11dab31d80e6d95aa89f8442f813ca)), closes [ExaDev/eslint-config#39](https://github.com/ExaDev/eslint-config/issues/39)
+* **workspace-checks:** keep-group always uses the group's own name ([8101fc9](https://github.com/ExaDev/eslint-config/commit/8101fc9f99f35d3932a8d5198eb820dc0f5eea1a))
+* **workspace-graph:** drop a "." workspace-root packages entry ([fd5a5f2](https://github.com/ExaDev/eslint-config/commit/fd5a5f235a927df938b6b3e8fa41da98b35999a4))
+* **workspace-json-helpers:** throw on a non-String member name ([2e1e70c](https://github.com/ExaDev/eslint-config/commit/2e1e70c2ee3b82ddf3cdd6a57ccf5c4bb338b1c9))
+* **workspace-path:** credit the right helper for the doc comment shape ([c0a0092](https://github.com/ExaDev/eslint-config/commit/c0a0092a8a57abbee3b5c7544d29156554203ac2))
+* **workspace-path:** drop history narration from doc comments ([82935ec](https://github.com/ExaDev/eslint-config/commit/82935ec6d24f415d8dc26fc06615d09412146aad))
+
 ## [2.22.1](https://github.com/ExaDev/eslint-config/compare/v2.22.0...v2.22.1) (2026-09-27)
 
 
