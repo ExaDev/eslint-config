@@ -1,3 +1,5 @@
+import { Linter } from 'eslint';
+
 import { RuleTester } from '@typescript-eslint/rule-tester';
 
 import tseslint from 'typescript-eslint';
@@ -26,6 +28,29 @@ describe('rule metadata', () => {
   });
 });
 
+// The rule's own meta.schema is what actually rejects an unrecognised option key; a plain Linter instance is used rather than ruleTester.run, matching barrel-policy.unit.test.ts's own established reasoning for why a RuleTester `invalid` case's schema rejection cannot be observed with `expect(...).toThrow()` (it surfaces deep inside RuleTester's own deferred `it()` registration, not as a synchronous throw back to the caller), while Linter#verify throws synchronously. A schema-only stand-in rule, not `rule` itself: this rule is built with ESLintUtils.RuleCreator (needed for typed TSESTree access), whose own readonly Options tuple type is not assignable to plain eslint's own mutable-array RuleDefinition shape a plain Linter's Plugin['rules'] expects; the schema array itself carries none of that generic baggage, so re-wrapping just it in a minimal, plain-eslint-shaped rule sidesteps the mismatch entirely while still exercising the identical schema this rule actually ships.
+const schemaLinter = new Linter();
+const schemaOnlyRule = { meta: { schema: rule.meta.schema }, create: () => ({}) };
+const schemaLintConfig = [{ files: ['**'], plugins: { exadev: { rules: { 'prefer-doc-comment': schemaOnlyRule } } } }];
+
+function lintWithOptions(options: unknown): void {
+  schemaLinter.verify('export function foo() {}', [...schemaLintConfig, { rules: { 'exadev/prefer-doc-comment': ['error', options] } }], 'src/index.ts');
+}
+
+describe('prefer-doc-comment schema', () => {
+  it('accepts an options object with just maxLineLength', () => {
+    expect(() => {
+      lintWithOptions({ maxLineLength: 80 });
+    }).not.toThrow();
+  });
+
+  it('rejects an unrecognised property alongside maxLineLength at the schema level', () => {
+    expect(() => {
+      lintWithOptions({ maxLineLength: 80, extra: true });
+    }).toThrow(/should NOT have additional properties/);
+  });
+});
+
 // No type information is needed at lint time (every check matches on TSESTree node/comment shape alone), so parserOptions.project/projectService is deliberately omitted, matching this codebase's own no-object-assign.test.ts/prefer-readonly-array-param.test.ts precedent.
 const ruleTester = new RuleTester({
   languageOptions: { parser: tseslint.parser, sourceType: 'module' },
@@ -40,6 +65,8 @@ const LONG_LINE = 'x'.repeat(DEFAULT_MAX_LINE_LENGTH + LINE_LENGTH_MARGIN);
 const CUSTOM_MAX_LINE_LENGTH = 20;
 // A single logical line under the default threshold (so it is VALID unmodified) but over a configured `maxLineLength: 20` (so the identical text becomes INVALID once that option is set), proving the option genuinely changes the outcome rather than merely being accepted by the schema.
 const MEDIUM_LINE = 'y'.repeat(CUSTOM_MAX_LINE_LENGTH + LINE_LENGTH_MARGIN / 2);
+// A single logical line of EXACTLY the default threshold's own length: pins the boundary as strictly-greater-than, not greater-than-or-equal (this line stays valid; LONG_LINE, one margin longer, is the invalid boundary already covered above).
+const EXACT_THRESHOLD_LINE = 'z'.repeat(DEFAULT_MAX_LINE_LENGTH);
 
 ruleTester.run('prefer-doc-comment', rule, {
   valid: [
@@ -65,6 +92,10 @@ ruleTester.run('prefer-doc-comment', rule, {
     'export const C = class {\n  // first line\n  // second line\n  m() {}\n};',
     // An exported const whose init is neither an arrow function nor a function expression: this rule's own enumerated target list only ever names those two shapes for a const, so a plain value is never reported, however substantial its leading comment.
     '// first line\n// second line\nexport const x = 5;',
+    // A public method of a class EXPRESSION that IS directly default-exported (parenthesised, so the parser keeps it a ClassExpression rather than an anonymous ClassDeclaration): still never reported, since isMethodOfExportedClass's own type check requires a genuine ClassDeclaration specifically, not merely "some kind of exported class".
+    'export default (class {\n  // first line\n  // second line\n  m() {}\n});',
+    // A single logical line of exactly the default threshold's own length: not substantial (strictly greater than, not greater-than-or-equal).
+    `// ${EXACT_THRESHOLD_LINE}\nexport function foo() {}`,
     // The comment is substantial and the declaration is exported, but a blank line separates the two: not really "attached" to the declaration it would otherwise document.
     '// first line\n// second line\n\nexport function foo() {}',
     // No leading comment at all.
@@ -174,6 +205,12 @@ ruleTester.run('prefer-doc-comment', rule, {
     {
       code: '// first line\n// second line\nexport type T = string;',
       output: '/**\n * first line\n * second line\n */\nexport type T = string;',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // The first line, after the leading `//`, itself starts with a literal `*`: still a genuine Line comment, not a Block one, so the "already a doc comment" exemption (which requires Block type specifically) never applies here, however much the text alone might resemble one.
+    {
+      code: '//* looks like a marker\n// second line\nexport function foo() {}',
+      output: '/**\n * * looks like a marker\n * second line\n */\nexport function foo() {}',
       errors: [{ messageId: 'preferDocComment' }],
     },
   ],
