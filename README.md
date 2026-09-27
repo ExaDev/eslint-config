@@ -481,9 +481,15 @@ pnpm build
   - `[]` if unresolvable and not explicitly forced on; a thrown `Error` if explicitly forced on (`enabled: true`) and still unresolvable.
   - `react.ts`'s blocks are scoped to `files: ['**/*.jsx', '**/*.tsx']`; `nextjs.ts`'s is not (see [Optional React and Next.js support](#optional-react-and-nextjs-support) for why).
 - [`src/create-config.ts`](src/create-config.ts) is config assembly's single source of truth.
-  - `exadevConfig(options, ...userConfigs)` concatenates `recommendedTypeChecked` with both builders' output (each fed the matching tri-state option) and any trailing user configs.
+  - `exadevConfig(options, ...userConfigs)` concatenates, in order: `buildGitignoreConfig`, `recommendedTypeChecked`, `jsdocAndTsdoc`, `jsonCanonicalConfig`, `buildReactConfig`, `buildNextjsConfig`, `buildPackageJsonKeyOrderConfig` (each tri-state builder fed its matching option), `buildWorkspaceArchitectureConfig` (only when `workspaceArchitecture` is given; there is no auto-detected default), and any trailing user configs.
   - `defaultConfig` is `exadevConfig()` evaluated once, eagerly, at module load.
-- [`src/index.ts`](src/index.ts) is the entry point, still a pure re-export barrel: `export { defaultConfig as default, exadevConfig } from './create-config'; export { publicPlugin as plugin } from './plugin';`.
+- [`src/index.ts`](src/index.ts) is the entry point, still a pure re-export barrel:
+  ```ts
+  export { defaultConfig as default, exadevConfig } from './create-config';
+  export { publicPlugin as plugin } from './plugin';
+  export { workspaceArchitectureConfig } from './workspace-architecture';
+  export type { GroupSpec, NamingOptions, RankRule, RankSkipOptions, SliceSpec, WorkspaceArchitectureOptions } from './rules/workspace-options';
+  ```
   - The named export is `publicPlugin`, not `plugin`'s own internal default export: `plugin` (src/plugin.ts) is typed against `@typescript-eslint/utils`' `TSESLint.FlatConfig.Plugin` for full rule-option checking while this package assembles it, then cast once, at the very end of that same file, to `PublicPlugin` (see `src/to-public-plugin.ts`) before re-export, mirroring how `defaultConfig` is built against the internal `ConfigArrayValue` and cast to `PublicConfigArray` at `exadevConfig`'s own boundary.
   - Required by `no-side-effects-in-index`/`no-non-barrel-reexport`, both of which assume this file contains nothing but `export ... from ...`.
   - All exports share one root module, so importing `{ plugin }` alone still resolves `typescript-eslint` via the sibling re-export — an accepted trade-off (an earlier separate-subpath split proved more awkward in practice).
