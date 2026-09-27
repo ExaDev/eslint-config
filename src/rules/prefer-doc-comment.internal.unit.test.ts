@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint';
 
 import { describe, expect, it } from 'vitest';
 
-import { extractCommentLines, getExportWrapper, hasUnsafeDocCommentContent, isDirectiveComment } from './prefer-doc-comment';
+import { extractCommentLines, getExportWrapper, hasUnsafeDocCommentContent, isDirectiveComment, stripStarredBlockPrefix } from './prefer-doc-comment';
 
 function definedOrThrow<T>(value: T | undefined): T {
   if (value === undefined) {
@@ -68,6 +68,49 @@ describe('extractCommentLines', () => {
 
   it('returns an empty array for a Block comment containing nothing but blank lines', () => {
     expect(extractCommentLines([{ type: AST_TOKEN_TYPES.Block, value: '\n' }])).toEqual([]);
+  });
+
+  it('strips only the single conventional space after `//`, preserving further leading whitespace as real content indentation', () => {
+    expect(extractCommentLines([{ type: AST_TOKEN_TYPES.Line, value: '   indented example line' }])).toEqual(['  indented example line']);
+  });
+
+  it('dedents every own-body physical line of a multi-line Block by their SHARED leading margin, preserving one indented further than its neighbours relative to them', () => {
+    expect(extractCommentLines([{ type: AST_TOKEN_TYPES.Block, value: ' one\n   two\n     three\n   four ' }])).toEqual(['one', 'two', '  three', 'four']);
+  });
+
+  it('keeps a genuinely blank MIDDLE physical line of a Block as an empty string (a paragraph separator), distinct from a blank first/last line, which is dropped', () => {
+    expect(extractCommentLines([{ type: AST_TOKEN_TYPES.Block, value: ' one\n\n   two ' }])).toEqual(['one', '', 'two']);
+  });
+
+  it('drops a blank first AND last physical line while dedenting the real body lines between them by their own shared margin', () => {
+    expect(extractCommentLines([{ type: AST_TOKEN_TYPES.Block, value: '\n   alpha\n   beta\n' }])).toEqual(['alpha', 'beta']);
+  });
+
+  it('strips a hand-written starred block\'s own leading marker after dedenting, converging on the same lines a bare block would produce', () => {
+    expect(extractCommentLines([{ type: AST_TOKEN_TYPES.Block, value: '\n * A starred block\n * second line\n ' }])).toEqual(['A starred block', 'second line']);
+  });
+});
+
+describe('stripStarredBlockPrefix', () => {
+  it('returns an empty array unchanged', () => {
+    expect(stripStarredBlockPrefix([])).toEqual([]);
+  });
+
+  it('returns the lines unchanged when every line is blank (nothing to test the shape against)', () => {
+    expect(stripStarredBlockPrefix([''])).toEqual(['']);
+  });
+
+  it('returns the lines completely unchanged when only SOME non-blank lines carry the marker', () => {
+    // Pins the whole-group `.every`, not a per-line `.some`: a mutant weakening this to a per-line check would still strip the one line that does carry the marker.
+    expect(stripStarredBlockPrefix(['* starred', 'not starred'])).toEqual(['* starred', 'not starred']);
+  });
+
+  it('strips a shared "* " marker from every non-blank line, keeping a blank line exactly as it was', () => {
+    expect(stripStarredBlockPrefix(['* first', '', '* second'])).toEqual(['first', '', 'second']);
+  });
+
+  it('strips a bare "*" with no trailing space too, the marker\'s own optional-space branch', () => {
+    expect(stripStarredBlockPrefix(['*first'])).toEqual(['first']);
   });
 });
 

@@ -24,21 +24,58 @@ export interface CommentLike {
 }
 
 /**
- * The comment group's own text, one array entry per ORIGINAL logical line, verbatim (whitespace-trimmed at each line's own boundary only, never reworded), regardless of whether the group is a run of `//` lines or a single already-consolidated bare block comment (both are real inputs this rule must handle identically: multiline-comment-style's own bare-block fixer, wired alongside this rule in stylistic-comments.ts, may already have converted a `//` run into a bare block by the time ESLint's multi-pass autofix reaches this rule). A `Line`-type group is one array entry per comment, each with its own single leading space (if the whole group has one uniformly) trimmed. A `Block`-type group's own `.value` is split on its internal linebreaks; for a genuinely multi-physical-line block, the first and last split segments are the pure indentation/closing-delimiter padding a bare-block fixer's own template inserts around the real content (see stylistic-comments.ts's own trace through its `convertToBlock` helper), so each is dropped only when it trims to nothing, never when it carries real leading/trailing content of its own (a hand-written single-physical-line block never reaches this branch at all, since `split` on no internal linebreak yields exactly one segment, returned as-is).
+ * The number of leading space characters every non-blank line in `lines` shares, the amount a shared left margin (a hand-written block's own body indentation, aligned however its author chose) can be stripped from every line at once while leaving any EXTRA indentation a particular line carries beyond that margin (a nested example, a sub-list) exactly as it was, relative to its neighbours. A blank line (all whitespace or empty) never lowers the shared amount: it carries no indentation of its own to compare, only whichever real content lines happen to surround it. Zero for an empty `lines`, or one all-blank: there is no real content to measure a margin from at all.
+ */
+function commonLeadingWhitespace(lines: readonly string[]): number {
+  const contentLines = lines.filter((line) => line.trim().length > 0);
+  if (contentLines.length === 0) return 0;
+
+  return Math.min(...contentLines.map((line) => line.length - line.trimStart().length));
+}
+
+/**
+ * Strips exactly the single conventional space between a `//`/`/*`-opening delimiter and the real content that follows it on the SAME physical line (turning `// text` into plain `text`, mirroring `@stylistic/spaced-comment`'s own `'always'` convention), leaving any further leading whitespace on `value` untouched: a second, third, ... leading space is the author's own deliberate content indentation (a code sample, a nested list item), not padding around the delimiter, so only ever the first is delimiter noise.
+ */
+function stripSingleLeadingSpace(value: string): string {
+  return value.startsWith(' ') ? value.slice(1) : value;
+}
+
+/**
+ * The comment group's own text, one array entry per ORIGINAL logical line, verbatim aside from stripping exactly the padding a bare-`/* `/`// ` delimiter itself adds (never the author's own further indentation, a real part of the content some lines may carry more of than others), regardless of whether the group is a run of `//` lines or a single already-consolidated bare block comment (both are real inputs this rule must handle identically: multiline-comment-style's own bare-block fixer, wired alongside this rule in stylistic-comments.ts, may already have converted a `//` run into a bare block by the time ESLint's multi-pass autofix reaches this rule). A `Line`-type group is one array entry per comment, each with its own single leading delimiter-space (see stripSingleLeadingSpace) stripped and trailing whitespace trimmed (never meaningful). A `Block`-type group's own `.value` is split on its internal linebreaks: the FIRST physical line sits on the same source line as the opening `/*` itself, so it gets the identical single-leading-space treatment as a `//` line; every line after it is a genuine physical line of the block's own body, sharing one left margin (see commonLeadingWhitespace) that is stripped from all of them together so their RELATIVE indentation survives. The opening and closing physical lines are each dropped entirely when they trim to nothing (the pure indentation/closing-delimiter padding a bare-block fixer's own template inserts around the real content, see stylistic-comments.ts's own trace through its `convertToBlock` helper), never when either carries real content of its own (a hand-written single-physical-line block never reaches this branch at all, since `split` on no internal linebreak yields exactly one segment, returned as-is); a blank line genuinely in the MIDDLE of the body (a paragraph separator) is kept, as an empty string, rather than dropped, since it is real structure the author put there, not delimiter padding.
  */
 export function extractCommentLines(group: readonly CommentLike[]): string[] {
   const [firstComment] = group;
   if (firstComment === undefined) return [];
   if (firstComment.type === AST_TOKEN_TYPES.Line) {
-    return group.map((comment) => comment.value.trim());
+    return group.map((comment) => stripSingleLeadingSpace(comment.value).trimEnd());
   }
-  const rawLines = firstComment.value.split(/\r\n|\r|\n/u).map((line) => line.trim());
-  if (rawLines.length <= 1) return rawLines;
-  // firstAndLastOrThrow, not a plain `rawLines[0]`/`.at(-1)`: the length check just above already guarantees at least two elements, so both are always defined here, and reusing this already-tested helper (rather than a second, always-true `!== undefined` guard of its own) is exactly the same "caller already confirmed a minimum length" case its own doc comment describes.
-  const [first, last] = firstAndLastOrThrow(rawLines);
-  const middle = rawLines.slice(1, -1);
 
-  return [...(first.length > 0 ? [first] : []), ...middle, ...(last.length > 0 ? [last] : [])];
+  const rawLines = firstComment.value.split(/\r\n|\r|\n/u);
+  if (rawLines.length <= 1) return rawLines.map((line) => line.trim());
+  // firstAndLastOrThrow, not a plain `rawLines[0]`/`.at(-1)`: the length check just above already guarantees at least two elements, so both are always defined here, and reusing this already-tested helper (rather than a second, always-true `!== undefined` guard of its own) is exactly the same "caller already confirmed a minimum length" case its own doc comment describes.
+  const [firstRaw, lastRaw] = firstAndLastOrThrow(rawLines);
+  const middleRaw = rawLines.slice(1, -1);
+  const firstKept = firstRaw.trim().length > 0;
+  const lastKept = lastRaw.trim().length > 0;
+  const ownBodyRaw = lastKept ? [...middleRaw, lastRaw] : middleRaw;
+  const dedent = commonLeadingWhitespace(ownBodyRaw);
+  const ownBodyLines = ownBodyRaw.map((line) => (line.trim().length === 0 ? '' : line.slice(dedent).trimEnd()));
+  const lines = [...(firstKept ? [stripSingleLeadingSpace(firstRaw).trimEnd()] : []), ...ownBodyLines];
+
+  return stripStarredBlockPrefix(lines);
+}
+
+// A hand-written block comment often pads every one of its own content lines with a leading `* ` purely for visual alignment under the `/*` that opens it (`/*\n * line one\n * line two\n *\/`), the same "delimiter decoration, not content" role a genuinely empty first/last physical line already plays above. Recognised only when EVERY non-blank line in the group carries it, never a partial match (which would instead be real content that happens to start with an asterisk, a markdown bullet, a multiplication example): a single line lacking it means the leading `*` elsewhere is real content too, and every line is left untouched.
+const STARRED_BLOCK_LINE_PATTERN = /^\*\s?/u;
+
+/**
+ * Strips a shared leading `* `/`*` marker from every line in `lines` when the group as a whole has the hand-written "starred block" shape STARRED_BLOCK_LINE_PATTERN's own comment describes; returns `lines` completely unchanged otherwise (including when `lines` is empty, or contains only blank lines, since there is then no real content to test the shape against at all).
+ */
+export function stripStarredBlockPrefix(lines: readonly string[]): string[] {
+  const contentLines = lines.filter((line) => line.length > 0);
+  if (contentLines.length === 0 || !contentLines.every((line) => STARRED_BLOCK_LINE_PATTERN.test(line))) return [...lines];
+
+  return lines.map((line) => line.replace(STARRED_BLOCK_LINE_PATTERN, ''));
 }
 
 /**

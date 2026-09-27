@@ -233,5 +233,17 @@ ruleTester.run('prefer-doc-comment', rule, {
       output: '/**\n * first line\n * second line\n */\nexport const h1 = (): void => {}, h2 = (): void => {};',
       errors: [{ messageId: 'preferDocComment' }],
     },
+    // A hand-written "starred" block comment (opening `/*`, not `/**`): each content line's own leading `* ` is delimiter decoration, not real content, so it is stripped once rather than left in place to double up against the fixer's own `* ` prefix.
+    {
+      code: '/*\n * A starred block that is not a doc comment\n * second line\n */\nexport function foo() {}',
+      output: '/**\n * A starred block that is not a doc comment\n * second line\n */\nexport function foo() {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // An indented example line inside the comment (a nested code sample) keeps its own extra indentation relative to the fixer's own `* ` prefix, rather than being flattened to the same level as its neighbours.
+    {
+      code: '// intro\n//   indented example line\nexport function foo() {}',
+      output: '/**\n * intro\n *   indented example line\n */\nexport function foo() {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
   ],
 });
