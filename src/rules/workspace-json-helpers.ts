@@ -6,10 +6,19 @@ function isStringNode(node: { readonly type: string }): node is StringNode {
   return node.type === 'String';
 }
 
+// momoa's own MemberNode.name is typed as StringNode | IdentifierNode because momoa's grammar also covers JSON5 (unquoted identifier keys), but every workspace-architecture rule's own meta.languages is only ever `json/json`/`json/jsonc`, where an unquoted key is a genuine parse error, never a value this function is asked to name. Mirrors package-json-key-order.ts's identical getMemberKeyName, kept as its own local copy rather than a shared import since each module narrows to the minimal structural shape it actually reads. Exported so that guarantee is checked directly against a deliberately IdentifierNode-shaped input, rather than trusted on the strength of this comment alone.
+export function getMemberKeyName(member: { readonly name: { readonly type: string } }): string {
+  const { name } = member;
+  if (!isStringNode(name)) {
+    throw new Error(`Unreachable: workspace-json-helpers only supports json/json and json/jsonc, where an unquoted (Identifier) member name is a parse error (got a "${name.type}" name instead).`);
+  }
+  return name.value;
+}
+
 /** package.json's own declared "name" field, read directly off a confirmed-top-level Object node. Returns undefined for a manifest with no "name" at all, or one whose value is not a plain string (a shape other JSON tooling would already flag elsewhere, not this rule's concern). */
 export function readDeclaredName(rootObject: ObjectNode): { readonly name: string; readonly node: StringNode } | undefined {
   for (const member of rootObject.members) {
-    if (!isStringNode(member.name) || member.name.value !== 'name') continue;
+    if (getMemberKeyName(member) !== 'name') continue;
     if (!isStringNode(member.value)) return undefined;
     return { name: member.value.value, node: member.value };
   }
@@ -30,11 +39,10 @@ export function collectTopLevelDependencies(rootObject: ObjectNode, dependencyFi
   const results: NamedDependency[] = [];
 
   for (const member of rootObject.members) {
-    if (!isStringNode(member.name) || !fields.has(member.name.value)) continue;
+    if (!fields.has(getMemberKeyName(member))) continue;
     if (member.value.type !== 'Object') continue;
     for (const dependency of member.value.members) {
-      if (!isStringNode(dependency.name)) continue;
-      results.push({ name: dependency.name.value, node: dependency });
+      results.push({ name: getMemberKeyName(dependency), node: dependency });
     }
   }
 

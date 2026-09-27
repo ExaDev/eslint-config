@@ -1,7 +1,7 @@
 import { parse } from '@humanwhocodes/momoa';
 import type { ObjectNode } from '@humanwhocodes/momoa';
 import { describe, expect, it } from 'vitest';
-import { collectTopLevelDependencies, readDeclaredName } from './workspace-json-helpers';
+import { collectTopLevelDependencies, getMemberKeyName, readDeclaredName } from './workspace-json-helpers';
 
 function rootObjectOf(json: string): ObjectNode {
   const document = parse(json, { mode: 'json' });
@@ -10,6 +10,13 @@ function rootObjectOf(json: string): ObjectNode {
   }
   return document.body;
 }
+
+describe('getMemberKeyName', () => {
+  it('throws for an Identifier-named member, a shape only reachable via JSON5, which this rule never parses', () => {
+    const fakeMember = { name: { type: 'Identifier', name: 'foo' } };
+    expect(() => getMemberKeyName(fakeMember)).toThrow(/Unreachable/);
+  });
+});
 
 describe('readDeclaredName', () => {
   it('reads a top-level "name" string field', () => {
