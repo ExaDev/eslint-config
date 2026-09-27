@@ -222,80 +222,92 @@ describe('isBeforeByRange', () => {
 });
 
 describe('isDirectiveComment', () => {
-  // Each recognised marker gets its own case, isolated from ESLint's own core directive-comment handling (which the main RuleTester suite's own comment explains would otherwise misreport an `eslint-disable` fixture as an unused directive): a mutant deleting any single alternative from the rule's own regex is only caught by exercising that exact alternative directly.
-  it.each([
-    'eslint-disable',
-    'eslint-disable-next-line no-console',
-    'eslint-disable-line no-console',
-    // The bare (`@`-less) form: never how a real TypeScript directive is written, but still recognised, since the alternative's own leading `@` is optional, not required.
-    'ts-expect-error',
-    'ts-ignore',
-    'ts-nocheck',
-    'ts-check',
-    // The real, `@`-prefixed form every TypeScript directive actually appears as once extractCommentLines has stripped only the single conventional space after `//` (never the `@` itself): pins the whole reason this rule exists to recognise `ts-*` markers at all, since the bare form above is never what a real fixture's own extracted line looks like.
-    '@ts-expect-error',
-    '@ts-ignore',
-    '@ts-nocheck',
-    '@ts-check',
-    'todo: revisit',
-    'fixme: revisit',
-    'TODO: revisit',
-    'FIXME: revisit',
-    // A bare `prettier-ignore` directive, the shape Prettier itself only ever recognises as a whole, self-contained comment.
-    'prettier-ignore',
-    // The rest of the real ESLint directive/config-comment family, verified directly against the installed eslint's own `lib/shared/directives.js`, not merely assumed: re-enabling a previously disabled rule, and the block-only inline config keywords that mark a variable or environment rather than suppressing a rule at all.
-    'eslint-enable',
-    'eslint-enable no-console',
-    'eslint no-console: off',
-    'eslint-env node',
-    'global foo, bar',
-    'globals foo, bar',
-    'exported foo',
-    // Each coverage tool's own `ignore` keyword, always separated from the tool name by real whitespace: `c8 ignore next`, `v8 ignore next`, `istanbul ignore next`, plus one further istanbul variant (`ignore if`) proving the pattern matches on the tool name and the `ignore` keyword alone, never the specific word after it.
-    'c8 ignore next',
-    'v8 ignore next',
-    'istanbul ignore next',
-    'istanbul ignore if',
-    // Two spaces between the tool name and "ignore", not one: pins the `+` quantifier on `\s+` specifically (a mutant weakening it to a bare `\s`, exactly one whitespace character, would fail to match this input, unlike the zero-or-more-vs-one-or-more distinction the "c8ignore" case below already pins).
-    'c8  ignore next',
-    // VS Code's and JetBrains' own shared editor-folding marker convention.
-    '#region',
-    '#region helpers',
-    '#endregion',
-    '#endregion helpers',
-  ])('recognises %s as a directive', (text) => {
-    expect(isDirectiveComment(text)).toBe(true);
+  // The two ESLint labels source-code.js's own getInlineConfigNodes/getDisableDirectives honour on a `//` Line comment, verified directly against the installed eslint's own source: recognised as directives in Line form too, not only Block.
+  it.each(['eslint-disable-next-line no-console', 'eslint-disable-line no-console'])('recognises %s as a directive in Line form, one of the two labels ESLint itself honours there', (text) => {
+    expect(isDirectiveComment(text, AST_TOKEN_TYPES.Line)).toBe(true);
   });
 
+  // The rest of the ESLint family, verified directly against the installed eslint's own `lib/shared/directives.js`: a live directive only in Block form, so recognised here with Block, not Line.
+  it.each(['eslint-disable', 'eslint-enable', 'eslint-enable no-console', 'eslint no-console: off', 'eslint-env node', 'global foo, bar', 'globals foo, bar', 'exported foo'])(
+    'recognises %s as a directive in Block form',
+    (text) => {
+      expect(isDirectiveComment(text, AST_TOKEN_TYPES.Block)).toBe(true);
+    },
+  );
+
+  // The identical text as the Block-form cases just above, but as a Line comment: source-code.js's own getInlineConfigNodes filters every one of these labels out for a Line comment (only the two `eslint-disable-line`/`eslint-disable-next-line` labels survive that filter), so ESLint itself never treats a `//` spelling of any of these as a live directive, and this rule must not either. This is the exact fix for the confirmed regression: `// eslint-enable is what this helper emits ...`, an ordinary Line comment merely opening with the word `eslint-enable`, was wrongly exempted before this distinction existed.
+  it.each(['eslint-disable', 'eslint-enable', 'eslint-enable no-console', 'eslint no-console: off', 'eslint-env node', 'global foo, bar', 'globals foo, bar', 'exported foo'])(
+    'does not recognise %s as a directive in Line form, since ESLint itself only honours eslint-disable-line/eslint-disable-next-line there',
+    (text) => {
+      expect(isDirectiveComment(text, AST_TOKEN_TYPES.Line)).toBe(false);
+    },
+  );
+
+  // Case-sensitivity: eslint's own directivesPattern is not case-insensitive, so a capitalised spelling of an otherwise-recognised ESLint-family word is never itself a directive, in Block form or Line, unlike the lowercase spelling tested above. Each of these is the exact confirmed regression fixture (only the first word's own case changed from the real directive already covered above), pinning the false-negative this rule used to have when the whole pattern carried the `i` flag.
+  it.each(['Global foo, bar', 'Exported foo', 'ESLint no-console: off'])('does not recognise %s as a directive in Block form, unlike its lowercase spelling', (text) => {
+    expect(isDirectiveComment(text, AST_TOKEN_TYPES.Block)).toBe(false);
+  });
+
+  // The bare (`@`-less) form: never how a real TypeScript directive is written, but still recognised, since the alternative's own leading `@` is optional, not required. Type-agnostic (no ESLint-style Line/Block restriction of its own), so tested with Line, the shape it always appears in for real.
+  it.each(['ts-expect-error', 'ts-ignore', 'ts-nocheck', 'ts-check', '@ts-expect-error', '@ts-ignore', '@ts-nocheck', '@ts-check', 'prettier-ignore'])('recognises %s as a directive', (text) => {
+    expect(isDirectiveComment(text, AST_TOKEN_TYPES.Line)).toBe(true);
+  });
+
+  // Each coverage tool's own `ignore` keyword, always separated from the tool name by real whitespace: `c8 ignore next`, `v8 ignore next`, `istanbul ignore next`, plus one further istanbul variant (`ignore if`) proving the pattern matches on the tool name and the `ignore` keyword alone, never the specific word after it. Type-agnostic, tested with Line.
+  it.each(['c8 ignore next', 'v8 ignore next', 'istanbul ignore next', 'istanbul ignore if', 'c8  ignore next', '#region', '#region helpers', '#endregion', '#endregion helpers'])(
+    'recognises %s as a directive',
+    (text) => {
+      expect(isDirectiveComment(text, AST_TOKEN_TYPES.Line)).toBe(true);
+    },
+  );
+
+  // The all-uppercase marker spelling is recognised on its own, regardless of what follows it, since no ordinary sentence opens a word that way.
+  it.each(['TODO: revisit', 'FIXME: revisit', 'TODO', 'FIXME'])('recognises the all-uppercase marker %s as a directive regardless of what follows', (text) => {
+    expect(isDirectiveComment(text, AST_TOKEN_TYPES.Line)).toBe(true);
+  });
+
+  // Any other casing is a directive only when immediately followed by `:` or `(`, the shape a real marker/tag is always written in.
+  it.each(['todo: revisit', 'fixme: revisit', 'todo(scope): message', 'fixme(scope): message'])('recognises %s as a directive, the real marker shape for a lowercase spelling', (text) => {
+    expect(isDirectiveComment(text, AST_TOKEN_TYPES.Line)).toBe(true);
+  });
+
+  // The exact confirmed regression fixture: a lowercase or mixed-case spelling with nothing but ordinary prose after it (no `:`/`(`) is never a directive, only ordinary text that happens to open with the word.
+  it.each(['todo now', 'Todo list items are rendered directly from the shared store'])(
+    'does not recognise %s as a directive, since a lowercase/mixed-case marker needs a following `:`/`(` and this one has neither',
+    (text) => {
+      expect(isDirectiveComment(text, AST_TOKEN_TYPES.Line)).toBe(false);
+    },
+  );
+
   it('does not recognise ordinary prose as a directive', () => {
-    expect(isDirectiveComment('an ordinary explanatory comment')).toBe(false);
+    expect(isDirectiveComment('an ordinary explanatory comment', AST_TOKEN_TYPES.Line)).toBe(false);
   });
 
   it('does not recognise a marker word only when it is not at the very start of the comment', () => {
     // Pins the leading `^` anchor: a mutant removing it would wrongly match a directive marker appearing mid-sentence.
-    expect(isDirectiveComment('this mentions todo later in the sentence')).toBe(false);
+    expect(isDirectiveComment('this mentions todo later in the sentence', AST_TOKEN_TYPES.Line)).toBe(false);
   });
 
   it('does not match a marker word without its own word boundary immediately after it', () => {
     // Pins the trailing `\b`: "todoist" is not the "todo" marker, just a longer word that happens to start with it.
-    expect(isDirectiveComment('todoist is not a real marker')).toBe(false);
+    expect(isDirectiveComment('todoist is not a real marker', AST_TOKEN_TYPES.Line)).toBe(false);
   });
 
   it('does not recognise "prettier-ignored", a longer word sharing the marker\'s own prefix, as the bare prettier-ignore directive', () => {
     // Pins the same trailing `\b` for the new prettier-ignore alternative specifically, the identical "todoist" reasoning above.
-    expect(isDirectiveComment('prettier-ignored is not a real marker')).toBe(false);
+    expect(isDirectiveComment('prettier-ignored is not a real marker', AST_TOKEN_TYPES.Line)).toBe(false);
   });
 
   it('does not recognise a coverage-tool name directly followed by "ignore" with no separating whitespace at all', () => {
     // Pins the `\s+` between the tool name and "ignore": a mutant weakening it to `\s*` would still match this input via its own zero-width case, silently accepting a shape no real coverage tool ever writes.
-    expect(isDirectiveComment('c8ignore next')).toBe(false);
+    expect(isDirectiveComment('c8ignore next', AST_TOKEN_TYPES.Line)).toBe(false);
   });
 
   it.each(['eslint-config-prettier is a real dependency of this package', 'eslint-plugin-jsdoc ships its own recommended config', 'global-scoped state is avoided here', 'exported-members are documented above'])(
     'does not recognise ordinary prose starting with an ESLint-keyword-shaped compound word as a directive: %s',
     (text) => {
       // Pins the ESLint family's own `(?=\s|$)` lookahead over the generic trailing `\b`: a mutant weakening it back to a bare `\b` would wrongly match every one of these, since a hyphen immediately satisfies a word boundary too.
-      expect(isDirectiveComment(text)).toBe(false);
+      expect(isDirectiveComment(text, AST_TOKEN_TYPES.Line)).toBe(false);
     },
   );
 });
