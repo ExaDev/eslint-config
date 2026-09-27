@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint';
 
 import { describe, expect, it } from 'vitest';
 
-import { extractCommentLines, getExportWrapper, hasUnsafeDocCommentContent, isDirectiveComment, stripStarredBlockPrefix } from './prefer-doc-comment';
+import { containsCommentTerminator, extractCommentLines, getExportWrapper, isDirectiveComment, parsesAsValidTsDoc, stripStarredBlockPrefix } from './prefer-doc-comment';
 
 function definedOrThrow<T>(value: T | undefined): T {
   if (value === undefined) {
@@ -152,21 +152,44 @@ describe('isDirectiveComment', () => {
   });
 });
 
-describe('hasUnsafeDocCommentContent', () => {
-  it('returns false for ordinary prose containing none of the unsafe characters', () => {
-    expect(hasUnsafeDocCommentContent(['an ordinary line', 'a second ordinary line'])).toBe(false);
-  });
-
-  it.each(['@', '{', '}', '<', '>'])('returns true when a line contains a bare %s', (character) => {
-    expect(hasUnsafeDocCommentContent([`a line containing ${character} right here`])).toBe(true);
+describe('containsCommentTerminator', () => {
+  it('returns false when no line contains a closing comment delimiter', () => {
+    expect(containsCommentTerminator(['an ordinary line', 'a second ordinary line'])).toBe(false);
   });
 
   it('returns true when a line contains a literal closing comment delimiter', () => {
-    expect(hasUnsafeDocCommentContent(['a line containing a close like this: */ right here'])).toBe(true);
+    expect(containsCommentTerminator(['a line containing a close like this: */ right here'])).toBe(true);
   });
 
   it('checks every line, not only the first', () => {
-    // Pins `.some` over the array (a mutant weakening it to check only `lines[0]` would miss an unsafe character on a later line).
-    expect(hasUnsafeDocCommentContent(['a safe first line', 'a second line with @ in it'])).toBe(true);
+    // Pins `.some` over the array (a mutant weakening it to check only `lines[0]` would miss a delimiter on a later line).
+    expect(containsCommentTerminator(['a safe first line', 'a second line with */ in it'])).toBe(true);
+  });
+});
+
+// Exercises the real @microsoft/tsdoc parser eslint-plugin-tsdoc's own `tsdoc/syntax` rule is itself built on, not a hand-picked character-class stand-in for it (see this function's own doc comment on the rule module for why the old approach was both too broad and too narrow). Every case here was confirmed directly against the installed parser before being pinned as a test, not assumed from its own documentation.
+describe('parsesAsValidTsDoc', () => {
+  it('returns true for an ordinary sentence with no TSDoc syntax of any kind', () => {
+    expect(parsesAsValidTsDoc('/**\n * an ordinary sentence\n */')).toBe(true);
+  });
+
+  it('returns true for a generic type reference, the exact shape the old character-class gate wrongly banned outright', () => {
+    expect(parsesAsValidTsDoc('/**\n * Returns an Array<string> of matches.\n */')).toBe(true);
+  });
+
+  it('returns true for a balanced backtick code span', () => {
+    expect(parsesAsValidTsDoc('/**\n * has a `balanced` backtick\n */')).toBe(true);
+  });
+
+  it('returns false for a bare at-sign not shaped like a real TSDoc tag', () => {
+    expect(parsesAsValidTsDoc('/**\n * uses @ right here\n */')).toBe(false);
+  });
+
+  it('returns false for an unbalanced backtick code span', () => {
+    expect(parsesAsValidTsDoc('/**\n * an unbalanced ` backtick\n */')).toBe(false);
+  });
+
+  it('returns false for an unescaped backslash, the exact shape a Windows path breaks on', () => {
+    expect(parsesAsValidTsDoc('/**\n * C:\\Users\\joe\n */')).toBe(false);
   });
 });
