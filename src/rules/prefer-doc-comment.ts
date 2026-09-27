@@ -89,13 +89,23 @@ export function isMethodOfExportedClass(node: TSESTree.MethodDefinition): boolea
 }
 
 /**
- * The maximal leading comment "group" directly attached to `anchor`: either a single already-consolidated `Block` comment, or the maximal run of consecutive `Line` comments, each immediately adjacent to the next (no blank line between any two), with the whole group sitting directly above `anchor` itself (no blank line separating the group from the declaration it documents). Returns `undefined` when `anchor` has no leading comment at all, or when the nearest one is separated from `anchor` by a blank line (not really "attached" to it). `TSESTree.Comment['type']` also allows a third value, `'Shebang'`, for parser-agnostic compatibility, but confirmed directly that typescript-eslint's own parser (the only one this codebase's rules are ever run under) never actually produces one: a leading `#!` line is dropped before tokenizing rather than surfaced as a comment at all, so there is no real input on which `lastComment` here is ever anything but `'Block'` or `'Line'`, and no separate branch is written for the case that cannot occur.
+ * Whether `comment` sits on the same physical line as a real token before it (a genuine trailing comment, `const before = 1; // note`), rather than starting its own line. `sourceCode.getTokenBefore` with `includeComments: false` skips past any earlier comment to the nearest real code token, so a run of several adjacent `//` lines is only ever flagged here on its very first member, the one that can actually share a line with preceding code; every later member in the same run is already known to start its own line (see getLeadingCommentGroup's own blank-line adjacency check, which guarantees each subsequent comment sits on its own physical line once the first is excluded).
+ */
+function isTrailingComment(sourceCode: TSESLint.SourceCode, comment: TSESTree.Comment): boolean {
+  const tokenBefore = sourceCode.getTokenBefore(comment, { includeComments: false });
+
+  return tokenBefore !== null && tokenBefore.loc.end.line === comment.loc.start.line;
+}
+
+/**
+ * The maximal leading comment "group" directly attached to `anchor`: either a single already-consolidated `Block` comment, or the maximal run of consecutive `Line` comments, each immediately adjacent to the next (no blank line between any two) and each starting its own physical line, with the whole group sitting directly above `anchor` itself (no blank line separating the group from the declaration it documents). Returns `undefined` when `anchor` has no leading comment at all, when the nearest one is separated from `anchor` by a blank line (not really "attached" to it), or when the nearest one is itself a trailing comment on the code line above (`export const before = 1; // trailing note`, isTrailingComment above): that comment documents the PRECEDING statement, not `anchor`, so treating it as `anchor`'s own leading comment would misattribute code that happens to share a line with it as the comment's own text. The backward walk through an adjacent run of `//` lines stops at the same trailing-comment boundary for the identical reason: a trailing comment further up the run ends the group there rather than being absorbed into it, so only the genuine standalone-line comments immediately above `anchor` are ever included. `TSESTree.Comment['type']` also allows a third value, `'Shebang'`, for parser-agnostic compatibility, but confirmed directly that typescript-eslint's own parser (the only one this codebase's rules are ever run under) never actually produces one: a leading `#!` line is dropped before tokenizing rather than surfaced as a comment at all, so there is no real input on which `lastComment` here is ever anything but `'Block'` or `'Line'`, and no separate branch is written for the case that cannot occur.
  */
 export function getLeadingCommentGroup(sourceCode: TSESLint.SourceCode, anchor: TSESTree.Node): readonly TSESTree.Comment[] | undefined {
   const comments = sourceCode.getCommentsBefore(anchor);
   const lastComment = comments.at(-1);
   if (lastComment === undefined) return undefined;
   if (anchor.loc.start.line - lastComment.loc.end.line > 1) return undefined;
+  if (isTrailingComment(sourceCode, lastComment)) return undefined;
   if (lastComment.type === AST_TOKEN_TYPES.Block) return [lastComment];
 
   // `boundary` tracks the earliest comment added to the group so far (seeded with `lastComment` itself), compared against each older candidate walking backward. Tracking it in its own variable, rather than re-reading `group[0]` each iteration, sidesteps `noUncheckedIndexedAccess` entirely for a value that can never actually be empty (`group` only ever grows from its non-empty seed), so no unreachable `=== undefined` guard is needed for it.
@@ -104,6 +114,7 @@ export function getLeadingCommentGroup(sourceCode: TSESLint.SourceCode, anchor: 
   for (const comment of comments.slice(0, -1).reverse()) {
     if (comment.type !== AST_TOKEN_TYPES.Line) break;
     if (boundary.loc.start.line - comment.loc.end.line > 1) break;
+    if (isTrailingComment(sourceCode, comment)) break;
     group.unshift(comment);
     boundary = comment;
   }

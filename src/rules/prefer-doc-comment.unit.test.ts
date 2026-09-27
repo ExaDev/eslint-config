@@ -100,6 +100,8 @@ ruleTester.run('prefer-doc-comment', rule, {
     '// first line\n// second line\n\nexport function foo() {}',
     // No leading comment at all.
     'export function foo() {}',
+    // A single trailing `//` comment sitting on the same line as the PRECEDING statement, directly above an export with nothing else between them: getLeadingCommentGroup treats this as not really `foo`'s own leading comment at all (isTrailingComment), so there is no group, and no report, however long the trailing text.
+    'export const before = 1; // trailing note\nexport function foo() {}',
     // Substantial, exported, but the comment's own text contains a bare `@`: withheld from reporting entirely, since promoting it into a doc comment would trip tsdoc/syntax on the very first character TSDoc treats as a tag opener.
     '// references an at-sign like this literal one: @ right here\n// second line\nexport function foo() {}',
     // Substantial, exported, but the comment's own text contains a literal closing comment delimiter: promoting it would prematurely end the new doc comment mid-content.
@@ -211,6 +213,18 @@ ruleTester.run('prefer-doc-comment', rule, {
     {
       code: '//* looks like a marker\n// second line\nexport function foo() {}',
       output: '/**\n * * looks like a marker\n * second line\n */\nexport function foo() {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A trailing comment on the PRECEDING statement's own line, followed by a genuine run of standalone doc lines above the export: getLeadingCommentGroup's backward walk stops at the trailing comment, so only the two standalone lines are converted, leaving the trailing note on the preceding statement's own line completely untouched.
+    {
+      code: 'export const before = 1; // trailing note\n// Doc line one for g.\n// Doc line two for g.\nexport function g(): void {}',
+      output: 'export const before = 1; // trailing note\n/**\n * Doc line one for g.\n * Doc line two for g.\n */\nexport function g(): void {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // The identical shape against a class method: a trailing comment on the previous method's own line, followed by a standalone doc-line run above the next method. Only the run above `n` is converted; `m`'s own trailing comment is untouched.
+    {
+      code: 'export class C {\n  m(): void {} // trailing\n  // Doc line one for n.\n  // Doc line two for n.\n  n(): void {}\n}',
+      output: 'export class C {\n  m(): void {} // trailing\n  /**\n   * Doc line one for n.\n   * Doc line two for n.\n   */\n  n(): void {}\n}',
       errors: [{ messageId: 'preferDocComment' }],
     },
   ],
