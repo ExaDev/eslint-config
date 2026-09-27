@@ -63,6 +63,8 @@ ruleTester.run('prefer-doc-comment', rule, {
     'class C {\n  // first line\n  // second line\n  m() {}\n}',
     // A public method of a class EXPRESSION assigned to an exported const, not a class DECLARATION: this rule's own enumerated target list never names a class expression, so it is never reported here either.
     'export const C = class {\n  // first line\n  // second line\n  m() {}\n};',
+    // An exported const whose init is neither an arrow function nor a function expression: this rule's own enumerated target list only ever names those two shapes for a const, so a plain value is never reported, however substantial its leading comment.
+    '// first line\n// second line\nexport const x = 5;',
     // The comment is substantial and the declaration is exported, but a blank line separates the two: not really "attached" to the declaration it would otherwise document.
     '// first line\n// second line\n\nexport function foo() {}',
     // No leading comment at all.
@@ -150,10 +152,16 @@ ruleTester.run('prefer-doc-comment', rule, {
       output: '/**\n * first line\n * second line\n */\nexport default function foo() {}',
       errors: [{ messageId: 'preferDocComment' }],
     },
-    // A public method of an exported class, indented two spaces: the fixer's own indentation tracks the comment's real column, not just column zero.
+    // A public method (no accessibility modifier at all) of an exported class, indented two spaces: the fixer's own indentation tracks the comment's real column, not just column zero.
     {
       code: 'export class C {\n  // first line\n  // second line\n  m() {}\n}',
       output: 'export class C {\n  /**\n   * first line\n   * second line\n   */\n  m() {}\n}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A method with the explicit `public` accessibility modifier: isPublicMethod's own `=== 'public'` branch, distinct from the "no modifier at all" (`undefined`) case above.
+    {
+      code: 'export class C {\n  // first line\n  // second line\n  public m() {}\n}',
+      output: 'export class C {\n  /**\n   * first line\n   * second line\n   */\n  public m() {}\n}',
       errors: [{ messageId: 'preferDocComment' }],
     },
     // An exported interface declaration.
