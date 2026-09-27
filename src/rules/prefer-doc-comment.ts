@@ -139,11 +139,25 @@ export function isMethodOfExportedClass(node: TSESTree.MethodDefinition): boolea
 }
 
 /**
+ * The `range` field isBeforeByRange below actually reads off each of its two arguments. Narrowed to just that (rather than the full `TSESTree.Decorator`/`ExportWrapper`, which also carry `type`/`loc`/`parent`, and, for a wrapper, `declaration`/`exportKind`) so the internal unit test can hand it plain, hand-written literal objects pinning the exact boundary a real parse can never reach, with no risk of drifting from the real parser's own shape: `range` alone can never itself drift, being always exactly `[start, end]` for any node, for any parser.
+ */
+export interface RangedNode {
+  readonly range: readonly [number, number];
+}
+
+/**
+ * Whether `a` starts strictly before `b`, by their own `range[0]`. A plain `<`, never `<=`: two distinct real tokens (a decorator and the export wrapper it may sit before, getDecoratedAnchor's own only real caller) can never share the identical start a real parse would produce, so this boundary is unreachable through the rule itself, but the function's own general contract still needs a real answer for it, confirmed directly rather than left to whichever `<`/`<=` happened to be written.
+ */
+export function isBeforeByRange(a: RangedNode, b: RangedNode): boolean {
+  return a.range[0] < b.range[0];
+}
+
+/**
  * The node whose own leading comment actually documents an exported class. TypeScript itself accepts a decorated exported class declaration written either way around the `export` keyword, `@dec export class Foo {}` or `export @dec class Foo {}` (confirmed directly by compiling both with the installed `typescript`, `experimentalDecorators` on and off alike; neither is a syntax error), but only the FIRST places the decorator's own range strictly before `wrapper`'s own start (confirmed directly against the real parser's own node ranges, not assumed): in that shape, `sourceCode.getCommentsBefore(wrapper)` finds nothing at all, since the decorator is a real code token, not a comment, sitting immediately before `wrapper`'s own start, so any real comment further up is above the decorator, never "directly before" the wrapper in the sense getCommentsBefore actually checks. In the second shape the decorator instead sits INSIDE `wrapper`'s own range (after `export`), so `wrapper`'s own start is already the correct anchor and needs no adjustment at all. A class's own `decorators` array can hold more than one entry (`@a @b export class Foo {}`), but only the FIRST is ever compared here: it is always the syntactically leftmost, so it alone can ever sit before `wrapper`.
  */
 export function getDecoratedAnchor(node: TSESTree.ClassDeclaration, wrapper: ExportWrapper): TSESTree.Node {
   const [firstDecorator] = node.decorators;
-  if (firstDecorator !== undefined && firstDecorator.range[0] < wrapper.range[0]) return firstDecorator;
+  if (firstDecorator !== undefined && isBeforeByRange(firstDecorator, wrapper)) return firstDecorator;
 
   return wrapper;
 }
