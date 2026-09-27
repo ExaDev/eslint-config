@@ -20,12 +20,15 @@ const createRule = ESLintUtils.RuleCreator(
 //
 // Of the ESLint family, `source-code.js`'s own `getInlineConfigNodes`/`getDisableDirectives` (read directly, not assumed) honour a `//` LINE comment ONLY for the two labels ESLINT_LINE_HONOURED_LABELS names below; every other member of the family (bare `eslint`, `eslint-env`, `eslint-enable`, `eslint-disable`, `global(s)`, `exported`) is a live directive only when written as a Block comment. A `//` line spelling one of those (`// eslint-enable is what this helper emits ...`) is therefore not a real ESLint directive at all, and this rule folding it into its own doc comment costs ESLint nothing, since ESLint was already ignoring it; isDirectiveComment below takes the comment's own `type` specifically to draw this distinction, and getProseGroupBefore/checkAnchor each pass the real type of the comment being tested, never a fixed assumption.
 //
-// TODO_FIXME_PATTERN is tested case-insensitively (`TODO`/`FIXME`/`Todo`/`todo` are all common in the wild) but restricted to the real marker shape: the all-uppercase spelling is recognised on its own, since no ordinary sentence opens a word that way, but any other casing is only a directive when immediately followed by `:` or `(` (`todo: revisit`, `fixme(scope): message`), the shape a real marker/tag is always written in; a bare `Todo `/`Fixme ` opening ordinary prose ("Todo list items are rendered ...") is never itself a directive, and case-insensitive matching without this shape restriction was a second real false negative an earlier version of this rule had.
+// TODO/FIXME are matched case-insensitively (`TODO`/`FIXME`/`Todo`/`todo` are all common in the wild) but restricted to the real marker shape, across two separate patterns rather than one with an optional captured marker (see ESLINT_FAMILY_PATTERN's own doc comment for why a captured group is avoided): TODO_FIXME_UPPERCASE_PATTERN recognises the all-uppercase spelling on its own, since no ordinary sentence opens a word that way, and TODO_FIXME_MARKED_PATTERN recognises any other casing only when immediately followed by `:` or `(` (`todo: revisit`, `fixme(scope): message`), the shape a real marker/tag is always written in; a bare `Todo `/`Fixme ` opening ordinary prose ("Todo list items are rendered ...") matches neither. Case-insensitive matching without this shape restriction was a second real false negative an earlier version of this rule had.
 //
 // OTHER_DIRECTIVE_PATTERN covers the remainder of the family, none of which carries an ESLint-style Line/Block restriction of its own, so each is recognised identically regardless of the comment's own type, case-insensitively throughout: matching the `ts-expect-error`/`prettier-ignore` families case-insensitively too is strictly more lenient here, never a false negative risk, since neither carries the ESLint family's own Line/Block distinction. The `ts-*` alternatives each carry an optional leading `@`: a real TypeScript suppression directive is always written `// @ts-expect-error`/`// @ts-ignore`/`// @ts-nocheck`/`// @ts-check`, never the bare `ts-expect-error` form with no `@` at all, and extractCommentLines never strips that `@` (only the single conventional space after `//`), so a pattern anchored on the bare form alone would never match a single real TypeScript directive in practice. The coverage-tool alternatives (`c8`/`v8`/`istanbul`) are always followed by a further keyword of their own (`ignore next`, `ignore next 3`, `ignore file`, `ignore else`, ...), never bare `ignore` alone, so the pattern requires at least the `ignore` keyword after the tool name and a following word boundary, matching every real variant without having to enumerate each one. `#region`/`#endregion` (an editor folding marker, VS Code's and JetBrains' own shared convention, never a symbol's own documentation any more than a suppression comment is) is recognised the same way: a real fixture written as one is always a whole, self-contained `//` comment of its own (`// #region helpers`), never prose that happens to start with a literal `#`, so the shared trailing `\b` is exactly as safe here as it already is for `todo`/`fixme`.
-const ESLINT_FAMILY_PATTERN = /^(eslint(?:-env|-enable|-disable(?:-next-line|-line)?)?|exported|globals?)(?=\s|$)/u;
+// Non-capturing throughout: the whole match (`RegExpExecArray`'s own index 0, always a real string, never `noUncheckedIndexedAccess`-optional the way a numbered group beyond it would be) is exactly the label text on its own, since the trailing `(?=\s|$)` lookahead is zero-width and contributes nothing to the matched text. Reading the label off index 0 rather than a captured group 1 needs no destructured fallback default for a branch no real match can ever actually take (a mandatory, un-nested alternation always populates index 0 when the pattern matches at all), the exact dead, uncoverable code a fallback default would otherwise be.
+const ESLINT_FAMILY_PATTERN = /^(?:eslint(?:-env|-enable|-disable(?:-next-line|-line)?)?|exported|globals?)(?=\s|$)/u;
 const ESLINT_LINE_HONOURED_LABELS: ReadonlySet<string> = new Set(['eslint-disable-line', 'eslint-disable-next-line']);
-const TODO_FIXME_PATTERN = /^(todo|fixme)\b(:|\()?/iu;
+// Split into two patterns, not one with an optional captured marker, for the identical reason ESLINT_FAMILY_PATTERN above reads its label off index 0 rather than a group: a captured, genuinely optional group still needs a destructured `undefined` fallback typed away, and testing each shape with its own `.test()` (a plain boolean, no captured text to extract at all) needs none.
+const TODO_FIXME_UPPERCASE_PATTERN = /^(?:TODO|FIXME)\b/u;
+const TODO_FIXME_MARKED_PATTERN = /^(?:todo|fixme)\b[:(]/iu;
 const OTHER_DIRECTIVE_PATTERN = /^(?:@?ts-(?:expect-error|ignore|nocheck|check)|prettier-ignore|(?:c8|v8|istanbul)\s+ignore|#(?:end)?region)\b/iu;
 
 /**
@@ -98,20 +101,9 @@ export function stripStarredBlockPrefix(lines: readonly string[]): string[] {
  */
 export function isDirectiveComment(text: string, commentType: TSESTree.Comment['type']): boolean {
   const eslintMatch = ESLINT_FAMILY_PATTERN.exec(text);
-  if (eslintMatch !== null) {
-    // `label` is always captured whenever `eslintMatch` is non-null (the alternation's own outer group is mandatory, never `(?:...)?`), so the destructured default is never actually reached through any real match; kept for the identical `noUncheckedIndexedAccess` reason firstMatchOrEmpty's own doc comment already gives for its sibling helper, never because this specific default is exercised.
-    const [, label = ''] = eslintMatch;
-
-    return commentType !== AST_TOKEN_TYPES.Line || ESLINT_LINE_HONOURED_LABELS.has(label);
-  }
-
-  const todoMatch = TODO_FIXME_PATTERN.exec(text);
-  if (todoMatch !== null) {
-    // `word` is always captured for the identical reason `label` above is; `marker` is genuinely optional (the pattern's own trailing `(:|\()?` group), so `undefined` here is a real, reachable outcome, not merely a defensive fallback.
-    const [, word = '', marker] = todoMatch;
-
-    return word === word.toUpperCase() || marker !== undefined;
-  }
+  // eslintMatch's own index 0 (see ESLINT_FAMILY_PATTERN's own doc comment for why that, not a captured group, is the label): always a real string whenever eslintMatch itself is non-null, by definition, the same guarantee firstMatchOrEmpty's own doc comment already gives its sibling helper.
+  if (eslintMatch !== null) return commentType !== AST_TOKEN_TYPES.Line || ESLINT_LINE_HONOURED_LABELS.has(eslintMatch[0]);
+  if (TODO_FIXME_UPPERCASE_PATTERN.test(text) || TODO_FIXME_MARKED_PATTERN.test(text)) return true;
 
   return OTHER_DIRECTIVE_PATTERN.test(text);
 }
