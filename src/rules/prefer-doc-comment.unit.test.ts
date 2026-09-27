@@ -80,6 +80,8 @@ ruleTester.run('prefer-doc-comment', rule, {
     '// TODO: revisit\nexport function foo() {}',
     // Exported, directive-shaped (FIXME), and deliberately far longer than the default threshold: still exempt, since a directive is exempt regardless of length.
     `// FIXME: ${LONG_LINE}\nexport function foo() {}`,
+    // A real TypeScript suppression directive, written exactly as one actually appears in source (its own leading `@`, never the bare `ts-expect-error` form): exempt regardless of length, the same as every other directive-shaped comment. Safe to use here as a real `@ts-expect-error`, unlike a real `eslint-disable`, since it is not one of ESLint's own core directive comments and so never trips an unused-directive complaint of its own in this minimal RuleTester setup.
+    "// @ts-expect-error deliberately wrong return type because this test needs a long explanation here\nexport function longTs(): number { return 'x'; }",
     // Exported class, but the method itself is private: never reported regardless of its own comment.
     'export class C {\n  // first line\n  // second line\n  private m() {}\n}',
     // Exported class, but the method itself is protected: never reported regardless of its own comment.
