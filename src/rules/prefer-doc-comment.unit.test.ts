@@ -102,10 +102,12 @@ ruleTester.run('prefer-doc-comment', rule, {
     'export function foo() {}',
     // A single trailing `//` comment sitting on the same line as the PRECEDING statement, directly above an export with nothing else between them: getLeadingCommentGroup treats this as not really `foo`'s own leading comment at all (isTrailingComment), so there is no group, and no report, however long the trailing text.
     'export const before = 1; // trailing note\nexport function foo() {}',
+    // The identical shape, but with the trailing text deliberately over the substantiality threshold: proves the exemption holds because isTrailingComment's own check fires, not merely because "trailing note" itself happened to be short enough to fail the separate substantiality check regardless.
+    `export const before = 1; // ${LONG_LINE}\nexport function foo() {}`,
     // A directive in the middle of a run, with only ONE short explanation line above it: the lines above the directive are sliced out on their own (never merged with the directive itself), and that one short line alone is not substantial, so nothing is reported at all, proving the split happens before the substantiality check, not after. A plain TODO stands in for a real `eslint-disable-next-line` here, the same substitution and reasoning the "directive-shaped (a short TODO marker)" case above already uses: this minimal RuleTester setup has no `no-empty-function` rule registered to report anything for a real disable comment to suppress, so ESLint's own core would flag it as an unused directive, a false failure unrelated to this rule.
     '// short intro\n// TODO: revisit\n// trailing detail\nexport function foo() {}',
-    // A directive-shaped line found INSIDE an already-consolidated Block comment (the shape multiline-comment-style's own bare-block fixer produces from a `//` run), rather than in a genuine `//` run: never split, and never reported at all, since a Block comment's one comment node has no one-to-one mapping onto its own extracted lines for a partial fix to slice safely (checkAnchor's own `!isLineRun` guard). A real `eslint-disable-next-line` is safe to use here, unlike in the `//`-run cases above: ESLint's own core directive parsing only ever recognises a comment whose ENTIRE own text matches directive syntax, never a line embedded inside a larger block's prose, so this never risks an unused-directive complaint of its own.
-    '/* intro line\n   eslint-disable-next-line no-empty-function\n   trailing detail */\nexport function foo() {}',
+    // A directive-shaped line found INSIDE an already-consolidated Block comment (the shape multiline-comment-style's own bare-block fixer produces from a `//` run), rather than in a genuine `//` run: never split, and never reported at all, since a Block comment's one comment node has no one-to-one mapping onto its own extracted lines for a partial fix to slice safely (checkAnchor's own `!isLineRun` guard). TWO intro lines above the directive, not one: with only one, the lines "above" the directive would be a single short line, already exempt on substantiality grounds alone, masking whether this guard is doing anything at all; with two, skipping the guard would produce a genuinely substantial (and corrupted) report of its own. A real `eslint-disable-next-line` is safe to use here, unlike in the `//`-run cases above: ESLint's own core directive parsing only ever recognises a comment whose ENTIRE own text matches directive syntax, never a line embedded inside a larger block's prose, so this never risks an unused-directive complaint of its own.
+    '/* intro line one\n   intro line two\n   eslint-disable-next-line no-empty-function\n   trailing detail */\nexport function foo() {}',
     // A short `//` comment immediately above the declaration, with an unrelated BLOCK comment further above it: the leading-comment group stops at the type mismatch (Block, not Line), so only the short adjacent line comment is considered, and it alone is not substantial.
     '/* explanatory aside */\n// x\nexport function foo() {}',
     // Two `//` comments with a blank line between them: the leading-comment group stops at that gap, so only the short adjacent line comment (immediately above the declaration) is considered.
@@ -223,6 +225,12 @@ ruleTester.run('prefer-doc-comment', rule, {
     {
       code: '// first line\n// second line\nexport const h1 = (): void => {}, h2 = (): void => {};',
       output: '/**\n * first line\n * second line\n */\nexport const h1 = (): void => {}, h2 = (): void => {};',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A MIXED multi-declarator statement, only one of whose declarators is function-valued (`h2 = 5` is not): still reported, since ANY matching declarator is enough (`.some`, not `.every`, which would instead demand every declarator match).
+    {
+      code: '// first line\n// second line\nexport const h1 = (): void => {}, h2 = 5;',
+      output: '/**\n * first line\n * second line\n */\nexport const h1 = (): void => {}, h2 = 5;',
       errors: [{ messageId: 'preferDocComment' }],
     },
     // A hand-written "starred" block comment (opening `/*`, not `/**`): each content line's own leading `* ` is delimiter decoration, not real content, so it is stripped once rather than left in place to double up against the fixer's own `* ` prefix.

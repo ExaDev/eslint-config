@@ -1,4 +1,4 @@
-import { AST_TOKEN_TYPES, ESLintUtils, type TSESTree } from '@typescript-eslint/utils';
+import { AST_TOKEN_TYPES, ESLintUtils, type TSESLint, type TSESTree } from '@typescript-eslint/utils';
 
 import { RuleTester } from '@typescript-eslint/rule-tester';
 
@@ -6,7 +6,16 @@ import tseslint from 'typescript-eslint';
 
 import { describe, expect, it } from 'vitest';
 
-import { containsCommentTerminator, extractCommentLines, getExportWrapper, isDirectiveComment, parsesAsValidTsDoc, stripStarredBlockPrefix } from './prefer-doc-comment';
+import {
+  commonLeadingWhitespace,
+  containsCommentTerminator,
+  extractCommentLines,
+  getExportWrapper,
+  isDirectiveComment,
+  isTrailingComment,
+  parsesAsValidTsDoc,
+  stripStarredBlockPrefix,
+} from './prefer-doc-comment';
 
 function definedOrThrow<T>(value: T | undefined): T {
   if (value === undefined) {
@@ -36,6 +45,32 @@ const probe = probeCreateRule({
 new RuleTester({ languageOptions: { parser: tseslint.parser, sourceType: 'module' } }).run('probe', probe, {
   valid: [],
   invalid: [{ code: 'const x = 1;', errors: [{ messageId: 'hit' }] }],
+});
+
+// isTrailingComment needs a real SourceCode (for getTokenBefore) and real Comment nodes in a genuine positional relationship a hand-written CommentLike object cannot supply, captured via a second probe rule over one fixture carrying both shapes its own doc comment describes: a comment genuinely trailing real code on its own line, and a comment merely sharing ITS line with an EARLIER, unrelated comment rather than real code.
+let capturedCommentsSourceCode: TSESLint.SourceCode | undefined;
+const commentsProbe = probeCreateRule({
+  name: 'comments-probe',
+  meta: { type: 'problem', schema: [], docs: { description: 'probe' }, messages: { hit: 'hit' } },
+  defaultOptions: [],
+  create(context) {
+    return {
+      Program(node) {
+        capturedCommentsSourceCode = context.sourceCode;
+        context.report({ node, messageId: 'hit' });
+      },
+    };
+  },
+});
+
+new RuleTester({ languageOptions: { parser: tseslint.parser, sourceType: 'module' } }).run('comments-probe', commentsProbe, {
+  valid: [],
+  invalid: [
+    {
+      code: 'const a = 1; // real trailing\n\nconst b = 2;\n/* aside */ // note\nexport function foo() {}',
+      errors: [{ messageId: 'hit' }],
+    },
+  ],
 });
 
 // extractCommentLines only ever reads a comment's own `type`/`value` fields (see CommentLike's own doc comment), so a plain hand-written literal object is a safe, drift-free stand-in for a real TSESTree.Comment here, unlike the node/scope fabrication this codebase's own similarly-shaped internal tests (prefer-options-object-param.internal.unit.test.ts) deliberately avoid.
@@ -89,6 +124,36 @@ describe('extractCommentLines', () => {
   it('strips a hand-written starred block\'s own leading marker after dedenting, converging on the same lines a bare block would produce', () => {
     expect(extractCommentLines([{ type: AST_TOKEN_TYPES.Block, value: '\n * A starred block\n * second line\n ' }])).toEqual(['A starred block', 'second line']);
   });
+
+  it('excludes a whitespace-only (not merely empty) own-body line from the shared dedent margin, distinct from a real content line', () => {
+    // Pins commonLeadingWhitespace's own `.trim()` check specifically: a mutant weakening it to a bare `.length > 0` would wrongly fold the all-space line's own 3-space indent into the margin, dedenting 'two' by 3 instead of the real body's own 5, leaving '  two' rather than 'two'.
+    expect(extractCommentLines([{ type: AST_TOKEN_TYPES.Block, value: ' one\n   \n     two ' }])).toEqual(['one', '', 'two']);
+  });
+
+  it('drops a whitespace-only (not merely empty) FIRST physical line as delimiter padding, not real content', () => {
+    // Pins firstKept's own `.trim()` check: a mutant weakening it to a bare `.length > 0` would keep this all-space line as a spurious leading empty entry.
+    expect(extractCommentLines([{ type: AST_TOKEN_TYPES.Block, value: '   \n   real content\n   more ' }])).toEqual(['real content', 'more']);
+  });
+
+  it('trims trailing whitespace off the FIRST physical line after stripping its own single leading space', () => {
+    // Pins the `.trimEnd()` specifically (not `.trimStart()`, which would leave this line's own trailing spaces in place): the first line carries no further leading indentation of its own to preserve here, only trailing padding before the next physical line begins.
+    expect(extractCommentLines([{ type: AST_TOKEN_TYPES.Block, value: ' first line   \n   second' }])).toEqual(['first line', 'second']);
+  });
+});
+
+describe('commonLeadingWhitespace', () => {
+  it('returns 0 for an empty array', () => {
+    expect(commonLeadingWhitespace([])).toBe(0);
+  });
+
+  it('returns 0 when every line is blank (whitespace-only), rather than the Infinity a bare Math.min of an empty spread would otherwise produce', () => {
+    expect(commonLeadingWhitespace(['   ', '  '])).toBe(0);
+  });
+
+  it('returns the shared margin across every non-blank line, ignoring a blank line\'s own lack of indentation', () => {
+    const sharedMargin = '   ';
+    expect(commonLeadingWhitespace([`${sharedMargin}a`, '', `${sharedMargin}  b`])).toBe(sharedMargin.length);
+  });
 });
 
 describe('stripStarredBlockPrefix', () => {
@@ -111,6 +176,26 @@ describe('stripStarredBlockPrefix', () => {
 
   it('strips a bare "*" with no trailing space too, the marker\'s own optional-space branch', () => {
     expect(stripStarredBlockPrefix(['*first'])).toEqual(['first']);
+  });
+
+  it('leaves a line with a `*` NOT at its own start completely unchanged, pinning the pattern\'s own leading anchor', () => {
+    // A mutant dropping the `^` anchor would match this line's mid-sentence `*` too, wrongly treating it as starred-block shape and corrupting it via replace.
+    expect(stripStarredBlockPrefix(['not * starred'])).toEqual(['not * starred']);
+  });
+});
+
+describe('isTrailingComment', () => {
+  it('returns true for a comment that genuinely trails real code on its own physical line', () => {
+    const sourceCode = definedOrThrow(capturedCommentsSourceCode);
+    const [realTrailing] = sourceCode.getAllComments();
+    expect(isTrailingComment(sourceCode, definedOrThrow(realTrailing))).toBe(true);
+  });
+
+  it('returns false for a comment sharing its own line with an EARLIER, unrelated comment rather than real code, pinning the default includeComments: false skip past that earlier comment', () => {
+    // A mutant flipping this default to `true` (or dropping it for the equivalent `{}`, resolved instead by omitting the options object entirely) would have getTokenBefore stop at the earlier `/* aside */` comment, which shares this comment's own line, and wrongly call it trailing too.
+    const sourceCode = definedOrThrow(capturedCommentsSourceCode);
+    const note = sourceCode.getAllComments().at(-1);
+    expect(isTrailingComment(sourceCode, definedOrThrow(note))).toBe(false);
   });
 });
 
