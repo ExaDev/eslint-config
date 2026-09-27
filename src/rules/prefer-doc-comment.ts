@@ -184,6 +184,15 @@ function getProseGroupBefore(sourceCode: TSESLint.SourceCode, beforeLine: number
   return group;
 }
 
+/**
+ * The line-break sequence, `\n` or `\r\n`, actually used right after `fromIndex` in `text`: the real terminator ending the leading comment group's own first physical line, whichever the file's own convention happens to be, so the fixer's own replacement (which needs a line break between the opening delimiter and the first body line, between every body line, and before the closing one) never introduces the OTHER convention into a file that consistently uses just one, corrupting a CRLF file with LF-only breaks the moment it splices in fresh text of its own. Returns `'\n'` when no line break is found anywhere in `text` from `fromIndex` onward: unreachable through the rule itself (a comment group and the anchor it documents are always on different physical lines, per getLeadingCommentGroup's own adjacency check, which guarantees a real break sits between the group's own start and the anchor that follows it), but this function's own general contract still needs an answer for that case.
+ */
+export function detectLineBreak(text: string, fromIndex: number): string {
+  const match = /\r\n|\n/.exec(text.slice(fromIndex));
+
+  return match === null ? '\n' : match[0];
+}
+
 type MessageIds = 'preferDocComment';
 type Options = readonly [{ readonly maxLineLength: number }];
 
@@ -244,8 +253,9 @@ const preferDocComment = createRule<Options, MessageIds>({
       const indentMatch = /^\s*/.exec(rawLinePrefix);
       // `/^\s*/` always matches, even against an empty string (its own `*` quantifier accepts zero repetitions), so `indentMatch` is never actually `null` here; the `?? []` fallback exists only to satisfy `exec`'s own general `RegExpExecArray | null` return type, not because this specific pattern can ever produce one.
       const [indent = ''] = indentMatch ?? [];
-      const body = consideredLines.map((line) => (line.length > 0 ? `${indent} * ${line}` : `${indent} *`)).join('\n');
-      const replacement = `/**\n${body}\n${indent} */`;
+      const lineBreak = detectLineBreak(sourceCode.text, firstComment.range[0]);
+      const body = consideredLines.map((line) => (line.length > 0 ? `${indent} * ${line}` : `${indent} *`)).join(lineBreak);
+      const replacement = `/**${lineBreak}${body}${lineBreak}${indent} */`;
       // containsCommentTerminator is checked independently of, and never overridden by, parsesAsValidTsDoc: see its own doc comment for why a literal `*\/` withholds the fix regardless of what TSDoc itself thinks of the rest of the candidate text.
       const canAutofix = !containsCommentTerminator(consideredLines) && parsesAsValidTsDoc(replacement);
 

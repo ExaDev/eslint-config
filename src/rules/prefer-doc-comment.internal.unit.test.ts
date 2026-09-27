@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   commonLeadingWhitespace,
   containsCommentTerminator,
+  detectLineBreak,
   extractCommentLines,
   getExportWrapper,
   isDirectiveComment,
@@ -252,6 +253,27 @@ describe('containsCommentTerminator', () => {
   it('checks every line, not only the first', () => {
     // Pins `.some` over the array (a mutant weakening it to check only `lines[0]` would miss a delimiter on a later line).
     expect(containsCommentTerminator(['a safe first line', 'a second line with */ in it'])).toBe(true);
+  });
+});
+
+describe('detectLineBreak', () => {
+  it('returns a bare LF when that is the break found', () => {
+    expect(detectLineBreak('first\nsecond', 0)).toBe('\n');
+  });
+
+  it('returns a CRLF pair when that is the break found, not just its own trailing LF half', () => {
+    // Pins the full `\r\n` alternative over the bare `\n` one: a mutant reordering the alternation, or dropping the `\r\n` branch entirely, would still match here on the LF half alone, silently discarding the `\r` and leaving mixed line endings in the fixer's own replacement.
+    expect(detectLineBreak('first\r\nsecond', 0)).toBe('\r\n');
+  });
+
+  it('searches only from fromIndex onward, ignoring a break that sits before it', () => {
+    // Pins the `.slice(fromIndex)`: a mutant dropping it (or using the whole string regardless of `fromIndex`) would instead find the earlier LF, before the real comment text this call cares about even starts.
+    expect(detectLineBreak('before\nfirst\r\nsecond', 'before\n'.length)).toBe('\r\n');
+  });
+
+  it('returns a bare LF fallback when there is no line break anywhere in the searched text', () => {
+    // Never reached through the rule itself (a leading comment group and its anchor are always on different physical lines), but this function's own general contract still needs an answer for it, the same "caller already confirmed" shape this file's own definedOrThrow helper documents for its own unreachable branch.
+    expect(detectLineBreak('no break here at all', 0)).toBe('\n');
   });
 });
 
