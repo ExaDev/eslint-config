@@ -112,6 +112,16 @@ describe('findNearestPackageJson', () => {
     expect(findNearestPackageJson(deepDir)).toBeUndefined();
   });
 
+  it('returns undefined for a package.json that parses to a top-level array rather than an object, the same outcome as no ancestor manifest at all', () => {
+    // Pins the behaviour the extracted, shared isRecord (src/is-record.ts) gives this walk: it excludes arrays (`!Array.isArray`), unlike a bare `typeof === 'object' && !== null` check would, so an array-shaped manifest is indistinguishable from a wholly absent one to every caller of findNearestPackageJson, matching workspace-graph.ts's identical readDeclaredManifest.
+    root = mkdtempSync(join(tmpdir(), 'barrel-auto-detect-array-manifest-'));
+    const startDir = join(root, 'src');
+    mkdirSync(startDir, { recursive: true });
+    writeFileSync(join(root, 'package.json'), JSON.stringify(['not', 'an', 'object']));
+
+    expect(findNearestPackageJson(startDir)).toBeUndefined();
+  });
+
   it('caches the resolved manifest by its own start directory, never re-reading the file on a later call for the same directory', () => {
     root = mkdtempSync(join(tmpdir(), 'barrel-auto-detect-cache-'));
     const startDir = join(root, 'src');
