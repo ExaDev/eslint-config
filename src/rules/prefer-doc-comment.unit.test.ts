@@ -259,6 +259,12 @@ ruleTester.run('prefer-doc-comment', rule, {
       output: '/**\n * Explanation line one.\n * Explanation line two.\n */\n// TODO: revisit\n// Explanation line three.\nexport function d4(): void {}',
       errors: [{ messageId: 'preferDocComment' }],
     },
+    // A bare BLOCK comment (the exact shape @stylistic/eslint-plugin's own multiline-comment-style `bare-block` fixer produces from a `//` run) directly above a directive-shaped Line comment, itself directly above the export: getLeadingCommentGroup's own backward walk must skip past the directive entirely to find the block, a DIFFERENT comment shape from the directive sitting below it, rather than stopping at that type boundary the moment the directive is reached (the exact bug a same-type-only walk would hit, since it would otherwise see only the directive as its own one-line "group", find nothing substantial there, and never even look at the block above at all, leaving it unreported and un-fixed forever). Still reported and converted, exactly like the pure `//`-run case above; the directive is left completely untouched, directly above the export, same as every other directive case here. A plain TODO stands in for a real `eslint-disable-next-line` for the same reason every other standalone-directive case above does: this minimal RuleTester setup has no matching rule registered for a real disable comment to suppress, so ESLint's own core would flag it as an unused directive, a false failure unrelated to this rule.
+    {
+      code: '/* first line\n   second line */\n// TODO: revisit\nexport function withDirective() {}',
+      output: '/**\n * first line\n * second line\n */\n// TODO: revisit\nexport function withDirective() {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
     // The comment's own text contains a bare `@` not shaped like a real TSDoc tag: no longer silently exempt from being reported at all (the old character-class gate withheld even the report, hiding a real violation). Still reported, but with no fix, since the exact candidate genuinely fails to parse as valid TSDoc, confirmed directly against the real parser rather than assumed.
     {
       code: '// references an at-sign like this literal one: @ right here\n// second line\nexport function foo() {}',
