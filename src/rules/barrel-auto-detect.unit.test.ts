@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { decideAutoBarrelMode, resolveAutoMode } from './barrel-auto-detect';
+import { decideAutoBarrelMode, findNearestPackageJson, resolveAutoMode } from './barrel-auto-detect';
 
 describe('decideAutoBarrelMode', () => {
   it('resolves single for a non-empty object exports field', () => {
@@ -39,6 +39,10 @@ describe('decideAutoBarrelMode', () => {
 
   it('resolves banned for an empty-array exports', () => {
     expect(decideAutoBarrelMode({ exports: [] })).toBe('banned');
+  });
+
+  it('resolves single for a non-empty-array exports', () => {
+    expect(decideAutoBarrelMode({ exports: ['./dist/index.js'] })).toBe('single');
   });
 
   it('resolves banned for an empty-string exports', () => {
@@ -89,5 +93,47 @@ describe('resolveAutoMode with the real filesystem walk-up', () => {
     writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'publish-shaped', exports: { '.': './dist/index.js' } }));
 
     expect(resolveAutoMode(join(root, 'src', 'index.ts'))).toBe('single');
+  });
+});
+
+describe('findNearestPackageJson', () => {
+  let root: string;
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('returns undefined once the walk reaches the real filesystem root with no ancestor package.json anywhere', () => {
+    // tmpdir()'s own ancestry (verified directly against this machine) owns no package.json all the way up to "/", so this genuinely exercises the walk's own root-reached branch (parent === dir) rather than a mocked stand-in for it.
+    root = mkdtempSync(join(tmpdir(), 'barrel-auto-detect-no-ancestor-'));
+    const deepDir = join(root, 'a', 'b', 'c');
+    mkdirSync(deepDir, { recursive: true });
+
+    expect(findNearestPackageJson(deepDir)).toBeUndefined();
+  });
+
+  it('caches the resolved manifest by its own start directory, never re-reading the file on a later call for the same directory', () => {
+    root = mkdtempSync(join(tmpdir(), 'barrel-auto-detect-cache-'));
+    const startDir = join(root, 'src');
+    mkdirSync(startDir, { recursive: true });
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'original' }));
+
+    const first = findNearestPackageJson(startDir);
+    expect(first).toEqual({ name: 'original' });
+
+    // Rewritten after the first call, without ever clearing the cache: a genuinely fresh read would see this new content, so the second call below can only still return the original value if it actually came from the cache rather than a re-read.
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'changed' }));
+    const second = findNearestPackageJson(startDir);
+    expect(second).toEqual({ name: 'original' });
+  });
+
+  it('caches an undefined outcome too, for a start directory proven above to have no ancestor package.json at all', () => {
+    root = mkdtempSync(join(tmpdir(), 'barrel-auto-detect-cache-undefined-'));
+    const deepDir = join(root, 'a', 'b');
+    mkdirSync(deepDir, { recursive: true });
+
+    expect(findNearestPackageJson(deepDir)).toBeUndefined();
+    // A second call for the identical directory, still with no package.json anywhere in its ancestry: proves the cached "undefined" outcome is itself returned (packageJsonByStartDir.has, not a nullish check, is what distinguishes "cached absence" from "never looked up").
+    expect(findNearestPackageJson(deepDir)).toBeUndefined();
   });
 });
