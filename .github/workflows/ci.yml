@@ -74,7 +74,22 @@ jobs:
           node-version: '22'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test:mutation
+      # Content-diff based (Stryker's IncrementalDiffer text-diffs stored vs current source, never hash/mtime/git-ref), so restoring from an unrelated prior run is always safe: a mismatch only means bigger diffs and more reruns, never a wrongly-skipped mutant. restore-keys' broad prefix is what actually matches, since the exact key (this run's own id) never hits on lookup, only on save. See https://stryker-mutator.io/docs/stryker-js/incremental/.
+      - name: Restore Stryker incremental result cache
+        uses: actions/cache/restore@v6
+        with:
+          path: reports/stryker-incremental.json
+          key: stryker-incremental-${{ github.run_id }}
+          restore-keys: |
+            stryker-incremental-
+      # Stryker only diffs mutated and test files, so a change to something outside that scope (config, fixture data, a snapshot, an env var) that alters behaviour is invisible to the incremental differ and could let a mutant wrongly reuse a stale result. --force on push to main (never on a PR, so PRs keep the speed benefit) periodically re-tests everything and rebuilds the incremental file from a known-clean baseline, so that blind spot can never compound silently forever.
+      - run: pnpm test:mutation${{ github.ref == 'refs/heads/main' && ' -- --force' || '' }}
+      - name: Save Stryker incremental result cache
+        if: always()
+        uses: actions/cache/save@v6
+        with:
+          path: reports/stryker-incremental.json
+          key: stryker-incremental-${{ github.run_id }}
 
   required-checks:
     name: Required Checks
