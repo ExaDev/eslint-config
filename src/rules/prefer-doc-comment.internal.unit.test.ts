@@ -223,6 +223,13 @@ describe('isDirectiveComment', () => {
     'fixme: revisit',
     'TODO: revisit',
     'FIXME: revisit',
+    // A bare `prettier-ignore` directive, the shape Prettier itself only ever recognises as a whole, self-contained comment.
+    'prettier-ignore',
+    // Each coverage tool's own `ignore` keyword, always separated from the tool name by real whitespace: `c8 ignore next`, `v8 ignore next`, `istanbul ignore next`, plus one further istanbul variant (`ignore if`) proving the pattern matches on the tool name and the `ignore` keyword alone, never the specific word after it.
+    'c8 ignore next',
+    'v8 ignore next',
+    'istanbul ignore next',
+    'istanbul ignore if',
   ])('recognises %s as a directive', (text) => {
     expect(isDirectiveComment(text)).toBe(true);
   });
@@ -239,6 +246,16 @@ describe('isDirectiveComment', () => {
   it('does not match a marker word without its own word boundary immediately after it', () => {
     // Pins the trailing `\b`: "todoist" is not the "todo" marker, just a longer word that happens to start with it.
     expect(isDirectiveComment('todoist is not a real marker')).toBe(false);
+  });
+
+  it('does not recognise "prettier-ignored", a longer word sharing the marker\'s own prefix, as the bare prettier-ignore directive', () => {
+    // Pins the same trailing `\b` for the new prettier-ignore alternative specifically, the identical "todoist" reasoning above.
+    expect(isDirectiveComment('prettier-ignored is not a real marker')).toBe(false);
+  });
+
+  it('does not recognise a coverage-tool name directly followed by "ignore" with no separating whitespace at all', () => {
+    // Pins the `\s+` between the tool name and "ignore": a mutant weakening it to `\s*` would still match this input via its own zero-width case, silently accepting a shape no real coverage tool ever writes.
+    expect(isDirectiveComment('c8ignore next')).toBe(false);
   });
 });
 
