@@ -21,6 +21,10 @@ const FIXED_GRAPH: WorkspaceGraph = {
       pkg('clock-system', 'core/clock/system', 'core'),
       pkg('@acme/test-database', 'test/database', 'test'),
       pkg(NAMELESS_RELATIVE_DIR, NAMELESS_RELATIVE_DIR, 'core'),
+      // A group that IS a single package rather than a container of them: 'docs' sits exactly at its own group's root, leaving no path segments for the default 'drop-group' strategy's own `rest` to keep.
+      pkg('@acme/docs', 'docs', 'docs'),
+      // Same group root, wrongly (unscoped) named, for the matching invalid case below: self-identification looks the manifest's OWN declared name up in the graph, so a mismatch fixture needs its own distinct graph entry, not a second manifest for the entry above.
+      pkg('docs', 'docs', 'docs'),
     ].map((entry) => [entry.name, entry]),
   ),
   dependencyNamesByName: new Map(),
@@ -55,7 +59,10 @@ describe('findGroupSpec', () => {
 const rule = createPackageNameMirrorsPathRule({ loadGraph: () => FIXED_GRAPH, fs: identityFs });
 const ruleTester = new RuleTester({ language: 'json/json', plugins: { json } });
 
-const GROUPS_AND_NAMING = { groups: [{ name: 'core' }, { name: 'test', naming: 'keep-group' as const }], naming: { scope: '@acme' } };
+const GROUPS_AND_NAMING = {
+  groups: [{ name: 'core' }, { name: 'test', naming: 'keep-group' as const }, { name: 'docs' }],
+  naming: { scope: '@acme' },
+};
 
 describe('createPackageNameMirrorsPathRule meta', () => {
   it('declares its own two message ids', () => {
@@ -99,6 +106,8 @@ ruleTester.run('package-name-mirrors-path', rule, {
     { code: JSON.stringify({ name: 'clock-system' }), filename: filenameFor('core/clock/system'), options: [{ groups: [{ name: 'core' }] }] },
     // A manifest declaring a real graph member's name, but linted from a DIFFERENT directory than that member's own relativeDir (a stale or duplicated copy sitting elsewhere), is skipped rather than checking the copy's OWN path against the real package's expected name.
     { code: JSON.stringify({ name: 'clock-system' }), filename: filenameFor('dist/clock-system'), options: [GROUPS_AND_NAMING] },
+    // A package sitting exactly at its own group's root, under the default 'drop-group' strategy: with no path segments left of the group's own root for 'rest' to keep, the expected name falls back to the group's own name rather than an impossible empty (or bare-scope) one.
+    { code: JSON.stringify({ name: '@acme/docs' }), filename: filenameFor('docs'), options: [GROUPS_AND_NAMING] },
   ],
   invalid: [
     {
@@ -120,6 +129,13 @@ ruleTester.run('package-name-mirrors-path', rule, {
       filename: filenameFor(NAMELESS_RELATIVE_DIR),
       options: [GROUPS_AND_NAMING],
       errors: [{ messageId: 'missingName', data: { dir: NAMELESS_RELATIVE_DIR, expected: '@acme/nameless' } }],
+    },
+    // A package at its own group's root declaring the wrong (unscoped) name still reports a satisfiable expected one (the group's own name), never an empty or bare-scope string.
+    {
+      code: JSON.stringify({ name: 'docs' }),
+      filename: filenameFor('docs'),
+      options: [GROUPS_AND_NAMING],
+      errors: [{ messageId: 'mismatch', data: { dir: 'docs', actual: 'docs', expected: '@acme/docs' } }],
     },
   ],
 });
