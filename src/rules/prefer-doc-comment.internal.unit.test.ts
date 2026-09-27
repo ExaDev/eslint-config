@@ -9,6 +9,7 @@ import {
   extractCommentLines,
   firstMatchOrEmpty,
   getExportWrapper,
+  isBeforeByRange,
   isDirectiveComment,
   isTrailingComment,
   parsesAsValidTsDoc,
@@ -203,6 +204,22 @@ describe('getExportWrapper', () => {
   });
 });
 
+describe('isBeforeByRange', () => {
+  // Every range boundary below is 0, 1 or 2 (this repo's own no-magic-numbers already exempts exactly those), never a value picked to be realistic: only each pair's own relative order matters to the function under test, not the numbers themselves.
+  it('returns true when a starts strictly before b', () => {
+    expect(isBeforeByRange({ range: [0, 0] }, { range: [2, 2] })).toBe(true);
+  });
+
+  it('returns false when a starts strictly after b', () => {
+    expect(isBeforeByRange({ range: [2, 2] }, { range: [0, 0] })).toBe(false);
+  });
+
+  it('returns false when a and b share the identical start, the one boundary getDecoratedAnchor\'s own real caller can never reach (a decorator and its export wrapper are always distinct tokens with distinct starts), pinning the plain `<` over `<=`', () => {
+    // A mutant widening this to `<=` would wrongly return true here instead.
+    expect(isBeforeByRange({ range: [0, 0] }, { range: [0, 1] })).toBe(false);
+  });
+});
+
 describe('isDirectiveComment', () => {
   // Each recognised marker gets its own case, isolated from ESLint's own core directive-comment handling (which the main RuleTester suite's own comment explains would otherwise misreport an `eslint-disable` fixture as an unused directive): a mutant deleting any single alternative from the rule's own regex is only caught by exercising that exact alternative directly.
   it.each([
@@ -230,6 +247,8 @@ describe('isDirectiveComment', () => {
     'v8 ignore next',
     'istanbul ignore next',
     'istanbul ignore if',
+    // Two spaces between the tool name and "ignore", not one: pins the `+` quantifier on `\s+` specifically (a mutant weakening it to a bare `\s`, exactly one whitespace character, would fail to match this input, unlike the zero-or-more-vs-one-or-more distinction the "c8ignore" case below already pins).
+    'c8  ignore next',
   ])('recognises %s as a directive', (text) => {
     expect(isDirectiveComment(text)).toBe(true);
   });
