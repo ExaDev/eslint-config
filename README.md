@@ -361,7 +361,7 @@ A group's own `slice` (`{ segment: N }` or `{ namePrefix: true }`) partitions it
 
 ### Example: a group-ranked repo
 
-Every group states its own `rank` directly; `test` keeps its own path segment in the derived name (`@novus/test-database`, not `@novus/database`), which every other group drops:
+Every group states its own `rank` directly; `test` keeps its own group name in the derived name (`@novus/test-database`, not `@novus/database`), which every other group drops:
 
 ```ts
 // eslint.config.ts
