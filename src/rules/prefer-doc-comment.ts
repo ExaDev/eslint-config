@@ -239,7 +239,11 @@ const preferDocComment = createRule<Options, MessageIds>({
       if (!substantial) return;
 
       const [firstComment, lastComment] = firstAndLastOrThrow(consideredGroup);
-      const indent = sourceCode.text.slice(firstComment.range[0] - firstComment.loc.start.column, firstComment.range[0]);
+      const rawLinePrefix = sourceCode.text.slice(firstComment.range[0] - firstComment.loc.start.column, firstComment.range[0]);
+      // Only the prefix's own leading run of whitespace, never the prefix verbatim: a genuine indentation prefix is all whitespace, but isTrailingComment only ever excludes a comment sharing its own line with real CODE, not with an EARLIER comment (`/* aside */ // real comment`), so `rawLinePrefix` can itself carry real, non-whitespace text here. Splicing that text onto every continuation line and the closing delimiter (the fixer's own previous behaviour) reproduces it there too, corrupting the file; taking only the leading whitespace run leaves the fixer's own continuation lines and closing `*/` at column zero instead, which is always valid, if visually unaligned with whatever precedes the comment's own opening `/**` on its first line.
+      const indentMatch = /^\s*/.exec(rawLinePrefix);
+      // `/^\s*/` always matches, even against an empty string (its own `*` quantifier accepts zero repetitions), so `indentMatch` is never actually `null` here; the `?? []` fallback exists only to satisfy `exec`'s own general `RegExpExecArray | null` return type, not because this specific pattern can ever produce one.
+      const [indent = ''] = indentMatch ?? [];
       const body = consideredLines.map((line) => (line.length > 0 ? `${indent} * ${line}` : `${indent} *`)).join('\n');
       const replacement = `/**\n${body}\n${indent} */`;
       // containsCommentTerminator is checked independently of, and never overridden by, parsesAsValidTsDoc: see its own doc comment for why a literal `*\/` withholds the fix regardless of what TSDoc itself thinks of the rest of the candidate text.
