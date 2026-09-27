@@ -327,6 +327,27 @@ describe('isDirectiveComment', () => {
   it('does not recognise a marked lowercase todo/fixme appearing mid-sentence', () => {
     expect(isDirectiveComment('A note mentions todo: later on', AST_TOKEN_TYPES.Line)).toBe(false);
   });
+
+  // extractCommentLines' own stripSingleLeadingSpace deliberately strips only the single conventional space right after `//`, leaving a second space or a tab (real indentation for a genuine prose line) on the extracted text; a live directive written with that extra whitespace is still live for its own tool regardless (ESLint's own directive value is matched trimmed, Prettier's `prettier-ignore` check is `value.trim() === 'prettier-ignore'`, TypeScript's own single-line directive regex allows leading whitespace), so isDirectiveComment must recognise it too, not only the exact zero-extra-whitespace spelling every other case above uses.
+  it.each(['  eslint-disable-next-line no-console', '\teslint-disable-next-line no-console'])(
+    'recognises an ESLint-family directive with extra leading whitespace: %j',
+    (text) => {
+      expect(isDirectiveComment(text, AST_TOKEN_TYPES.Line)).toBe(true);
+    },
+  );
+
+  it.each(['  prettier-ignore', '\tprettier-ignore', '   @ts-expect-error'])('recognises a coverage/ts/prettier-ignore directive with extra leading whitespace: %j', (text) => {
+    expect(isDirectiveComment(text, AST_TOKEN_TYPES.Line)).toBe(true);
+  });
+
+  it.each(['  TODO: revisit', '\tTODO', '  todo: revisit'])('recognises a TODO/FIXME marker with extra leading whitespace: %j', (text) => {
+    expect(isDirectiveComment(text, AST_TOKEN_TYPES.Line)).toBe(true);
+  });
+
+  it('still requires the marker at the true start once leading whitespace is stripped, not merely somewhere in the whitespace run', () => {
+    // Pins that trimStart, not a bare test-anywhere search, is what closes this gap: a mutant replacing trimStart with a no-op would fail every case above, and one replacing it with a full trim (also stripping trailing content) would still pass every case above without this one, since trailing text is never whitespace-only here.
+    expect(isDirectiveComment('   an ordinary comment that happens to have leading spaces', AST_TOKEN_TYPES.Line)).toBe(false);
+  });
 });
 
 describe('isTripleSlashDirective', () => {
