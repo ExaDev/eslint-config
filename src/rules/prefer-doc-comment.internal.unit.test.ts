@@ -12,6 +12,7 @@ import {
   isBeforeByRange,
   isDirectiveComment,
   isTrailingComment,
+  isTripleSlashDirective,
   parsesAsValidTsDoc,
   stripStarredBlockPrefix,
 } from './prefer-doc-comment';
@@ -275,6 +276,21 @@ describe('isDirectiveComment', () => {
   it('does not recognise a coverage-tool name directly followed by "ignore" with no separating whitespace at all', () => {
     // Pins the `\s+` between the tool name and "ignore": a mutant weakening it to `\s*` would still match this input via its own zero-width case, silently accepting a shape no real coverage tool ever writes.
     expect(isDirectiveComment('c8ignore next')).toBe(false);
+  });
+});
+
+describe('isTripleSlashDirective', () => {
+  it('recognises a genuine `///` reference directive by its own un-stripped value starting directly with a slash', () => {
+    expect(isTripleSlashDirective({ type: AST_TOKEN_TYPES.Line, value: '/ <reference types="vite/client" />' })).toBe(true);
+  });
+
+  it('does not recognise an ordinary `//` comment whose own prose happens to start with a slash, distinguished by the single conventional space stripSingleLeadingSpace would otherwise remove', () => {
+    // Pins the raw, un-stripped `value` check specifically: a mutant reading the already-stripped extracted line instead would wrongly match this too, since stripping that one leading space leaves an identical leading slash.
+    expect(isTripleSlashDirective({ type: AST_TOKEN_TYPES.Line, value: ' / test' })).toBe(false);
+  });
+
+  it('does not recognise a Block comment whose own value starts with a slash, since a `///` directive can only ever be tokenised as a Line comment', () => {
+    expect(isTripleSlashDirective({ type: AST_TOKEN_TYPES.Block, value: '/ not a real directive' })).toBe(false);
   });
 });
 

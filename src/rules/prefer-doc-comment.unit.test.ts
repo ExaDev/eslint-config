@@ -126,6 +126,8 @@ ruleTester.run('prefer-doc-comment', rule, {
     '/* This substantial prose block sits above another block entirely and would be reported and fixed if it were ever wrongly selected as the group instead of the real directive block below it. */\n/* TODO: revisit this exact decision later on */\nexport function guardedByDirectiveBlock() {}',
     // A `/*!` license/banner block directly above an exported declaration: exempt regardless of length, the same as an already-consolidated `/**` doc comment, since a banner is real, structural, intentionally-preserved text, never a plain comment this rule should upgrade or otherwise disturb.
     '/*! Copyright ExaDev. Licensed under MIT. This banner must survive minification intact. */\nexport function licensed() {}',
+    // A `///` triple-slash reference directive at the TOP of the run, with substantial prose directly below it, directly above the export: the directive is found at index 0 of the extracted lines, so "the lines strictly above it" (checkAnchor's own directiveIndex slicing) is empty, and nothing is reported at all, the same way a mid-run directive already leaves the prose AFTER it untouched (see the "d4" invalid case below). Never corrupted into `/**\n * / <reference ... */`, the exact regression this fixture pins.
+    '/// <reference types="vite/client" />\n// Explains why this exists and\n// what callers must guarantee.\nexport function f() {}',
   ],
   invalid: [
     // A run of two `//` lines directly above an exported function: merged into a single doc comment, verbatim.
@@ -361,6 +363,12 @@ ruleTester.run('prefer-doc-comment', rule, {
     {
       code: '// first line\r\n// second line\r\nexport function crlf() {}',
       output: '/**\r\n * first line\r\n * second line\r\n */\r\nexport function crlf() {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A `///` triple-slash reference directive directly above the export, with substantial prose above THAT: getProseGroupBefore's own recursive skip (extended by isTripleSlashDirective, the same as its existing eslint-disable/TODO/prettier-ignore skip) excludes the directive from the group entirely, so only the prose converts; the directive is left completely untouched directly above the export, still a real reference to the tokeniser, never merged into the new doc comment's own text.
+    {
+      code: '// Explains why this exists and\n// what callers must guarantee.\n/// <reference types="vite/client" />\nexport function f() {}',
+      output: '/**\n * Explains why this exists and\n * what callers must guarantee.\n */\n/// <reference types="vite/client" />\nexport function f() {}',
       errors: [{ messageId: 'preferDocComment' }],
     },
     // The exact shape that regressed: an ALREADY-BARE-BLOCK comment whose own internal line break is bare `\n` (the shape @stylistic/eslint-plugin's own multiline-comment-style bare-block fixer hard-codes, regardless of the file's real convention), sitting in a file whose REAL line breaks, both before the block and between it and the export, are `\r\n`. Reading the terminator from firstComment.range[0] (the old, buggy call site) would find this internal `\n` first and wrongly adopt it; reading from lastComment.range[1] (right after the block's own closing `*/`, in real untouched source) correctly finds `\r\n` instead, so the fixer's own new doc comment uses `\r\n` throughout, matching the surrounding file exactly, with no mixed line endings.
