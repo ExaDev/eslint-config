@@ -88,6 +88,13 @@ export function isDirectiveComment(text: string): boolean {
 }
 
 /**
+ * Whether `comment` is a `///` triple-slash directive (`/// <reference types="..." />`, `/// <reference path="..." />`, `/// <reference lib="..." />`, `/// <amd-module name="..." />`, ...), TypeScript's own ambient-reference/AMD-module syntax, never itself the symbol's documentation, so it must never be folded into a doc comment any more than an `eslint-disable`/`@ts-expect-error`/`prettier-ignore` line is. Checked against `comment`'s own UN-stripped `value` specifically, never the extracted, delimiter-space-stripped line DIRECTIVE_COMMENT_PATTERN is matched against: the tokeniser leaves a genuine `///` comment's `value` starting directly with the lone third slash and no space at all (`/ <reference ... />`), while an ordinary `//` comment that merely happens to start its own prose with a slash (`// / test`, `// /etc/passwd`) always carries the single conventional space between the `//` delimiter and that content, so its own `value` starts with a space, never a bare `/`. Testing the raw `value` is what tells the two apart; testing the already-stripped extracted line could not, since stripSingleLeadingSpace would have removed that one distinguishing space from the ordinary-prose case too.
+ */
+export function isTripleSlashDirective(comment: CommentLike): boolean {
+  return comment.type === AST_TOKEN_TYPES.Line && comment.value.startsWith('/');
+}
+
+/**
  * Whether any line of the candidate doc-comment body already contains a literal closing-comment delimiter. This is checked independently of, and never overridden by, parsesAsValidTsDoc below: a `*\/` sitting inside what would become the new comment's own content ends that comment at the LEXICAL level the moment the file is re-read, the instant the JS/TS tokeniser reaches it, regardless of whether the surrounding text is otherwise valid TSDoc. Applying a fix here would not merely leave a bad doc comment, it would corrupt the file into a syntax error, so this check alone always withholds the fix, with no parser able to tell us otherwise.
  */
 export function containsCommentTerminator(lines: readonly string[]): boolean {
@@ -188,6 +195,7 @@ function getProseGroupBefore(sourceCode: TSESLint.SourceCode, beforeLine: number
   if (isTrailingComment(sourceCode, lastComment)) return undefined;
 
   if (lastComment.type === AST_TOKEN_TYPES.Line) {
+    if (isTripleSlashDirective(lastComment)) return getProseGroupBefore(sourceCode, lastComment.loc.start.line, comments.slice(0, -1));
     const [soleLine] = extractCommentLines([lastComment]);
     if (soleLine !== undefined && isDirectiveComment(soleLine)) return getProseGroupBefore(sourceCode, lastComment.loc.start.line, comments.slice(0, -1));
   }
@@ -269,7 +277,13 @@ const preferDocComment = createRule<Options, MessageIds>({
       const lines = extractCommentLines(group);
       // A Line-comment run's own comments map one-to-one onto `lines` (one array entry per comment), so a directive line found anywhere in the run, whether first, in the middle, or immediately above `anchor`, can be sliced out of BOTH arrays together, in step, leaving only the genuine prose strictly above it eligible for its own report. A single already-consolidated Block comment has no such one-to-one mapping (one comment node can carry many extracted lines), so a directive found anywhere inside one is left alone entirely rather than risking a fix that touches only part of one physical comment node. getLeadingCommentGroup only ever returns one of two homogeneous shapes, a single-element Block group or an all-Line run, never a mix of the two, so `groupFirstComment`'s own type already tells us which one this is, with no need to check every element in step.
       const isLineRun = groupFirstComment.type === AST_TOKEN_TYPES.Line;
-      const directiveIndex = lines.findIndex((line) => isDirectiveComment(line));
+      // A Line run's own `group[index]` (guarded against `noUncheckedIndexedAccess`'s own `undefined` branch, unreachable here since a Line run's `lines` and `group` are always the same length, one extracted entry per comment) is checked for isTripleSlashDirective alongside the extracted-text isDirectiveComment check on `line` itself: a `///` triple-slash directive's raw, un-stripped comment value is what actually distinguishes it from ordinary prose (see isTripleSlashDirective's own doc comment), never the already delimiter-stripped `line` text DIRECTIVE_COMMENT_PATTERN matches against. Guarded by `isLineRun` (never read for a Block group, where `group`'s own one comment node has no one-to-one mapping onto `lines`, per this file's own header comment on extractCommentLines).
+      const directiveIndex = lines.findIndex((line, index) => {
+        if (isDirectiveComment(line)) return true;
+        const candidate = group[index];
+
+        return isLineRun && candidate !== undefined && isTripleSlashDirective(candidate);
+      });
       if (directiveIndex !== -1 && !isLineRun) return;
       const consideredLines = directiveIndex === -1 ? lines : lines.slice(0, directiveIndex);
       const consideredGroup = directiveIndex === -1 ? group : group.slice(0, directiveIndex);
