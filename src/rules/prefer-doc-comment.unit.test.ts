@@ -118,6 +118,8 @@ ruleTester.run('prefer-doc-comment', rule, {
     '/*\n*/\nexport function foo() {}',
     // A short, single-physical-line block comment.
     '/* short */\nexport function foo() {}',
+    // A `/*!` license/banner block directly above an exported declaration: exempt regardless of length, the same as an already-consolidated `/**` doc comment, since a banner is real, structural, intentionally-preserved text, never a plain comment this rule should upgrade or otherwise disturb.
+    '/*! Copyright ExaDev. Licensed under MIT. This banner must survive minification intact. */\nexport function licensed() {}',
   ],
   invalid: [
     // A run of two `//` lines directly above an exported function: merged into a single doc comment, verbatim.
