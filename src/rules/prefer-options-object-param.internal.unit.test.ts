@@ -1,9 +1,9 @@
-import { ESLintUtils } from '@typescript-eslint/utils';
+import { AST_NODE_TYPES, ESLintUtils } from '@typescript-eslint/utils';
 import type { TSESLint, TSESTree } from '@typescript-eslint/utils';
 import { RuleTester } from '@typescript-eslint/rule-tester';
 import tseslint from 'typescript-eslint';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { hasOptionsNameCollision, isOptionalParam } from './prefer-options-object-param';
+import { describeFunctionKind, hasOptionsNameCollision, isOptionalParam } from './prefer-options-object-param';
 
 function definedOrThrow<T>(value: T | undefined): T {
   if (value === undefined) {
@@ -17,6 +17,8 @@ let optionalIdentifierParam: TSESTree.Parameter | undefined;
 let requiredIdentifierParam: TSESTree.Parameter | undefined;
 let bareDestructuredParam: TSESTree.Parameter | undefined;
 let capturedScope: TSESLint.Scope.Scope | undefined;
+let constructorFunctionNode: TSESTree.FunctionExpression | TSESTree.TSEmptyBodyFunctionExpression | undefined;
+let regularMethodFunctionNode: TSESTree.FunctionExpression | TSESTree.TSEmptyBodyFunctionExpression | undefined;
 
 const createRule = ESLintUtils.RuleCreator((name) => name);
 const probe = createRule({
@@ -31,6 +33,10 @@ const probe = createRule({
         capturedScope = context.sourceCode.getScope(node);
         context.report({ node, messageId: 'hit' });
       },
+      MethodDefinition(node) {
+        if (node.kind === 'constructor') constructorFunctionNode = node.value;
+        else if (node.key.type === AST_NODE_TYPES.Identifier && node.key.name === 'regularMethod') regularMethodFunctionNode = node.value;
+      },
     };
   },
 });
@@ -40,8 +46,9 @@ ruleTester.run('probe', probe, {
   valid: [],
   invalid: [
     {
-      // Two `var options;` declarations in the same function scope are the same real Variable with two distinct identifier occurrences (JS `var` re-declaration), the one natural way to get a Variable with more than one identifier without hand-fabricating one.
-      code: 'function paramsProbe(a?: number, b: number, { c }: { c: number }): void {\n  var options;\n  var options;\n}',
+      // Two `var options;` declarations in the same function scope are the same real Variable with two distinct identifier occurrences (JS `var` re-declaration), the one natural way to get a Variable with more than one identifier without hand-fabricating one. The class alongside it supplies a real constructor and a real regular method, both captured by the MethodDefinition visitor above, for describeFunctionKind's own direct tests below.
+      code:
+        'function paramsProbe(a?: number, b: number, { c }: { c: number }): void {\n  var options;\n  var options;\n}\nclass ProbeClass {\n  constructor(a: number) {}\n  regularMethod(a: number) {}\n}',
       errors: [{ messageId: 'hit' }],
     },
   ],
@@ -59,6 +66,16 @@ describe('isOptionalParam', () => {
   it('returns false, never undefined, for a bare (non-optional, no default) destructured ObjectPattern parameter', () => {
     // The distinguishing case: an ObjectPattern has no `optional` property at all, so a mutant that reaches the Identifier branch's `return param.optional` regardless of type would return `undefined` here, not `false`. Every real call site treats the two as equivalent (`!isOptionalParam(...)`, where `!undefined === !false`), so only a strict `toBe(false)` assertion, not real rule behaviour, can tell them apart.
     expect(isOptionalParam(definedOrThrow(bareDestructuredParam))).toBe(false);
+  });
+});
+
+describe('describeFunctionKind', () => {
+  it('labels a real class constructor "constructor"', () => {
+    expect(describeFunctionKind(definedOrThrow(constructorFunctionNode))).toBe('constructor');
+  });
+
+  it('labels a real, non-constructor class method "method", not "constructor"', () => {
+    expect(describeFunctionKind(definedOrThrow(regularMethodFunctionNode))).toBe('method');
   });
 });
 
