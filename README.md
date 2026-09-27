@@ -450,6 +450,7 @@ pnpm install    # requires Node >=20 and the pnpm version pinned in package.json
 pnpm lint
 pnpm typecheck
 pnpm test
+pnpm test:mutation   # Stryker, 100% break threshold
 pnpm build
 ```
 
@@ -515,7 +516,7 @@ pnpm build
 
 ### Contributing
 
-Conventional commits are enforced by a husky `commit-msg` hook and re-checked in CI. CI runs commitlint, lint, and typecheck+test+build+attw on every push and pull request; the release job runs only on push to `main`, after all pass.
+Conventional commits are enforced by a husky `commit-msg` hook and re-checked in CI. CI runs commitlint, lint, typecheck+test+build+attw, and Mutation on every push and pull request; the release job runs only on push to `main`, after all pass.
 
 ### Release
 
