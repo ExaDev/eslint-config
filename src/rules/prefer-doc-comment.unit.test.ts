@@ -134,6 +134,10 @@ ruleTester.run('prefer-doc-comment', rule, {
     '// #region helpers\n// Explains the helper.\nexport function f() {}',
     // A `///` triple-slash reference directive at the TOP of the run, with substantial prose directly below it, directly above the export: the directive is found at index 0 of the extracted lines, so "the lines strictly above it" (checkAnchor's own directiveIndex slicing) is empty, and nothing is reported at all, the same way a mid-run directive already leaves the prose AFTER it untouched (see the "d4" invalid case below). Never corrupted into `/**\n * / <reference ... */`, the exact regression this fixture pins.
     '/// <reference types="vite/client" />\n// Explains why this exists and\n// what callers must guarantee.\nexport function f() {}',
+    // An `export` inside a non-exported `namespace`: `hidden`'s own immediate parent is a genuine ExportNamedDeclaration, exactly like a real top-level export, but that wrapper sits inside `Internal`'s own TSModuleBlock, and `Internal` itself is never exported, so isAtPublicSurface's own recursive check must still say no. Never reported, regardless of its own substantial two-line comment: a non-exported declaration is never reported, matching the README's own promise.
+    'namespace Internal {\n  // first line of a substantial comment\n  // second line of a substantial comment\n  export function hidden() {}\n}',
+    // A `declare global { ... }` augmentation: there is no such syntax as `export declare global`, so the augmentation's own TSModuleDeclaration is never itself wrapped in an export, the identical reason the non-exported `namespace` case just above is never reported either. Proven with the same `export` shape inside it, not merely relying on the absence of one: even an inline `export` inside the augmentation's own block is still never treated as reaching the module's public surface.
+    'declare global {\n  // first line of a substantial comment\n  // second line of a substantial comment\n  export interface Hidden {}\n}',
   ],
   invalid: [
     // A run of two `//` lines directly above an exported function: merged into a single doc comment, verbatim.
@@ -393,6 +397,12 @@ ruleTester.run('prefer-doc-comment', rule, {
     {
       code: '/* first line\n   second line */\r\nexport function crlfBareBlock() {}',
       output: '/**\r\n * first line\r\n * second line\r\n */\r\nexport function crlfBareBlock() {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // `export namespace N { export function f() {} }`: unlike the non-exported `namespace Internal` valid case above, `N` itself IS exported (its own TSModuleDeclaration sits inside an ExportNamedDeclaration whose own parent is Program), so `f`'s own inner export wrapper genuinely reaches the module's public surface and is reported, exactly like a real top-level export.
+    {
+      code: 'export namespace N {\n  // first line\n  // second line\n  export function f() {}\n}',
+      output: 'export namespace N {\n  /**\n   * first line\n   * second line\n   */\n  export function f() {}\n}',
       errors: [{ messageId: 'preferDocComment' }],
     },
   ],
