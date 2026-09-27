@@ -97,15 +97,16 @@ export function stripStarredBlockPrefix(lines: readonly string[]): string[] {
 }
 
 /**
- * Whether `text` (already trimmed, the first extracted line) opens with one of the recognised directive markers, given `commentType` (the real comment's own `type`, Line or Block): the ESLint family's own Line-restricted subset (ESLINT_LINE_HONOURED_LABELS) is applied only when `commentType` is Line, exactly matching what eslint's own `source-code.js` itself honours there.
+ * Whether `text` (the first extracted line, per extractCommentLines) opens with one of the recognised directive markers, given `commentType` (the real comment's own `type`, Line or Block): the ESLint family's own Line-restricted subset (ESLINT_LINE_HONOURED_LABELS) is applied only when `commentType` is Line, exactly matching what eslint's own `source-code.js` itself honours there. Matched against `text.trimStart()`, never the raw `text`: extractCommentLines' own stripSingleLeadingSpace deliberately strips only the single conventional space right after `//`/`/*`, leaving any FURTHER leading whitespace (a second space, a tab) on the line untouched, since that is the author's own deliberate content indentation for a real prose line. A live directive, though, is never indented that way by the tools that honour it: ESLint's own directive comments are matched with their value trimmed (`value.trim()` in `getDirectiveComment`), Prettier's `prettier-ignore` check is `comment.value.trim() === 'prettier-ignore'`, and TypeScript's own `commentDirectiveRegExSingleLine` allows arbitrary leading whitespace before the `@ts-*` marker, so `//   eslint-disable-next-line no-console`, `//\tprettier-ignore` and `//  @ts-expect-error` are all still live directives for their own tool, whatever whitespace sits between the `//` and the marker. Trimming here, rather than teaching extractCommentLines to strip more, keeps that deliberate indentation-preservation behaviour intact for genuine prose while still recognising every one of these as the directive it is.
  */
 export function isDirectiveComment(text: string, commentType: TSESTree.Comment['type']): boolean {
-  const eslintMatch = ESLINT_FAMILY_PATTERN.exec(text);
-  // eslintMatch's own index 0 (see ESLINT_FAMILY_PATTERN's own doc comment for why that, not a captured group, is the label): always a real string whenever eslintMatch itself is non-null, by definition, the same guarantee firstMatchOrEmpty's own doc comment already gives its sibling helper.
+  const trimmed = text.trimStart();
+  const eslintMatch = ESLINT_FAMILY_PATTERN.exec(trimmed);
+  // eslintMatch's own index 0 (see ESLINT_FAMILY_PATTERN's own doc comment for why that, not a captured group, is the label): always a real string whenever eslintMatch itself is non-null, by definition.
   if (eslintMatch !== null) return commentType !== AST_TOKEN_TYPES.Line || ESLINT_LINE_HONOURED_LABELS.has(eslintMatch[0]);
-  if (TODO_FIXME_UPPERCASE_PATTERN.test(text) || TODO_FIXME_MARKED_PATTERN.test(text)) return true;
+  if (TODO_FIXME_UPPERCASE_PATTERN.test(trimmed) || TODO_FIXME_MARKED_PATTERN.test(trimmed)) return true;
 
-  return OTHER_DIRECTIVE_PATTERN.test(text);
+  return OTHER_DIRECTIVE_PATTERN.test(trimmed);
 }
 
 /**
