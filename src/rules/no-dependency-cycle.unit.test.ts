@@ -132,7 +132,7 @@ ruleTester.run('no-dependency-cycle', rule, {
       options: [{ groups: [{ name: 'core' }] }],
       errors: [{ messageId: 'cycle', data: { from: NAMELESS_RELATIVE_DIR, to: 'a' } }],
     },
-    // An INDIRECT cycle: "c" here declares a dependency on "a", and the fixture's own edges (a -> b -> c) mean "c" reaches "a" only through "b", never directly, so the message must not claim a direct back-edge from "b" to "a".
+    // An INDIRECT cycle: "c" here declares a dependency on "a", and the fixture's own edges (a -> b -> c) mean "a" reaches back to "c" only through "b", never directly, so the message must not claim a direct back-edge from "a" to "c".
     {
       code: manifest('c', { a: 'workspace:*' }),
       filename: selfFilename('c'),
