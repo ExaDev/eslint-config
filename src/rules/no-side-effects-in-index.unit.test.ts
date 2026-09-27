@@ -1,7 +1,5 @@
 import { RuleTester } from 'eslint';
-
 import tseslint from 'typescript-eslint';
-
 import rule from './no-side-effects-in-index';
 
 const ruleTester = new RuleTester({

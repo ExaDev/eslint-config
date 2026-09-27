@@ -1,5 +1,4 @@
 import type { ConfigArrayValue } from './config-types';
-
 import { readFlatConfig, tryRequire, type RequireFn } from './optional-plugin';
 
 export interface NextjsConfigOptions {

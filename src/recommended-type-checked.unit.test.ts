@@ -1,13 +1,8 @@
 import type { Linter } from 'eslint';
-
 import { Linter as LinterClass } from 'eslint';
-
 import json from '@eslint/json';
-
 import tseslint from 'typescript-eslint';
-
 import { describe, expect, it } from 'vitest';
-
 import recommendedTypeChecked from './recommended-type-checked';
 
 // Exercises this package's own test-file relaxation directly against the real exported array (the last two entries: the outright-strictness rules, then the test-file override), rather than a re-implementation — proving the shipped config, not a description of intent. `projectService.allowDefaultProject` below gives every inline snippet a genuine ad hoc single-file TS project (the same pattern this repo's own type-aware rule tests use), so every rule in the shared block — type-aware or not — runs exactly as it would in production, with no rules turned off to work around a missing project service. No runtime Array.isArray narrowing needed here — recommendedTypeChecked's own ConfigArrayValue type (Extract<ConfigValue, unknown[]>) already proves this at compile time.

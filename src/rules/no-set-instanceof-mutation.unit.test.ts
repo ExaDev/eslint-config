@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
-
 import { RuleTester } from '@typescript-eslint/rule-tester';
-
 import rule from './no-set-instanceof-mutation';
 
 describe('rule metadata', () => {

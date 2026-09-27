@@ -1,7 +1,5 @@
 import { defineConfig } from 'eslint/config';
-
 import { describe, expect, it } from 'vitest';
-
 import { buildWorkspaceArchitectureConfig, workspaceArchitectureConfig } from './workspace-architecture';
 
 const throwingRequireFn = () => {

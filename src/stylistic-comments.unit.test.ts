@@ -1,15 +1,9 @@
 import stylistic from '@stylistic/eslint-plugin';
-
 import type { Linter } from 'eslint';
-
 import { Linter as LinterClass } from 'eslint';
-
 import { describe, expect, it } from 'vitest';
-
 import plugin from './plugin';
-
 import { JSX_FILE_PATTERNS } from './react';
-
 import stylisticCommentsConfig from './stylistic-comments';
 
 // The three blocks this file's own shape assertions below each check in turn: the hand-picked JS/TS rules, the .d.ts multiline-comment-style override, and the JSX-specific rules. Named here since a bare `3` would itself trip @typescript-eslint/no-magic-numbers with nothing explaining what it denotes.
@@ -34,6 +28,8 @@ describe('stylisticCommentsConfig', () => {
           'error',
           { blankLine: 'always', prev: 'directive', next: '*' },
           { blankLine: 'always', prev: ['cjs-import', 'import'], next: '*' },
+          { blankLine: 'any', prev: 'directive', next: 'directive' },
+          { blankLine: 'any', prev: ['cjs-import', 'import'], next: ['cjs-import', 'import'] },
           { blankLine: 'always', prev: '*', next: 'return' },
         ],
         'exadev/prefer-doc-comment': 'error',
@@ -105,5 +101,31 @@ describe('multiline-comment-style (consecutive triple-slash directives in a .d.t
     const output = fixedOutput(tripleSlashCode, 'ordinary.ts');
     expect(output).not.toBe(tripleSlashCode);
     expect(output.startsWith('/* / <reference')).toBe(true);
+  });
+});
+
+// A real --fix run: `blankLine: 'always'` matched against `next: '*'` would, on its own, insert a blank line after EVERY directive and EVERY import, not only after the last one in a run, since `'*'` matches a following directive/import too. The two `blankLine: 'any'` entries added alongside them must be observed through the fixer's own actual output, not the config-shape test above, to prove they close that gap rather than merely producing an object of the right shape.
+describe('padding-line-between-statements (consecutive directives and imports stay together)', () => {
+  const linter = new LinterClass();
+
+  function fixedOutput(code: string): string {
+    const config: Linter.Config[] = [{ files: ['**'], languageOptions: { sourceType: 'module', ecmaVersion: 2022 } }, ...stylisticCommentsConfig] as Linter.Config[];
+
+    return linter.verifyAndFix(code, config, 'padding.ts').output;
+  }
+
+  it('does not insert a blank line between two consecutive directives, and treats a trailing CommonJS require alongside two ES imports as one unbroken import-like run, but still requires one after the directive prologue before the run starts', () => {
+    const code = "'use strict';\n'use client';\nimport { a } from './x';\nimport { b } from './y';\nconst c = require('z');\n";
+    expect(fixedOutput(code)).toBe("'use strict';\n'use client';\n\nimport { a } from './x';\nimport { b } from './y';\nconst c = require('z');\n");
+  });
+
+  it('still requires a blank line between the last directive and the first import', () => {
+    const code = "'use strict';\nimport { a } from './x';\n";
+    expect(fixedOutput(code)).toBe("'use strict';\n\nimport { a } from './x';\n");
+  });
+
+  it('still requires a blank line after the last import before an ordinary statement that is not itself import-like', () => {
+    const code = "import { a } from './x';\nimport { b } from './y';\nconst c = 1;\n";
+    expect(fixedOutput(code)).toBe("import { a } from './x';\nimport { b } from './y';\n\nconst c = 1;\n");
   });
 });

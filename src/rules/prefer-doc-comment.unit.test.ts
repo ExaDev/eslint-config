@@ -1,11 +1,7 @@
 import { Linter } from 'eslint';
-
 import { RuleTester } from '@typescript-eslint/rule-tester';
-
 import tseslint from 'typescript-eslint';
-
 import { describe, expect, it } from 'vitest';
-
 import rule from './prefer-doc-comment';
 
 describe('rule metadata', () => {

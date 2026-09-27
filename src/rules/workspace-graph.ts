@@ -1,17 +1,10 @@
 import { dirname, join, relative, resolve, sep } from 'node:path';
-
 import { realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
-
 import { resolveWorkspacePackageDirs } from './workspace-glob';
-
 import { splitPathSegments } from './workspace-path';
-
 import { readWorkspacePackages } from './workspace-yaml';
-
 import { resolveDependencyFields, type GroupSpec, type WorkspaceArchitectureOptions } from './workspace-options';
-
 import { assertIsError, jsonParseContext } from './workspace-errors';
-
 import { isRecord } from '../is-record';
 
 /**

@@ -1,15 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs';
-
 import { join } from 'node:path';
-
 import type { ConfigArrayValue } from './config-types';
-
 import { resolveJsonPlugin } from './json-plugin';
-
 import { tryRequire, type RequireFn } from './optional-plugin';
-
 import plugin from './plugin';
-
 import type { PackageJsonKeyOrderOptions } from './rules/package-json-key-order';
 
 export interface PackageJsonKeyOrderConfigOptions extends PackageJsonKeyOrderOptions {

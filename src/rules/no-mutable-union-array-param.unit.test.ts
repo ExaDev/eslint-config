@@ -1,9 +1,6 @@
 import { RuleTester } from '@typescript-eslint/rule-tester';
-
 import tseslint from 'typescript-eslint';
-
 import { describe, expect, it } from 'vitest';
-
 import rule from './no-mutable-union-array-param';
 
 // Pins every literal in the rule's own metadata — name, docs url/description, message text, and the empty defaultOptions array — against mutation, since none of these are otherwise observable through a RuleTester fixture.

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-
 import {
   expandBraces,
   expandGlob,
@@ -8,7 +7,6 @@ import {
   segmentToRegExp,
   splitTopLevelAlternatives,
 } from './workspace-glob';
-
 import type { WorkspaceFs } from './workspace-fs';
 
 // An in-memory tree keyed by absolute-ish path, mapping each directory to its own subdirectory names, plus a set of paths that own a real package.json.

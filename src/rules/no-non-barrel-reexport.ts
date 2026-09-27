@@ -1,7 +1,5 @@
 import type { Rule } from 'eslint';
-
 import { createSplitReexportDetector, isIndexFile } from './barrel-helpers';
-
 import type { ImportDeclarationNode, ReferenceIdentifier, SyntaxElement, TrackedImport } from './barrel-helpers';
 
 /* The single-statement re-export ban (`export { x } from '...'`, `export * from '...'`) is caught directly by walking ExportNamedDeclaration[source] / ExportAllDeclaration. This rule closes the split-statement gap: `import { foo } from './bar'; export { foo };` binds foo locally and hands it back out under its own name — exactly what `export { foo } from './bar'` does directly — but neither statement carries a source on the export, so no AST selector alone matches it. The same split applies to `export default`: `import { foo } from './bar'; export default foo;` is the split form of `export { foo as default } from './bar';`. Detection runs at Program:exit (see createSplitReexportDetector) so an import written below its export is still seen.

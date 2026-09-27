@@ -1,5 +1,4 @@
 import type { MemberNode, ObjectNode, StringNode } from '@humanwhocodes/momoa';
-
 import { getMemberKeyName } from './json-member-key';
 
 // Shared momoa-shaped reading for every workspace-architecture rule: identifying package.json's own top-level "name" and "dependencies"-style fields. This is the actual fix for the hive original's own never-firing top-level guard: its `Member` visitor checked `parent === undefined`, but @eslint/json's own JSONRuleVisitor types a Member's parent as the ObjectNode that contains it, never undefined (only the traversal root, which is never a Member, has an undefined parent), so that guard passed unconditionally and never actually restricted anything to the manifest's own top level. The real check has to happen one level up, on the Object visitor, confirming its own parent is the Document node (see package-json-key-order.ts's identical objectParentOrThrow/`parent.type === 'Document'` pattern); every rule below is written as `Object(node, parent) { if (parent?.type !== 'Document') return; ... }` for exactly this reason, never as a `Member` visitor.

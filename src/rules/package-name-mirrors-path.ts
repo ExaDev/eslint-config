@@ -1,15 +1,9 @@
 import type { JSONRuleDefinition, JSONRuleVisitor } from '@eslint/json';
-
 import type { ObjectNode } from '@humanwhocodes/momoa';
-
 import { loadWorkspaceGraph, manifestRelativeDir, type WorkspaceRuleDeps } from './workspace-graph';
-
 import { readWorkspaceArchitectureOptions, workspaceArchitectureOptionsSchema, type GroupSpec, type WorkspaceArchitectureOptions } from './workspace-options';
-
 import { expectedPackageName } from './workspace-checks';
-
 import { readDeclaredName } from './workspace-json-helpers';
-
 import { realWorkspaceFs } from './workspace-fs';
 
 /**

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-
 import { readFlatConfig, tryRequire } from './optional-plugin';
 
 describe('tryRequire', () => {

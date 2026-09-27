@@ -1,7 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-
 import { JSX_FILE_PATTERNS } from './react';
-
 import plugin from './plugin';
 
 describe('plugin.meta', () => {

@@ -1,7 +1,5 @@
 import { join } from 'node:path';
-
 import { describe, expect, it } from 'vitest';
-
 import {
   buildWorkspaceGraph,
   deriveRank,
@@ -15,9 +13,7 @@ import {
   resolveWorkspaceRoot,
   stripScope,
 } from './workspace-graph';
-
 import { realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
-
 import type { GroupSpec, WorkspaceArchitectureOptions } from './workspace-options';
 
 const FIXTURE_ROOT = join(import.meta.dirname, '__fixtures__/workspace');

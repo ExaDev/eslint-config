@@ -1,19 +1,11 @@
 import { parse } from '@humanwhocodes/momoa';
-
 import json from '@eslint/json';
-
 import { RuleTester } from 'eslint';
-
 import { describe, expect, it } from 'vitest';
-
 import { createNoUphillDependencyRule, findDependencyEntry } from './no-uphill-dependency';
-
 import type { WorkspaceGraph } from './workspace-graph';
-
 import type { WorkspacePackageInfo } from './workspace-graph';
-
 import type { NamedDependency } from './workspace-json-helpers';
-
 import type { WorkspaceFs } from './workspace-fs';
 
 // FIXED_GRAPH's own root and every filename built from it (selfFilename below) are fabricated paths, never real directories: manifestRelativeDir's own realpath resolution (workspace-graph.ts) is exercised directly by its own unit tests, so this rule's tests only need a WorkspaceFs whose realpathSync passes every path through unchanged, the same as node:fs's own realpathSync would for a path with no symlink anywhere along it.

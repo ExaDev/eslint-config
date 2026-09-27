@@ -1,11 +1,7 @@
 import { AST_TOKEN_TYPES, ESLintUtils, type TSESLint, type TSESTree } from '@typescript-eslint/utils';
-
 import { RuleTester } from '@typescript-eslint/rule-tester';
-
 import tseslint from 'typescript-eslint';
-
 import { describe, expect, it } from 'vitest';
-
 import {
   commonLeadingWhitespace,
   containsCommentTerminator,

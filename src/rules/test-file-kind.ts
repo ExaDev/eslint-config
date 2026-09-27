@@ -1,5 +1,4 @@
 import type { Rule } from 'eslint';
-
 import { classifyTestFile } from './test-file-helpers';
 
 const DEFAULT_KINDS: readonly string[] = ['unit', 'integration', 'e2e'];

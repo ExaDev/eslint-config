@@ -1,11 +1,7 @@
 import { RuleTester } from '@typescript-eslint/rule-tester';
-
 import { ESLintUtils } from '@typescript-eslint/utils';
-
 import * as ts from 'typescript';
-
 import { describe, expect, it } from 'vitest';
-
 import { asExpression, asTypeReference, firstTokenOrThrow, lastTokenOrThrow } from './ts-node-guards';
 
 function definedOrThrow<T>(value: T | undefined): T {

@@ -1,5 +1,4 @@
 import { isTypeReference } from 'ts-api-utils';
-
 import * as ts from 'typescript';
 
 /**

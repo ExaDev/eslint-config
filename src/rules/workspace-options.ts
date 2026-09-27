@@ -1,7 +1,6 @@
 // The one options shape shared by all three workspace-architecture rules (no-uphill-dependency, no-dependency-cycle, package-name-mirrors-path), so a consumer configures the workspace once and passes the identical object to each rule (or once to workspaceArchitectureConfig(), which wires all three). See the package README's own workspace architecture section for the option-by-option reasoning; this file is the schema and the runtime reader, not the policy.
 
 import { assertIsError, regExpConstructorContext } from './workspace-errors';
-
 import { isRecord } from '../is-record';
 
 export interface SliceBySegment {

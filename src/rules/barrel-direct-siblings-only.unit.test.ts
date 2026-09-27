@@ -1,7 +1,5 @@
 import { RuleTester } from 'eslint';
-
 import tseslint from 'typescript-eslint';
-
 import rule from './barrel-direct-siblings-only';
 
 const ruleTester = new RuleTester({

@@ -1,13 +1,8 @@
 import type { Rule } from 'eslint';
-
 import { RuleTester } from 'eslint';
-
 import tseslint from 'typescript-eslint';
-
 import { describe, expect, it } from 'vitest';
-
 import type { ExportSpecifierNode, ImportDeclarationNode, ReferenceIdentifier, SyntaxElement } from './barrel-helpers';
-
 import { importIsOnlyUsedByThisExport, removeListMember } from './no-non-barrel-reexport';
 
 // A bare (source-less) export specifier's own `local` is always an Identifier in real syntax; this narrows the wider ExportSpecifierNode['local'] type (Identifier | Literal, the latter only ever produced by a WITH-source re-export) down to what this specific probe fixture always actually captures.

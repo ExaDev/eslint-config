@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-
 import { viaDefineConfig, viaDefineConfigSpread, viaTseslintConfig } from './consumer-compatibility';
 
 // This file's only job is proving both legacy consumption patterns still resolve to real config arrays at runtime, not just typecheck — consumer-compatibility.ts is deliberately excluded from the published bundle (see its own comment), so nothing else in this package ever imports it.

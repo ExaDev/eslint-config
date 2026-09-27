@@ -1,13 +1,8 @@
 import { AST_NODE_TYPES, ESLintUtils } from '@typescript-eslint/utils';
-
 import type { TSESLint, TSESTree } from '@typescript-eslint/utils';
-
 import { RuleTester } from '@typescript-eslint/rule-tester';
-
 import tseslint from 'typescript-eslint';
-
 import { describe, expect, it } from 'vitest';
-
 import { buildReadonlyArrayFix } from './no-mutable-union-array-param';
 
 function definedOrThrow<T>(value: T | undefined): T {

@@ -1,13 +1,8 @@
 import { RuleTester } from '@typescript-eslint/rule-tester';
-
 import { AST_NODE_TYPES, ESLintUtils } from '@typescript-eslint/utils';
-
 import type { TSESTree } from '@typescript-eslint/utils';
-
 import tseslint from 'typescript-eslint';
-
 import { describe, expect, it } from 'vitest';
-
 import { asIdentifierName } from './scope-guards';
 
 function definedOrThrow<T>(value: T | undefined): T {

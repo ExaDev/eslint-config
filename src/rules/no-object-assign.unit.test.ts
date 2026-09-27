@@ -1,9 +1,6 @@
 import { RuleTester } from '@typescript-eslint/rule-tester';
-
 import { describe, expect, it } from 'vitest';
-
 import tseslint from 'typescript-eslint';
-
 import rule from './no-object-assign';
 
 describe('rule metadata', () => {

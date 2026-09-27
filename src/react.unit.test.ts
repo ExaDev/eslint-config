@@ -1,9 +1,6 @@
 import type { Linter } from 'eslint';
-
 import { Linter as LinterClass } from 'eslint';
-
 import { describe, expect, it } from 'vitest';
-
 import { buildReactConfig, JSX_FILE_PATTERNS } from './react';
 
 const throwingRequireFn = () => {

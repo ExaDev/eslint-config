@@ -1,9 +1,6 @@
 import { Linter, RuleTester } from 'eslint';
-
 import { describe, expect, it } from 'vitest';
-
 import tseslint from 'typescript-eslint';
-
 import rule, { createBarrelPolicyRule, readMode } from './barrel-policy';
 
 describe('readMode', () => {

@@ -1,5 +1,4 @@
 import type { TSESLint } from '@typescript-eslint/utils';
-
 import type { Config as ESLintCoreConfig, ConfigObject as ESLintCoreConfigObject } from 'eslint/config';
 
 /**

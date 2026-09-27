@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-
 import { resolveJsonPlugin } from './json-plugin';
 
 describe('resolveJsonPlugin', () => {

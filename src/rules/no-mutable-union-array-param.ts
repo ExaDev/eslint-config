@@ -1,5 +1,4 @@
 import { AST_NODE_TYPES, ESLintUtils, TSESLint, type TSESTree } from '@typescript-eslint/utils';
-
 import { asIdentifierName } from './scope-guards';
 
 /* TypeScript checks array element types covariantly: a `number[]` is assignable wherever a `(string | number)[]` is expected, because a read of the wider array's elements is still safe. But a WRITE is not — confirmed directly: `function pushString(arr: (string | number)[]): void { arr.push('x'); } const nums: number[] = [1, 2, 3]; pushString(nums);` type-checks cleanly under `tsc --strict`, and `nums` now genuinely holds a string at runtime despite its `number[]` type. No existing typescript-eslint rule flags this — it is a structural consequence of covariant array typing, not a bug the type checker itself can close without breaking ordinary covariant reads.
