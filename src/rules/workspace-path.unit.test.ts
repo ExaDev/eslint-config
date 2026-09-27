@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { splitPathSegments } from './workspace-path';
+import { requireChar, splitPathSegments } from './workspace-path';
 
 describe('splitPathSegments', () => {
   it('splits a clean path into its segments', () => {
@@ -24,5 +24,16 @@ describe('splitPathSegments', () => {
 
   it('returns a single segment for a path with no separator at all', () => {
     expect(splitPathSegments('core')).toEqual(['core']);
+  });
+});
+
+describe('requireChar', () => {
+  it('returns the character at a genuinely in-bounds index', () => {
+    expect(requireChar('abc', 1)).toBe('b');
+  });
+
+  it('throws for an out-of-bounds index, a shape no real call site (each bounded by its own loop\'s "index < length" condition) can produce', () => {
+    const outOfBoundsIndex = 3;
+    expect(() => requireChar('abc', outOfBoundsIndex)).toThrow(/Unreachable/);
   });
 });

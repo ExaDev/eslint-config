@@ -1,8 +1,6 @@
 // Shared @eslint/json resolution: extracted out of package-json-key-order.ts once workspace-architecture.ts needed the identical "resolve @eslint/json's own plugin object through an optional peer, tolerating its real ESM-namespace require() shape" logic for its own `**/package.json` config block. Both consumers wire the plugin's own JSON language onto the config they build; only the throw message differs (each names its own feature).
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
+import { isRecord } from './is-record';
 
 // A real check (the candidate's own `languages.json` entry exists) rather than an assertion: enough evidence this is genuinely @eslint/json's plugin object, not a hand-typed re-implementation of its full public surface.
 function isJsonLanguagePlugin(value: unknown): value is Record<string, unknown> {

@@ -1,6 +1,7 @@
 // The one options shape shared by all three workspace-architecture rules (no-uphill-dependency, no-dependency-cycle, package-name-mirrors-path), so a consumer configures the workspace once and passes the identical object to each rule (or once to workspaceArchitectureConfig(), which wires all three). See the package README's own workspace architecture section for the option-by-option reasoning; this file is the schema and the runtime reader, not the policy.
 
 import { assertIsError, regExpConstructorContext } from './workspace-errors';
+import { isRecord } from '../is-record';
 
 export interface SliceBySegment {
   readonly segment: number;
@@ -131,10 +132,6 @@ export const MISCONFIGURATION_MESSAGE =
 
 function fail(): never {
   throw new Error(MISCONFIGURATION_MESSAGE);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 // Every key this reader recognises at each level it validates, checked against the object's own actual keys so an unknown or misspelled one (a typo'd "rankskip" alongside, or instead of, the real "rankSkip") fails loudly here rather than being silently dropped by the whitelisted reconstruction below and never reaching ESLint's own schema at all (workspaceArchitectureConfig builds its rule options by calling this reader on the caller's raw object BEFORE that validation ever sees it; see readWorkspaceArchitectureOptions' own doc comment).

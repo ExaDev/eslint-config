@@ -1,17 +1,8 @@
 import { join } from 'node:path';
 import { listSubdirectories, type WorkspaceFs } from './workspace-fs';
-import { splitPathSegments } from './workspace-path';
+import { requireChar, splitPathSegments } from './workspace-path';
 
 // Reimplements pnpm-workspace.yaml's own "packages:" glob dialect directly against the real directory tree, rather than via Node's fs.globSync: that API only stabilised in Node 22, below this package's own >=20 engines floor. The current pnpm CLI (verified against the installed 12.4.1 binary: it is a compiled Rust executable, not the older TypeScript CLI, and its strings hold no "fast-glob" at all) does not literally resolve these globs through the fast-glob JS library; what stays true, checked against the same binary's own embedded exclusion string, is the documented DIALECT (https://pnpm.io/pnpm-workspace_yaml) this matcher follows: brace expansion ('{core,lib}/*' is two patterns, not one literal path), a wildcard segment never matching a name starting with "." ("A '*' never matches a name beginning with a dot, so 'packages/*' skips 'packages/.cache'"), and a "./" prefix or "." / ".." segment normalising the same way path.posix.normalize would ("./packages/*" and "packages//*" select the same projects). Every "packages:" glob is a directory glob (it names where a package's own directory lives, never a file), so this matcher only ever walks real subdirectories: '**' matches zero or more whole path segments; every other segment (a bare '*', a '[...]' character class, a literal name, or a partial pattern mixing literal text with '*'/'?'/'[...]' such as 'app-*' or '[a-z]-web') is matched against one real directory name at a time via segmentToRegExp below. node_modules and bower_components are never descended into or matched, mirroring the exact two-entry exclusion list ("**/node_modules/**", "**/bower_components/**") the installed pnpm binary itself embeds: a hoisted or npm-nested node_modules, or a bower_components left over from an older tool, is real content in the tree, never a workspace package.
-
-/** Reads `text[index]`, throwing rather than reading past the end: every call site in this file only ever derives `index` from a `for` loop whose own condition (`index < text.length`) already guarantees it in range, so an out-of-bounds read here would mean that loop's own invariant broke, not a case to handle quietly. Exported so this throw (unreachable through every real call site) can be tested directly, the same "Unreachable, tested directly rather than trusted on a comment" shape workspace-yaml.ts's own `requireLine` establishes. */
-export function requireChar(text: string, index: number): string {
-  const char = text[index];
-  if (char === undefined) {
-    throw new Error(`Unreachable: index ${String(index)} is out of bounds for a string of length ${String(text.length)}.`);
-  }
-  return char;
-}
 
 // Every character segmentToRegExp's own default (no wildcard, no class) branch below can still reach and must escape under this file's own 'u'-flag regexes: a lone, unescaped ']' is itself a SyntaxError there ("Lone quantifier brackets"), not merely a stylistic nicety the way it would be without 'u', since it can never open a character class of its own to begin with; '[', '*' and '?' never reach this branch at all (their own dedicated branches above handle every one, matched or not), so they are deliberately absent from this list.
 const REGEXP_SPECIAL_CHARS = /[.+^${}()|\]\\]/gu;
