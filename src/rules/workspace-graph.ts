@@ -84,7 +84,9 @@ function sliceBySegment(relativeDir: string, group: GroupSpec, segmentIndex: num
   return rest[segmentIndex];
 }
 
-// Strips a leading npm scope ("@scope/") from a declared package name before name-prefix slice matching: a scoped workspace's own declared names ("@x/store-cli") carry a prefix that is never part of any slice value, so matching the full declared name would never find a prefix at all under a scoped naming convention. Exported for direct testing of the anchor (a scope must start the name, not merely appear somewhere inside it) and the "one or more" scope-name length (a real scope is rarely a single character) independently of sliceByNamePrefix's own longest-match behaviour.
+/**
+ * Strips a leading npm scope (`"@scope/"`) from a declared package name before name-prefix slice matching: a scoped workspace's own declared names (`"@x/store-cli"`) carry a prefix that is never part of any slice value, so matching the full declared name would never find a prefix at all under a scoped naming convention. Exported for direct testing of the anchor (a scope must start the name, not merely appear somewhere inside it) and the "one or more" scope-name length (a real scope is rarely a single character) independently of sliceByNamePrefix's own longest-match behaviour.
+ */
 export function stripScope(declaredName: string): string {
   const scopeMatch = /^@[^/]+\//u.exec(declaredName);
 

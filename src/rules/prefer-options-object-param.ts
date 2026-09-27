@@ -45,7 +45,9 @@ const FUNCTION_LIKE_SELECTOR = [
   'TSMethodSignature',
 ].join(', ');
 
-// A parameter is optional exactly when it carries a `?` marker or a default value: a TSParameterProperty is optional exactly when the parameter it wraps is. An Identifier, an ObjectPattern and an ArrayPattern each carry their own `?` marker via their own `optional` field (`{ x }?: T` and `[y]?: T[]` are a type error (TS2463) in an implementation signature, valid in any body-less signature); a bare RestElement never carries either marker, since a rest parameter cannot be written with a `?` in valid TypeScript. Exported so this can be tested directly against real parameter nodes captured by the internal test's probe rule.
+/**
+ * A parameter is optional exactly when it carries a `?` marker or a default value: a TSParameterProperty is optional exactly when the parameter it wraps is. An Identifier, an ObjectPattern and an ArrayPattern each carry their own `?` marker via their own `optional` field (`{ x }?: T` and `[y]?: T[]` are a type error (TS2463) in an implementation signature, valid in any body-less signature); a bare RestElement never carries either marker, since a rest parameter cannot be written with a `?` in valid TypeScript. Exported so this can be tested directly against real parameter nodes captured by the internal test's probe rule.
+ */
 export function isOptionalParam(param: TSESTree.Parameter): boolean {
   if (param.type === AST_NODE_TYPES.TSParameterProperty) return isOptionalParam(param.parameter);
   if (param.type === AST_NODE_TYPES.AssignmentPattern) return true;
@@ -108,7 +110,9 @@ function isDefined<T>(value: T | undefined): value is T {
   return value !== undefined;
 }
 
-// The fixer's own replacement range spans from the run's first parameter to its last — both are guaranteed to exist once the caller has already confirmed the run has at least `minTrailingOptional` (>= 2) elements, but a plain index/`.at(-1)` lookup under this codebase's own `noUncheckedIndexedAccess` still types each as possibly `undefined`. Exported so that guarantee is checked directly against a deliberately empty array, rather than assumed away with a cast.
+/**
+ * The fixer's own replacement range spans from the run's first parameter to its last: both are guaranteed to exist once the caller has already confirmed the run has at least `minTrailingOptional` (`>= 2`) elements, but a plain index/`.at(-1)` lookup under this codebase's own `noUncheckedIndexedAccess` still types each as possibly `undefined`. Exported so that guarantee is checked directly against a deliberately empty array, rather than assumed away with a cast.
+ */
 export function firstAndLastOrThrow<T>(items: readonly T[]): readonly [T, T] {
   const first = items[0];
   const last = items.at(-1);
@@ -149,7 +153,9 @@ const LIFTABLE_JSDOC_PARENTS: ReadonlySet<AST_NODE_TYPES> = new Set([
   AST_NODE_TYPES.ExportDefaultDeclaration,
 ]);
 
-// A function-like node's own leading JSDoc block comment, walking up through the handful of wrapper nodes a real declaration commonly sits under (a `const f = (...) => {}`'s own VariableDeclarator/VariableDeclaration, a class method's MethodDefinition, an `export`) until either a genuine block comment starting with `*` (the `/**` convention) is found immediately before the current node, or the parent chain reaches a node the JSDoc convention would never attach to. Exported so its own comment-shape and parent-climbing decisions can be tested directly against fabricated source, independent of any particular RuleTester fixture.
+/**
+ * A function-like node's own leading JSDoc block comment, walking up through the handful of wrapper nodes a real declaration commonly sits under (a `const f = (...) => {}`'s own VariableDeclarator/VariableDeclaration, a class method's MethodDefinition, an `export`) until either a genuine block comment starting with `*` (the `/**` convention) is found immediately before the current node, or the parent chain reaches a node the JSDoc convention would never attach to. Exported so its own comment-shape and parent-climbing decisions can be tested directly against fabricated source, independent of any particular RuleTester fixture.
+ */
 export function getLeadingJSDocComment(sourceCode: TSESLint.SourceCode, node: TSESTree.Node): TSESTree.Comment | undefined {
   let current: TSESTree.Node = node;
   for (;;) {
@@ -164,7 +170,9 @@ export function getLeadingJSDocComment(sourceCode: TSESLint.SourceCode, node: TS
   }
 }
 
-// Whether a JSDoc block comment's own text documents `name` via an `@param` tag — matching the common forms (`@param name`, `@param {Type} name`, `@param [name]` for the optional-parameter convention, each optionally followed by a description) without requiring a full JSDoc parser, since this only ever needs to answer "does an existing doc comment already name this exact parameter", not validate or extract the tag's own structure. `name` is escaped before being interpolated into the pattern, since it is echoed verbatim from a real parameter's own identifier text, which can contain a regex-special character (`$` is a valid, if unusual, leading character in a JS identifier). Exported so both the escaping and the tag-matching can be tested directly, independent of any particular RuleTester fixture.
+/**
+ * Whether a JSDoc block comment's own text documents `name` via an `@param` tag — matching the common forms (`@param name`, `@param {Type} name`, `@param [name]` for the optional-parameter convention, each optionally followed by a description) without requiring a full JSDoc parser, since this only ever needs to answer "does an existing doc comment already name this exact parameter", not validate or extract the tag's own structure. `name` is escaped before being interpolated into the pattern, since it is echoed verbatim from a real parameter's own identifier text, which can contain a regex-special character (`$` is a valid, if unusual, leading character in a JS identifier). Exported so both the escaping and the tag-matching can be tested directly, independent of any particular RuleTester fixture.
+ */
 export function jsDocMentionsParam(commentValue: string, name: string): boolean {
   const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const paramTagPattern = new RegExp(`@param\\s+(?:\\{[^}]*\\}\\s+)?\\[?${escapedName}\\b`);
