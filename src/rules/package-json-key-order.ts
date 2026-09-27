@@ -113,7 +113,9 @@ interface Ranged {
   readonly range?: readonly [number, number];
 }
 
-// Every node momoa produces carries a real `range`, since @eslint/json's own JSON language always requests range tracking (ESLint's own fixer machinery — this rule's `fixable: 'code'` included — depends on it); `range` is only typed optional because momoa's own base Node interface leaves it that way for a parser configuration this codebase never uses. Exported so that guarantee is checked directly against a deliberately range-less input, rather than trusted on the strength of this comment alone.
+/**
+ * Every node momoa produces carries a real `range`, since `@eslint/json`'s own JSON language always requests range tracking (ESLint's own fixer machinery, this rule's `fixable: 'code'` included, depends on it); `range` is only typed optional because momoa's own base Node interface leaves it that way for a parser configuration this codebase never uses. Exported so that guarantee is checked directly against a deliberately range-less input, rather than trusted on the strength of this comment alone.
+ */
 export function rangeOf(node: Ranged): readonly [number, number] {
   if (node.range === undefined) {
     throw new Error('Unreachable: every node reaching this function was produced by a JSON language that always requests range tracking.');
@@ -125,7 +127,9 @@ export function rangeOf(node: Ranged): readonly [number, number] {
 // The Object visitor's own second parameter, derived rather than hand-typed since @eslint/json's own ValueNodeParent alias behind it isn't exported.
 type ObjectParent = NonNullable<Parameters<NonNullable<JSONRuleVisitor['Object']>>[1]>;
 
-// @eslint/json's own JSONSourceCode#traverse only ever omits a node's own `parent` for the single root node of the whole traversal (the Document node itself, per its own `getParent` implementation), which is never typed 'Object' — so the Object visitor, specifically, is never invoked with an undefined parent. The parameter stays optional in `JSONRuleVisitor`'s own type because it's shared across every node-type callback, some of which genuinely can be the traversal root. Exported so that guarantee is checked directly against a deliberately undefined parent, rather than assumed away with a cast.
+/**
+ * `@eslint/json`'s own `JSONSourceCode#traverse` only ever omits a node's own `parent` for the single root node of the whole traversal (the Document node itself, per its own `getParent` implementation), which is never typed `'Object'`, so the Object visitor, specifically, is never invoked with an undefined parent. The parameter stays optional in `JSONRuleVisitor`'s own type because it's shared across every node-type callback, some of which genuinely can be the traversal root. Exported so that guarantee is checked directly against a deliberately undefined parent, rather than assumed away with a cast.
+ */
 export function objectParentOrThrow(parent: ObjectParent | undefined): ObjectParent {
   if (parent === undefined) {
     throw new Error('Unreachable: the Object visitor is never invoked for the traversal root, which is always the Document node.');

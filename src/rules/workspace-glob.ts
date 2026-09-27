@@ -119,7 +119,9 @@ function findMatchingBrace(pattern: string, openIndex: number): number {
   return -1;
 }
 
-// Splits `text` on every top-level "," (one not itself nested inside a further "{...}" group), so "{a,{b,c}}" yields ["a", "{b,c}"] rather than wrongly cutting the nested group's own comma. Exported for direct testing independent of expandBraces' own real-pattern scenarios.
+/**
+ * Splits `text` on every top-level `,` (one not itself nested inside a further `{...}` group), so `"{a,{b,c}}"` yields `["a", "{b,c}"]` rather than wrongly cutting the nested group's own comma. Exported for direct testing independent of expandBraces' own real-pattern scenarios.
+ */
 export function splitTopLevelAlternatives(text: string): readonly string[] {
   const alternatives: string[] = [];
   let depth = 0;

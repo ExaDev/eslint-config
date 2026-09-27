@@ -41,7 +41,9 @@ export function isMainBarrel(filename: string): boolean {
   return filename.endsWith('/src/index.ts');
 }
 
-// True for re-export statements only: `export * from '...'` / `export { x } from '...'` / `export type { x } from '...'`. A file restricted to these cannot execute anything at import time — no semantic "does this statement have a side effect" judgement needed, which matters because top-level schema construction (z.object/z.discriminatedUnion/z.codec) throughout every non-barrel module would need special-casing under any naive "no top-level function calls" heuristic.
+/**
+ * True for re-export statements only: `export * from '...'` / `export { x } from '...'` / `export type { x } from '...'`. A file restricted to these cannot execute anything at import time — no semantic "does this statement have a side effect" judgement needed, which matters because top-level schema construction (z.object/z.discriminatedUnion/z.codec) throughout every non-barrel module would need special-casing under any naive "no top-level function calls" heuristic.
+ */
 export function isPureReexport(statement: { type: string; source?: unknown }): boolean {
   if (statement.type === 'ExportAllDeclaration') return true;
 
@@ -100,7 +102,9 @@ function isAncestorNode(value: unknown): value is AncestorNode {
   return typeof value.type === 'string';
 }
 
-// `declare module "..." { ... }` / `declare module Foo { ... }` (a TSModuleDeclaration) describes an external package's or a namespace's types — it produces no real runtime import chain, so an `export * from`/`export { x } from` written purely inside one (routinely used to re-export an untyped package's own types under a new module name, e.g. `declare module "untyped-pkg" { export * from "typed-pkg"; }`) carries nothing for barrel-policy to protect against: nothing is actually imported or re-exported at runtime at that location, it exists solely to satisfy the type checker. Walks the loosely-typed AncestorNode shape (rather than ESLint core's own Node union, which has no TSModuleDeclaration member) so this stays parser-agnostic rather than asserting a TypeScript-specific node type.
+/**
+ * `declare module "..." { ... }` / `declare module Foo { ... }` (a TSModuleDeclaration) describes an external package's or a namespace's types — it produces no real runtime import chain, so an `export * from`/`export { x } from` written purely inside one (routinely used to re-export an untyped package's own types under a new module name, e.g. `declare module "untyped-pkg" { export * from "typed-pkg"; }`) carries nothing for barrel-policy to protect against: nothing is actually imported or re-exported at runtime at that location, it exists solely to satisfy the type checker. Walks the loosely-typed AncestorNode shape (rather than ESLint core's own Node union, which has no TSModuleDeclaration member) so this stays parser-agnostic rather than asserting a TypeScript-specific node type.
+ */
 export function isInsideAmbientModuleDeclaration(node: unknown): boolean {
   let current: unknown = node;
   while (isAncestorNode(current)) {
@@ -111,7 +115,9 @@ export function isInsideAmbientModuleDeclaration(node: unknown): boolean {
   return false;
 }
 
-// ─── Node types ─── Derived from ESLint's own Rule.RuleListener via Parameters<>, never hand-written and never imported from @types/estree directly (this package does not otherwise depend on it). Pulling them out of no-non-barrel-reexport.ts into this shared module so the umbrella rule and the standalone rules share one source of truth for the ESTree shapes they walk.
+/**
+ * ─── Node types ─── Derived from ESLint's own `Rule.RuleListener` via `Parameters<>`, never hand-written and never imported from `@types/estree` directly (this package does not otherwise depend on it). Pulling them out of no-non-barrel-reexport.ts into this shared module so the umbrella rule and the standalone rules share one source of truth for the ESTree shapes they walk.
+ */
 export type ExportNamedDeclarationNode = Parameters<NonNullable<Rule.RuleListener['ExportNamedDeclaration']>>[0];
 export type ExportSpecifierNode = ExportNamedDeclarationNode['specifiers'][number];
 export type ExportDefaultDeclarationNode = Parameters<NonNullable<Rule.RuleListener['ExportDefaultDeclaration']>>[0];
@@ -123,7 +129,9 @@ export interface TrackedImport {
   specifier: ImportSpecifierNode;
 }
 
-// Narrows an ExportNamedDeclarationNode to the with-source shape (a real `export { x } from '...'`) rather than a bare `export { x };`. The parser only ever sets `source` to a real Literal or to `null`, never `undefined` — the `source?: unknown` field on the underlying ESTree type nonetheless allows it, so both checks are genuinely independent rather than one subsuming the other.
+/**
+ * Narrows an ExportNamedDeclarationNode to the with-source shape (a real `export { x } from '...'`) rather than a bare `export { x };`. The parser only ever sets `source` to a real Literal or to `null`, never `undefined` — the `source?: unknown` field on the underlying ESTree type nonetheless allows it, so both checks are genuinely independent rather than one subsuming the other.
+ */
 export function hasSource(node: ExportNamedDeclarationNode): node is ExportNamedDeclarationNode & { source: NonNullable<ExportNamedDeclarationNode['source']> } {
   return node.source !== null && node.source !== undefined;
 }
@@ -134,7 +142,9 @@ export function hasSource(node: ExportNamedDeclarationNode): node is ExportNamed
 export type SyntaxElement = Parameters<Rule.RuleFixer['remove']>[0];
 export type ReferenceIdentifier = ReturnType<Rule.RuleContext['sourceCode']['getDeclaredVariables']>[number]['references'][number]['identifier'];
 
-// ─── Split-statement re-export detector ─── The single-statement re-export forms (`export { x } from '...'`, `export * from '...'`) are caught directly by walking ExportNamedDeclaration[source] / ExportAllDeclaration. The split-statement form — `import { x } from './y'; export { x };` or `import { x } from './y'; export default x;` — binds x locally and hands it back out under its own name, achieving the identical coupling across two statements that neither a source-bearing export nor an AST selector can match. This detector tracks every name an ImportDeclaration binds, then at flush() (called from Program:exit so an import written below its export is still seen) returns each split-statement re-export it found, carrying enough about the originating import for a caller that wants to fix it (no-non-barrel-reexport) or merely report it (the umbrella).
+/**
+ * ─── Split-statement re-export detector ─── The single-statement re-export forms (`export { x } from '...'`, `export * from '...'`) are caught directly by walking ExportNamedDeclaration[source] / ExportAllDeclaration. The split-statement form — `import { x } from './y'; export { x };` or `import { x } from './y'; export default x;` — binds x locally and hands it back out under its own name, achieving the identical coupling across two statements that neither a source-bearing export nor an AST selector can match. This detector tracks every name an ImportDeclaration binds, then at flush() (called from Program:exit so an import written below its export is still seen) returns each split-statement re-export it found, carrying enough about the originating import for a caller that wants to fix it (no-non-barrel-reexport) or merely report it (the umbrella).
+ */
 export type SplitReexportViolation =
   | { readonly kind: 'named'; readonly specifier: ExportSpecifierNode; readonly declaration: ExportNamedDeclarationNode; readonly name: string; readonly trackedImport: TrackedImport }
   // identifierNode carries the already-narrowed Identifier this violation's own name was read from — computed once in violations() below, where the narrowing genuinely happens, rather than asked of a caller to re-derive with a runtime check that (once a violation exists at all) could never see its own false branch.
