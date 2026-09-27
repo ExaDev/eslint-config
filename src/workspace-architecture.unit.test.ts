@@ -1,6 +1,6 @@
 import { defineConfig } from 'eslint/config';
 import { describe, expect, it } from 'vitest';
-import { workspaceArchitectureConfig } from './workspace-architecture';
+import { buildWorkspaceArchitectureConfig, workspaceArchitectureConfig } from './workspace-architecture';
 
 const throwingRequireFn = () => {
   throw new Error('simulated missing package');
@@ -9,8 +9,9 @@ const throwingRequireFn = () => {
 const MINIMAL = { groups: [{ name: 'core', rank: 0 }] };
 
 describe('workspaceArchitectureConfig', () => {
+  // requireFn is buildWorkspaceArchitectureConfig's own test seam, deliberately absent from workspaceArchitectureConfig's public parameter type (see that function's own comment), so the two requireFn-driven cases below call the internal builder directly rather than the public export.
   it('throws naming the real install command when @eslint/json is not resolvable', () => {
-    expect(() => workspaceArchitectureConfig({ ...MINIMAL, requireFn: throwingRequireFn })).toThrow(/pnpm add -D @eslint\/json/);
+    expect(() => buildWorkspaceArchitectureConfig({ ...MINIMAL, requireFn: throwingRequireFn })).toThrow(/pnpm add -D @eslint\/json/);
   });
 
   it('wires no-uphill-dependency and no-dependency-cycle onto **/package.json, but not package-name-mirrors-path when "naming" is omitted', () => {
@@ -37,7 +38,7 @@ describe('workspaceArchitectureConfig', () => {
 
   it('resolves a json-language plugin that is its own default export directly, not nested under .default', () => {
     const directPlugin = { languages: { json: {} } };
-    const result = workspaceArchitectureConfig({ ...MINIMAL, requireFn: () => directPlugin });
+    const result = buildWorkspaceArchitectureConfig({ ...MINIMAL, requireFn: () => directPlugin });
     expect(result[0]?.plugins?.['json']).toBe(directPlugin);
   });
 
