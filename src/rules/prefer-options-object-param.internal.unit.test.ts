@@ -73,8 +73,8 @@ describe('isOptionalParam', () => {
     expect(isOptionalParam(definedOrThrow(requiredIdentifierParam))).toBe(false);
   });
 
-  it('returns false, never undefined, for a bare (non-optional, no default) destructured ObjectPattern parameter', () => {
-    // The distinguishing case: an ObjectPattern has no `optional` property at all, so a mutant that reaches the Identifier branch's `return param.optional` regardless of type would return `undefined` here, not `false`. Every real call site treats the two as equivalent (`!isOptionalParam(...)`, where `!undefined === !false`), so only a strict `toBe(false)` assertion, not real rule behaviour, can tell them apart.
+  it('returns false for a bare (non-optional, no default) destructured ObjectPattern parameter', () => {
+    // A bare ObjectPattern reaches the same `param.type === Identifier || ObjectPattern || ArrayPattern` branch as an Identifier and reads its own `.optional` field, which is `false` here: pins the branch's false case (a mutant returning `true` unconditionally, or negating `param.optional`, would flip this to `true`). Paired with the two true cases directly below, which pin the same branch's true case for the equivalent optional patterns.
     expect(isOptionalParam(definedOrThrow(bareDestructuredParam))).toBe(false);
   });
 
