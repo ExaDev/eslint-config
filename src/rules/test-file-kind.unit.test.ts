@@ -1,4 +1,4 @@
-import { RuleTester } from 'eslint';
+import { Linter, RuleTester } from 'eslint';
 import { describe, expect, it } from 'vitest';
 import tseslint from 'typescript-eslint';
 import rule, { readKinds } from './test-file-kind';
@@ -27,6 +27,75 @@ describe('readKinds', () => {
   it('throws when kinds is an array containing a non-string element', () => {
     const nonStringElement = 42;
     expect(() => readKinds({ kinds: ['unit', nonStringElement] })).toThrow(/Unreachable/);
+  });
+});
+
+// The rule's own meta.schema is the FIRST line of defence against a bad `{ kinds }` option, rejected by ESLint itself before create() ever runs. A plain Linter instance, not ruleTester.run: a schema-validation failure surfaces deep inside RuleTester's own nested, deferred it() registration rather than as a synchronous throw back to the caller (see barrel-policy.unit.test.ts's own identical comment on this), so Linter#verify is what actually lets these assert the rejection directly.
+const schemaLinter = new Linter();
+const schemaLintConfig = [{ files: ['**'], plugins: { exadev: { rules: { 'test-file-kind': rule } } } }];
+
+function lintWithOptions(options: unknown): void {
+  schemaLinter.verify('test();', [...schemaLintConfig, { rules: { 'exadev/test-file-kind': ['error', options] } }], 'src/foo.unit.test.ts');
+}
+
+describe('test-file-kind meta.messages', () => {
+  const { meta } = rule;
+  if (meta === undefined) throw new Error('Unreachable: the rule always defines its own meta object literal.');
+
+  it('carries the exact missingKind message text', () => {
+    expect(meta.messages?.['missingKind']).toBe(
+      "Test file names must declare their test kind via a filename suffix (e.g. 'foo.unit.test.ts'). '{{ filename }}' has none — expected one of: {{ kinds }}.",
+    );
+  });
+
+  it('carries the exact invalidKind message text', () => {
+    expect(meta.messages?.['invalidKind']).toBe(
+      "Test file names must declare a recognised test kind via a filename suffix. '{{ filename }}' declares '{{ found }}', which is not one of: {{ kinds }}.",
+    );
+  });
+});
+
+describe('test-file-kind schema', () => {
+  it('accepts an options object with no kinds key at the schema level', () => {
+    expect(() => {
+      lintWithOptions({});
+    }).not.toThrow();
+  });
+
+  it('accepts a kinds array holding at least one string', () => {
+    expect(() => {
+      lintWithOptions({ kinds: ['unit'] });
+    }).not.toThrow();
+  });
+
+  it('rejects a non-array kinds value at the schema level', () => {
+    expect(() => {
+      lintWithOptions({ kinds: 'unit' });
+    }).toThrow(/should be array/);
+  });
+
+  it('rejects a kinds array holding a non-string element at the schema level', () => {
+    expect(() => {
+      lintWithOptions({ kinds: [1] });
+    }).toThrow(/should be string/);
+  });
+
+  it('rejects an empty kinds array at the schema level (minItems: 1)', () => {
+    expect(() => {
+      lintWithOptions({ kinds: [] });
+    }).toThrow(/should NOT have fewer than 1 items/);
+  });
+
+  it('rejects an unrecognised property alongside kinds at the schema level', () => {
+    expect(() => {
+      lintWithOptions({ kinds: ['unit'], extra: true });
+    }).toThrow(/should NOT have additional properties/);
+  });
+
+  it('rejects a non-object options value at the schema level', () => {
+    expect(() => {
+      lintWithOptions('unit');
+    }).toThrow(/should be object/);
   });
 });
 
