@@ -27,8 +27,8 @@ export default defineConfig(
     },
   },
   {
-    // src/to-public-config-array.ts's one line is the sole, verified-necessary use of a type assertion in this codebase (see PublicConfigArray's own comment in src/config-types.ts) -- noInlineConfig rules out an inline disable, so this scoped override is the only mechanism available, and isolating the cast into its own single-purpose file keeps the override's blast radius to exactly that one line rather than a whole file that does other things too.
-    files: ['src/to-public-config-array.ts'],
+    // src/to-public-config-array.ts and src/to-public-plugin.ts each hold exactly one verified-necessary type assertion (see PublicConfigArray's and PublicPlugin's own comments in src/config-types.ts). noInlineConfig rules out an inline disable, so this scoped override is the only mechanism available, and isolating each cast into its own single-purpose file keeps the override's blast radius to exactly that one line rather than a whole file that does other things too.
+    files: ['src/to-public-config-array.ts', 'src/to-public-plugin.ts'],
     rules: { '@typescript-eslint/consistent-type-assertions': 'off' },
   },
   {
