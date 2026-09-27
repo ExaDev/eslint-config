@@ -375,7 +375,7 @@ ruleTester.run('prefer-options-object-param', rule, {
         },
       ],
     },
-    // Bail-out: an optional (?-marked) ObjectPattern and an optional (?-marked) ArrayPattern in the trailing run, in a declaration-only ambient function signature (TSDeclareFunction). Neither pattern has a single bindable name, so resolveFixableParam bails on both regardless, but proves isOptionalParam itself now recognises `{ x }?: T` and `[y]?: T[]` as optional (both parse and are only valid in a declaration signature, a `.d.ts` file or an interface method, never in a real function body).
+    // Bail-out: an optional (?-marked) ObjectPattern and an optional (?-marked) ArrayPattern in the trailing run, in a declaration-only ambient function signature (TSDeclareFunction). Neither pattern has a single bindable name, so resolveFixableParam bails on both regardless, but proves isOptionalParam itself now recognises `{ x }?: T` and `[y]?: T[]` as optional (both parse, and are a type error (TS2463) in an implementation signature but valid in any body-less signature).
     {
       code: 'declare function g(a: string, { x }?: { x: number }, [y]?: number[]): void;',
       errors: [
