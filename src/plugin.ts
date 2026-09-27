@@ -1,8 +1,9 @@
 import type { TSESLint } from '@typescript-eslint/utils';
-import type { ConfigValue } from './config-types';
+import type { ConfigValue, PublicPlugin } from './config-types';
 import { version } from '../package.json';
 import { buildNextjsConfig } from './nextjs';
 import { buildReactConfig } from './react';
+import { toPublicPlugin } from './to-public-plugin';
 import barrelDirectSiblingsOnly from './rules/barrel-direct-siblings-only';
 import barrelPolicy from './rules/barrel-policy';
 import noArrayIsarrayMutation from './rules/no-array-isarray-mutation';
@@ -106,3 +107,6 @@ const plugin: TSESLint.FlatConfig.Plugin = {
 };
 
 export default plugin;
+
+// The named export src/index.ts re-exports as `plugin`: retyped at the same public boundary PublicConfigArray/toPublicConfigArray use, since a consumer wiring `plugins: { exadev: plugin }` straight into `defineConfig()` (README's "lighter option" section) needs @eslint/core's own Plugin shape, not this module's internal TSESLint.FlatConfig.Plugin (see PublicPlugin's own comment in config-types.ts). Every other consumer of `plugin` in this codebase (package-json-key-order.ts, workspace-architecture.ts, recommended-type-checked.ts) imports the internal-typed default export above directly, since each spreads it into a ConfigArrayValue it is still assembling, which needs the TSESLint-typed shape for typescript-eslint's own rule-option checking.
+export const publicPlugin: PublicPlugin = toPublicPlugin(plugin);
