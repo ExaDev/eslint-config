@@ -70,7 +70,7 @@ describe('createNoDependencyCycleRule meta', () => {
     expect(meta.docs?.description).toBe('Disallow a cyclic workspace dependency.');
     expect(meta.docs?.url).toBe('https://github.com/ExaDev/eslint-config/blob/main/src/rules/no-dependency-cycle.ts');
     expect(meta.messages?.cycle).toBe(
-      '"{{from}}" depends on "{{to}}", which depends back on "{{from}}": a workspace cycle. Move the shared code into a package both can depend on, or invert one edge behind a contract.',
+      '"{{from}}" depends on "{{to}}", which can reach back to "{{from}}": a workspace cycle. Move the shared code into a package both can depend on, or invert one edge behind a contract.',
     );
   });
 });
@@ -131,6 +131,13 @@ ruleTester.run('no-dependency-cycle', rule, {
       filename: `${FIXED_GRAPH.root}/${NAMELESS_RELATIVE_DIR}/package.json`,
       options: [{ groups: [{ name: 'core' }] }],
       errors: [{ messageId: 'cycle', data: { from: NAMELESS_RELATIVE_DIR, to: 'a' } }],
+    },
+    // An INDIRECT cycle: "c" here declares a dependency on "a", and the fixture's own edges (a -> b -> c) mean "a" can only reach "c" through "b", never directly. The old message wording ("which depends back on") claimed a direct back-edge regardless, so this reported "a depends on b, which depends back on a" even though "b" itself has no edge to "a" at all; the reworded message ("which can reach back to") makes no such claim and stays true for this transitive path.
+    {
+      code: manifest('c', { a: 'workspace:*' }),
+      filename: selfFilename('c'),
+      options: [{ groups: [{ name: 'core' }] }],
+      errors: [{ messageId: 'cycle', data: { from: 'c', to: 'a' } }],
     },
   ],
 });

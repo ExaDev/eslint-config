@@ -32,7 +32,7 @@ export function createNoDependencyCycleRule(deps: WorkspaceRuleDeps = {}): NoDep
       },
       messages: {
         cycle:
-          '"{{from}}" depends on "{{to}}", which depends back on "{{from}}": a workspace cycle. Move the shared code into a package both can depend on, or invert one edge behind a contract.',
+          '"{{from}}" depends on "{{to}}", which can reach back to "{{from}}": a workspace cycle. Move the shared code into a package both can depend on, or invert one edge behind a contract.',
       },
     },
     create(context) {
