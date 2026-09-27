@@ -1,3 +1,11 @@
+## [2.22.1](https://github.com/ExaDev/eslint-config/compare/v2.22.0...v2.22.1) (2026-09-27)
+
+
+### Bug Fixes
+
+* **workspace-checks:** keep-group uses the group's own name, not its path ([68df33c](https://github.com/ExaDev/eslint-config/commit/68df33c73b50bff845ab5c94320781474b8da043))
+* **workspace-yaml:** prefix packages: parse errors like the other workspace-architecture modules ([0820a56](https://github.com/ExaDev/eslint-config/commit/0820a56ee14f0b35c4a3534ef390422b8e914205))
+
 # [2.22.0](https://github.com/ExaDev/eslint-config/compare/v2.21.1...v2.22.0) (2026-09-26)
 
 
