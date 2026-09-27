@@ -7,6 +7,7 @@ import {
   containsCommentTerminator,
   detectLineBreak,
   extractCommentLines,
+  firstMatchOrEmpty,
   getExportWrapper,
   isDirectiveComment,
   isTrailingComment,
@@ -253,6 +254,21 @@ describe('containsCommentTerminator', () => {
   it('checks every line, not only the first', () => {
     // Pins `.some` over the array (a mutant weakening it to check only `lines[0]` would miss a delimiter on a later line).
     expect(containsCommentTerminator(['a safe first line', 'a second line with */ in it'])).toBe(true);
+  });
+});
+
+describe('firstMatchOrEmpty', () => {
+  it('returns the real match text when one is present', () => {
+    expect(firstMatchOrEmpty(['  '])).toBe('  ');
+  });
+
+  it('returns an empty string for a genuinely absent match (null)', () => {
+    expect(firstMatchOrEmpty(null)).toBe('');
+  });
+
+  it('returns an empty string when a real, non-null match array has no index-0 element of its own', () => {
+    // Never reached through any real caller in this file (a real RegExp#exec result's own index 0 is always the whole match), but this function's own general contract still needs an answer for it, pinning the destructured default distinctly from the `?? []` fallback the case above already covers.
+    expect(firstMatchOrEmpty([])).toBe('');
   });
 });
 

@@ -114,6 +114,8 @@ ruleTester.run('prefer-doc-comment', rule, {
     '/*\n*/\nexport function foo() {}',
     // A short, single-physical-line block comment.
     '/* short */\nexport function foo() {}',
+    // A Block comment directly above the export whose own content happens to read as directive-shaped (`TODO: ...`), with a genuinely substantial, ordinary PROSE Block comment directly above THAT (no blank line either side): getProseGroupBefore's own type check (only a `Line` comment is ever tested for directive-ness at all) must return the directive-shaped BLOCK itself immediately, never treat it as skippable and recurse past it to the prose above, which checkAnchor's own directiveIndex logic then correctly leaves entirely alone (a directive found inside an already-consolidated Block comment leaves the whole comment alone). Were that type check ever weakened to fire for a Block too, this exact fixture would instead surface the prose block as the group and report it.
+    '/* This substantial prose block sits above another block entirely and would be reported and fixed if it were ever wrongly selected as the group instead of the real directive block below it. */\n/* TODO: revisit this exact decision later on */\nexport function guardedByDirectiveBlock() {}',
     // A `/*!` license/banner block directly above an exported declaration: exempt regardless of length, the same as an already-consolidated `/**` doc comment, since a banner is real, structural, intentionally-preserved text, never a plain comment this rule should upgrade or otherwise disturb.
     '/*! Copyright ExaDev. Licensed under MIT. This banner must survive minification intact. */\nexport function licensed() {}',
   ],
@@ -321,6 +323,12 @@ ruleTester.run('prefer-doc-comment', rule, {
     {
       code: '/* aside */ // This comment follows a block comment on the same line and is long enough to be substantial for sure.\nexport function afterAside() {}',
       output: '/* aside */ /**\n * This comment follows a block comment on the same line and is long enough to be substantial for sure.\n */\nexport function afterAside() {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A Line comment whose own text happens to start with `!` (no space after `//`, so nothing strips it), but is not a `/*!` Block banner at all: the banner exemption's own type check (Block only) must still report and fix this, proving the exemption never fires for a Line comment no matter what its own text starts with.
+    {
+      code: '//!not actually a license banner, just a coincidentally exclamation-prefixed comment that still deserves conversion to a real doc comment\nexport function notABanner() {}',
+      output: '/**\n * !not actually a license banner, just a coincidentally exclamation-prefixed comment that still deserves conversion to a real doc comment\n */\nexport function notABanner() {}',
       errors: [{ messageId: 'preferDocComment' }],
     },
     // A CRLF file: every line break in the fixture below, both between the two `//` lines and after them, is a real `\r\n` pair, never a bare `\n`. The fixer's own replacement must use that same `\r\n` throughout its own new text (between `/**` and the first body line, between the two body lines, and before the closing ` */`), never a hard-coded `\n`, which would leave the file with the two conventions mixed.

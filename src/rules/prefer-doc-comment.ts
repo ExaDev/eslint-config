@@ -185,6 +185,15 @@ function getProseGroupBefore(sourceCode: TSESLint.SourceCode, beforeLine: number
 }
 
 /**
+ * `match`'s own index-0 element, or `''` for both a genuinely absent match (`match` itself `null`) and the type system's own `noUncheckedIndexedAccess` view of a real, non-null match's index 0 (never actually absent there: a real `RegExp#exec` result's own index 0 is always the whole match, by definition never a hole). Narrowed to a plain `readonly string[]` rather than the exact `RegExpExecArray` type, since nothing here reads any of that type's other fields: this is a small, directly testable helper specifically so its own "index 0 absent" fallback, unreachable through every real caller in this file (each already confirmed its own regex can never itself return a matchless `null`), still gets exercised directly, the same "caller already confirmed" shape firstAndLastOrThrow's own direct empty-array test uses for its sibling helper.
+ */
+export function firstMatchOrEmpty(match: readonly string[] | null): string {
+  const [first = ''] = match ?? [];
+
+  return first;
+}
+
+/**
  * The line-break sequence, `\n` or `\r\n`, actually used right after `fromIndex` in `text`: the real terminator ending the leading comment group's own first physical line, whichever the file's own convention happens to be, so the fixer's own replacement (which needs a line break between the opening delimiter and the first body line, between every body line, and before the closing one) never introduces the OTHER convention into a file that consistently uses just one, corrupting a CRLF file with LF-only breaks the moment it splices in fresh text of its own. Returns `'\n'` when no line break is found anywhere in `text` from `fromIndex` onward: unreachable through the rule itself (a comment group and the anchor it documents are always on different physical lines, per getLeadingCommentGroup's own adjacency check, which guarantees a real break sits between the group's own start and the anchor that follows it), but this function's own general contract still needs an answer for that case.
  */
 export function detectLineBreak(text: string, fromIndex: number): string {
@@ -250,9 +259,8 @@ const preferDocComment = createRule<Options, MessageIds>({
       const [firstComment, lastComment] = firstAndLastOrThrow(consideredGroup);
       const rawLinePrefix = sourceCode.text.slice(firstComment.range[0] - firstComment.loc.start.column, firstComment.range[0]);
       // Only the prefix's own leading run of whitespace, never the prefix verbatim: a genuine indentation prefix is all whitespace, but isTrailingComment only ever excludes a comment sharing its own line with real CODE, not with an EARLIER comment (`/* aside */ // real comment`), so `rawLinePrefix` can itself carry real, non-whitespace text here. Splicing that text onto every continuation line and the closing delimiter (the fixer's own previous behaviour) reproduces it there too, corrupting the file; taking only the leading whitespace run leaves the fixer's own continuation lines and closing `*/` at column zero instead, which is always valid, if visually unaligned with whatever precedes the comment's own opening `/**` on its first line.
-      const indentMatch = /^\s*/.exec(rawLinePrefix);
-      // `/^\s*/` always matches, even against an empty string (its own `*` quantifier accepts zero repetitions), so `indentMatch` is never actually `null` here; the `?? []` fallback exists only to satisfy `exec`'s own general `RegExpExecArray | null` return type, not because this specific pattern can ever produce one.
-      const [indent = ''] = indentMatch ?? [];
+      // No leading `^` anchor: a bare `\s*` still only ever matches starting at index 0 anyway, since `exec` always tries the earliest position first and a `*` quantifier always succeeds there with a zero-length match at worst, for every input including one with no leading whitespace at all; confirmed directly across every real shape this can be called with (empty, all-whitespace, no leading whitespace, and a non-whitespace prefix), an anchor genuinely changes nothing here, so keeping it would be dead syntax a mutation test could never distinguish from its own removal.
+      const indent = firstMatchOrEmpty(/\s*/.exec(rawLinePrefix));
       const lineBreak = detectLineBreak(sourceCode.text, firstComment.range[0]);
       const body = consideredLines.map((line) => (line.length > 0 ? `${indent} * ${line}` : `${indent} *`)).join(lineBreak);
       const replacement = `/**${lineBreak}${body}${lineBreak}${indent} */`;
