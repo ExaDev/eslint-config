@@ -200,6 +200,25 @@ function generateLinesOfCode(count: number): string {
   return Array.from({ length: count }, (_, index) => `const generatedLine${String(index)} = ${String(index)};`).join('\n');
 }
 
+// Matches the `max: 4` configured on the rule under test above.
+const MAX_PARAMS = 4;
+
+function generateFunctionWithParamCount(count: number): string {
+  const params = Array.from({ length: count }, (_, index) => `p${String(index)}: number`).join(', ');
+  const sum = Array.from({ length: count }, (_, index) => `p${String(index)}`).join(' + ');
+  return `function withParams(${params}): number {\n  return ${sum};\n}\n`;
+}
+
+describe('max-params', () => {
+  it('bans a function declaring more than 4 parameters', () => {
+    expect(lint(generateFunctionWithParamCount(MAX_PARAMS + 1), 'src/foo.ts')).toContain('max-params');
+  });
+
+  it('allows a function declaring 4 parameters or fewer', () => {
+    expect(lint(generateFunctionWithParamCount(MAX_PARAMS), 'src/foo.ts')).not.toContain('max-params');
+  });
+});
+
 describe('max-lines', () => {
   it('bans a file over 800 real lines of code', () => {
     expect(lint(generateLinesOfCode(MAX_LINES + 1), 'src/foo.ts')).toContain('max-lines');
