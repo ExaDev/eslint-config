@@ -254,4 +254,14 @@ describe('expectedPackageName', () => {
     const trailingSlashGroup: GroupSpec = { name: 'core', path: 'core/' };
     expect(expectedPackageName('core/clock/contract', trailingSlashGroup, { scope: '@exacap' })).toBe('@exacap/clock-contract');
   });
+
+  it("'drop-group' falls back to the group's own name when the package sits exactly at the group's own root, leaving no path segments for rest to keep", () => {
+    const docsGroup: GroupSpec = { name: 'docs' };
+    expect(expectedPackageName('docs', docsGroup, { scope: '@x' })).toBe('@x/docs');
+  });
+
+  it("'drop-group' falls back to the group's own name at the root of a group nested under its own path, not the path's own last segment", () => {
+    const nestedRootGroup: GroupSpec = { name: 'web', path: 'apps/web' };
+    expect(expectedPackageName('apps/web', nestedRootGroup, { scope: '@x' })).toBe('@x/web');
+  });
 });

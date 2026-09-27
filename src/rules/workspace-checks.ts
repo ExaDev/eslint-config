@@ -119,7 +119,7 @@ export function last<T>(array: readonly T[]): T {
 /**
  * The three per-group naming strategies' own segment selection, keyed by NamingStrategy's own three literal members rather than a chain of ternaries: `Record<NamingStrategy, ...>` requires every member to have its own entry, which is what makes 'drop-group' a genuine, independently-typed branch, not merely "whatever the ternary chain falls through to when nothing else matched". Stryker's own typescript checker rejects a mutant that replaces the `?? 'drop-group'` fallback with some other string, since indexing this record with a value outside NamingStrategy is a type error, caught before any test even runs.
  *
- * - **'drop-group'**: drop the group's own root path segments, keep what remains.
+ * - **'drop-group'**: drop the group's own root path segments, keep what remains, falling back to the group's own `name` when nothing remains: a package sitting exactly at its group's own root (`relativeDir` equals the group's `path`, a group that IS a single package rather than a container of them, a standalone `docs` package under a `{ name: 'docs' }` group, say) has no path segments left of its own for `rest` to keep, so the group's declared identity stands in for them, exactly as it always does for 'keep-group'. Without this, such a group could never have a satisfiable expected name at all: every package in it would derive an empty (or bare-scope) name no real `package.json` can declare.
  * - **'keep-group'**: keep the group's OWN `name` ahead of `rest`, always, regardless of how deep its own `path` nests: a group declared `{ name: 'test', path: 'tests' }` derives "test-e2e" for `tests/e2e`, and one declared `{ name: 'test', path: 'packages/tests' }` derives "test-e2e" for `packages/tests/e2e` too, never "tests-e2e" (the group's declared identity, not whatever path segment sits above it). A test group whose packages are named "test-<feature>", mirroring the feature they test, needs its own "test" name kept, regardless of how many container directories its `path` nests under.
  * - **'basename'**: use only `relativeDir`'s own final segment, ignoring every intermediate directory, for a group whose intermediate structure exists purely for filesystem organisation and carries no naming intent of its own.
  */
@@ -130,7 +130,7 @@ const NAME_SEGMENTS_BY_STRATEGY: Record<
 > = {
   basename: ({ segments }) => [last(segments)],
   'keep-group': ({ rest, group }) => [group.name, ...rest],
-  'drop-group': ({ rest }) => rest,
+  'drop-group': ({ rest, group }) => (rest.length === 0 ? [group.name] : rest),
 };
 
 /**
