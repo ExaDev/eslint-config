@@ -7,9 +7,9 @@ import * as ts from 'typescript';
 import { asExpression } from './ts-node-guards';
 
 /* A numeric enum accepts any bare `number`, not just its own members — confirmed directly: `enum Direction { Up, Down } declare const n: number; const d: Direction = n;` type-checks cleanly under `tsc --strict`, with no cast needed. TypeScript DOES reject an invalid numeric LITERAL assigned the same way (`const d: Direction = 999;` is a real error) — the hole is specifically for a non-literal `number` value, where the compiler has no literal to range-check against.
-   
+
    Verified via the TypeScript compiler API directly (not assumed): at a position whose contextual type is EnumLike, a genuine enum member access (`Direction.Up`) has EnumLike set on its OWN actual type, and a valid literal (`0`) reports `isLiteral() === true` — both distinguishable from the unsafe case, a plain `number`-flagged, non-literal actual type with no EnumLike flag of its own. This needs real type information (`getContextualType`/`getTypeAtLocation`), so this rule requires type-aware linting.
-   
+
    No autofix is offered: the only way to make a live `number` value provably safe is a genuine runtime check against the enum's actual members, which is a real behavioural change a mechanical fix cannot responsibly synthesise (mirrors no-pointless-reassignment's own precedent of reporting without fixing once a transform can't be proven both safe and meaning-preserving). */
 
 const createRule = ESLintUtils.RuleCreator(

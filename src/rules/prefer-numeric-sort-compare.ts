@@ -7,9 +7,9 @@ import * as ts from 'typescript';
 import { asExpression, asTypeReference, lastTokenOrThrow } from './ts-node-guards';
 
 /* @typescript-eslint/require-array-sort-compare already flags any '.sort()'/'.toSorted()' call with no compare function, except on a plain string array — and ships with no fix or suggestion at all, correctly, since the right compare function in general depends on intent (ascending/descending/locale-aware/by-key) that can't be derived from the code. This rule is a deliberately narrow addition alongside it, not a replacement: both rules fire on the same call for a number array, and that overlap is intentional.
-   
+
    The one case singled out here is the one where a specific fix is actually defensible as a suggestion: when the array's element type is definitively 'number' (every element type is NumberLike, not a union with any other type, and not 'any'/'unknown'), a bare '.sort()'/'.toSorted()' is essentially always a bug. The default comparator is lexicographic string comparison — confirmed directly: `[1, 2, 3, 10, 20, 30].sort()` produces `[1, 10, 2, 20, 3, 30]`, not ascending numeric order — and ascending numeric order is the overwhelmingly common intent for a bare numeric sort.
-   
+
    This is a SUGGESTION, not a full autofix (no 'fixable: code', no top-level 'fix' on the report): auto-applying ascending order on every matching call could still be wrong for code that genuinely wants descending order, which is a real, if less common, alternative. A suggestion the developer explicitly reviews and accepts is appropriate; silently rewriting behaviour on every save is not. */
 
 const createRule = ESLintUtils.RuleCreator(

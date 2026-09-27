@@ -1,7 +1,7 @@
 import { AST_NODE_TYPES, ESLintUtils, TSESLint, type TSESTree } from '@typescript-eslint/utils';
 
 /* Object.assign's own overload signatures merge the target and source parameter types without checking that a source object's properties are actually assignable to the corresponding property on the target — confirmed directly: given `const f: { bar: string } = { bar: 'x' }`, `Object.assign(f, { bar: 42 })` passes `tsc --strict` with zero errors, while the equivalent direct assignment `f.bar = 42` is correctly rejected as `Type 'number' is not assignable to type 'string'`. This holds for a literal, non-computed property key too — the hole is in Object.assign's own typing, not specific to a computed key or a generic call site. Object spread (`{ ...target, ...source }`) does not carry this hole: TypeScript checks a spread's resulting object literal against its target type the normal way.
-   
+
    Two genuinely different autofix situations, handled differently:
     - `Object.assign({...}, ...sources)` where the target is a FRESH object literal has no pre-existing
    binding anything else could be aliasing, so rewriting it to `{ ...targetProps, ...sources }` is always safe — offered as a real, automatic fix.
