@@ -1,3 +1,55 @@
+# [2.23.0](https://github.com/ExaDev/eslint-config/compare/v2.22.2...v2.23.0) (2026-09-28)
+
+
+### Bug Fixes
+
+* exempt a /*! license or banner block from both comment rules ([7758fa8](https://github.com/ExaDev/eslint-config/commit/7758fa83ee06b78eecdbb3800ed55b05e6e7f973))
+* **prefer-doc-comment:** correct the PropertyDefinition null-guard comment ([8b051f6](https://github.com/ExaDev/eslint-config/commit/8b051f65ad4d7d4a09943a2f3cb1882245cd587f))
+* **prefer-doc-comment:** cover a genuinely ambient function signature ([b53de1d](https://github.com/ExaDev/eslint-config/commit/b53de1d13e2fd677926adad433bfcf37e4a36e81))
+* **prefer-doc-comment:** drop the redundant isLineRun guard in directiveIndex ([9feebbb](https://github.com/ExaDev/eslint-config/commit/9feebbbcf26f13528a4cb90b836f296ce0217c38))
+* **prefer-doc-comment:** exempt overload implementation signatures ([96d8edb](https://github.com/ExaDev/eslint-config/commit/96d8edbf3834c2808315cbdf2430f0438f7a9483))
+* **prefer-doc-comment:** judge the segment adjacent to the anchor, not the first directive ([335f2be](https://github.com/ExaDev/eslint-config/commit/335f2be5ae7f93fad037c8691e137834e2d38ad7)), closes [#region](https://github.com/ExaDev/eslint-config/issues/region)
+* **prefer-doc-comment:** match ESLint's own directive rules exactly ([2b76c29](https://github.com/ExaDev/eslint-config/commit/2b76c29c7c629a0bfe46cdb9d232006131bc13c9))
+* **prefer-doc-comment:** never merge a directive line into the fixed doc comment ([e82af51](https://github.com/ExaDev/eslint-config/commit/e82af518db396e55ec1349fcb64ad8ac2fe96e80))
+* **prefer-doc-comment:** never merge a directive line into the fixed doc comment ([6f0373b](https://github.com/ExaDev/eslint-config/commit/6f0373b94764b0caa5dd3b00a5bf9579c0f3bc02))
+* **prefer-doc-comment:** preserve comment indentation and unwrap starred blocks ([3cb5088](https://github.com/ExaDev/eslint-config/commit/3cb5088601fccc354675184aa22149e6fadb55a2))
+* **prefer-doc-comment:** read the CRLF terminator from real source, not a rewritten comment ([1d03f9e](https://github.com/ExaDev/eslint-config/commit/1d03f9e3dd36e5da9e684dfa8a3322bedba99aaa))
+* **prefer-doc-comment:** recognise #region/#endregion editor folding markers ([b620e04](https://github.com/ExaDev/eslint-config/commit/b620e0490d139b826d08192e15f99f6013431b28)), closes [region/#endregion](https://github.com/ExaDev/eslint-config/issues/endregion) [#region](https://github.com/ExaDev/eslint-config/issues/region) [#endregion](https://github.com/ExaDev/eslint-config/issues/endregion)
+* **prefer-doc-comment:** recognise a real @-prefixed TypeScript directive ([bc6ad31](https://github.com/ExaDev/eslint-config/commit/bc6ad31a021e0e0a2e26af9609fd5938a1974dc1))
+* **prefer-doc-comment:** recognise directives despite extra leading whitespace ([f198f72](https://github.com/ExaDev/eslint-config/commit/f198f72ea151476717eabdd199431acd73e08970))
+* **prefer-doc-comment:** recognise eslint-enable in the directive pattern ([b6e9cae](https://github.com/ExaDev/eslint-config/commit/b6e9caee88a9e077c30dc543d775b8caff3a1fe1))
+* **prefer-doc-comment:** recognise node:coverage, cspell and biome-ignore directives ([d2da2be](https://github.com/ExaDev/eslint-config/commit/d2da2beb97790a1d77d81d046d6481188cdf7698))
+* **prefer-doc-comment:** recognise prettier-ignore and coverage-tool ignore directives ([d43028b](https://github.com/ExaDev/eslint-config/commit/d43028b0ba49df0d983b839e002fdb0fa53c64ee))
+* **prefer-doc-comment:** report a multi-declarator export exactly once ([87c71e0](https://github.com/ExaDev/eslint-config/commit/87c71e08837b6a6f8a58e8b705d8caafd7215695))
+* **prefer-doc-comment:** require ordering and static-match for a method's own overload signature ([cfa3fb0](https://github.com/ExaDev/eslint-config/commit/cfa3fb0d46472016444f0ad2066c461bdc71db5f))
+* **prefer-doc-comment:** require the export wrapper to reach the public surface ([df97ee9](https://github.com/ExaDev/eslint-config/commit/df97ee94e5e91563fdbb962afcf4d7d039745000))
+* **prefer-doc-comment:** restrict the VariableDeclaration check to export const ([0dd0e84](https://github.com/ExaDev/eslint-config/commit/0dd0e849bc0ec04160b66cf37fd6957b095b52fe))
+* **prefer-doc-comment:** stop absorbing a trailing comment into the next leading group ([a081eae](https://github.com/ExaDev/eslint-config/commit/a081eaea96b2301dade124c09039181f69ecc762))
+* **prefer-doc-comment:** stop folding triple-slash directives into doc comments ([1074346](https://github.com/ExaDev/eslint-config/commit/10743469fe9aa156ff97a2ff4e45a23e3b726e83))
+* **prefer-doc-comment:** stop the fixer splicing real text into every line as indent ([bf9185c](https://github.com/ExaDev/eslint-config/commit/bf9185c3c0d136033e6a9d08f5401b2ec9c4fe2b))
+* **prefer-doc-comment:** take the fixer's line break from the source ([a4e4bb9](https://github.com/ExaDev/eslint-config/commit/a4e4bb9512f0cefa712137ebfad3b6a9d24a6ddf))
+* **prefer-doc-comment:** validate the unsafe-content gate against real TSDoc ([cce1303](https://github.com/ExaDev/eslint-config/commit/cce130358a637dc6a7516772ae779db181260bb7))
+* **prefer-doc-comment:** withhold autofix for any TSDoc tag line, not just a blank line before one ([b97fb2c](https://github.com/ExaDev/eslint-config/commit/b97fb2c36b5f45dd51bd0b46ec329088330607d4))
+* **prefer-doc-comment:** withhold autofix when a line would collide with jsdoc/no-multi-asterisks ([36561e9](https://github.com/ExaDev/eslint-config/commit/36561e9906fd70d43d8f8c5b22d0521c381ea434))
+* **prefer-doc-comment:** withhold autofix when a line would collide with jsdoc/tag-lines ([0c86926](https://github.com/ExaDev/eslint-config/commit/0c869269bbb51ed52591f208e81c3ad2c4e42aff))
+* **release:** arm the deploy-key push by persisting checkout credentials ([456c22f](https://github.com/ExaDev/eslint-config/commit/456c22f0d17f2b564beb840b7b3676dd730539a5))
+* satisfy prefer-doc-comment across the repo's own source ([0c4a288](https://github.com/ExaDev/eslint-config/commit/0c4a28859f9905e9a06a9d1b4c5759671fc1a031))
+* **stylistic-comments:** exempt cspell:disable-line from line-comment-position ([5983a46](https://github.com/ExaDev/eslint-config/commit/5983a46ac74e9b4e2a5b3c6467778cd1fdee08e9))
+* **stylistic-comments:** stop enabling multiline-comment-style ([1b4e5bd](https://github.com/ExaDev/eslint-config/commit/1b4e5bd946ff56497e0fa6e629d163caaac2f56b))
+* **stylistic-comments:** stop forcing a blank line between consecutive imports and directives ([674bfe6](https://github.com/ExaDev/eslint-config/commit/674bfe6f658df456a7a8275ea23438899601bb37))
+* **stylistic-comments:** stop multiline-comment-style breaking triple-slash directives ([0b7d45b](https://github.com/ExaDev/eslint-config/commit/0b7d45bb7865b4b01bf8c79e481fadff407f8d62)), closes [eslint-stylistic/eslint-stylistic#1285](https://github.com/eslint-stylistic/eslint-stylistic/issues/1285)
+* **stylistic-comments:** stop spaced-comment breaking source-map and #region markers ([a511051](https://github.com/ExaDev/eslint-config/commit/a511051d7c50348d41d3b6e261fe4b8d429a5fc6)), closes [#region](https://github.com/ExaDev/eslint-config/issues/region) [region/#endregion](https://github.com/ExaDev/eslint-config/issues/endregion)
+
+
+### Features
+
+* add prefer-doc-comment rule ([aa3d937](https://github.com/ExaDev/eslint-config/commit/aa3d9370c8a60b7028880342cd2c14727955db12))
+* **deps:** add @stylistic/eslint-plugin ([37e38de](https://github.com/ExaDev/eslint-config/commit/37e38de72afadcb1a9f853429b808f1054e8dcfa))
+* **prefer-doc-comment:** cover exported enums, namespaces, value consts, default expressions ([3f658d5](https://github.com/ExaDev/eslint-config/commit/3f658d5f14d29d7ca46042ef64c533c65f11d447))
+* **prefer-doc-comment:** cover public abstract methods and function-valued class properties ([349d96a](https://github.com/ExaDev/eslint-config/commit/349d96a26b3a2d6758c442b5bd2b22669f624f5d))
+* **prefer-doc-comment:** report an exported function's own overload signature ([cb4be1e](https://github.com/ExaDev/eslint-config/commit/cb4be1e603d41c91830e6d58ad17e06d67919da1))
+* wire stylistic comment, class-member and JSX rules into config ([950de79](https://github.com/ExaDev/eslint-config/commit/950de796de61f0304454a5f3ea002a7344cbe475))
+
 ## [2.22.2](https://github.com/ExaDev/eslint-config/compare/v2.22.1...v2.22.2) (2026-09-27)
 
 
