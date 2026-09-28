@@ -6,6 +6,8 @@ import { firstAndLastOrThrow } from './prefer-options-object-param';
 //
 // Scope, deliberately bounded to exactly these five declaration shapes: an exported function declaration, an exported function expression or arrow function assigned to an exported `const`, an exported class declaration, an exported class's public method, and an exported interface/type-alias declaration. Deliberately NOT covered: a name exported later via a separate `export { x }` statement (a genuinely different, harder detection problem, real scope/binding analysis across the whole module rather than a single parent-chain check; see no-pointless-reassignment.ts's own `isExportedAlias` for what that would take, and note it solves a narrower problem, a single alias `const`, not this rule's five different declaration shapes); an ambient/declare-only signature (`TSDeclareFunction`, ambient class members); and an individual interface/type-alias member (only the declaration as a whole is checked, not each of its properties/methods). Each is a real, if rare, gap, not an oversight: extending to any of them is a distinct, separately-scoped follow-up, not a silent partial implementation of this one.
 //
+// A TypeScript function/method overload set's own IMPLEMENTATION signature (the body-carrying `FunctionDeclaration`/`MethodDefinition` that follows the separate overload signatures) is also deliberately excluded, for the opposite reason to every gap above: TypeScript never shows that signature to callers at all (only the separate overload signatures, `TSDeclareFunction` for a function, a `MethodDefinition` whose own `value` is `TSEmptyBodyFunctionExpression` for a class method, both already out of scope per the previous paragraph, are ever checked against a call site), so a comment directly above the implementation is internal reasoning about how the overloads are actually realised, never a public contract this rule should ever upgrade into a doc comment. isOverloadImplementation below detects a function's own implementation through ESLint's own scope analysis (the overload signatures and the implementation all share one Variable); isOverloadImplementationMethod detects a class method's own implementation by an earlier same-key `MethodDefinition` sibling in the enclosing `ClassBody` whose own `value` is `TSEmptyBodyFunctionExpression`. The FunctionDeclaration/MethodDefinition visitors skip checkAnchor entirely for a node either identifies.
+//
 // A `/*! ... */` exclamation-marked license/banner block is exempted the same way @stylistic/eslint-plugin's own `multiline-comment-style` recognises one via its own `isExclamationComment` check (not itself enabled in this package's config, see stylistic-comments.ts's own header comment on why): checkAnchor below returns for any Block comment whose own `value` starts with `!`, before this rule's own "already a doc comment" check (`value.startsWith('*')`) even runs, since a single-export file with a banner directly above its export is an ordinary shape, not the theoretical one this rule once assumed.
 
 const createRule = ESLintUtils.RuleCreator(
@@ -187,6 +189,26 @@ export function isMethodOfExportedClass(node: TSESTree.MethodDefinition): boolea
 }
 
 /**
+ * Whether `node` (a `FunctionDeclaration`) is the implementation signature of a TypeScript function overload set, so the comment directly above it is internal reasoning about the implementation, never the public contract callers see (see this file's own header comment for why the real overload signatures, each a separate `TSDeclareFunction` node, are already out of scope on their own, needing no exclusion here). Detected through `sourceCode.getDeclaredVariables(node)`, ESLint's own scope-analysis API, rather than by hand-walking the enclosing statement list: typescript-eslint's own scope-manager already merges every overload signature and the implementation into ONE shared Variable, its own `defs` array carrying one entry per signature in source order (confirmed directly against the installed `@typescript-eslint/scope-manager`, by running a real overload set, both top-level and locally nested inside another function, through a probe rule), so no separate branch is needed to walk however many levels of `Program`/`TSModuleBlock`/`BlockStatement` nesting a real overload set might sit inside, or to unwrap each signature's own export wrapper by hand; the scope merge already did all of that. `getDeclaredVariables` also returns `node`'s own PARAMETERS alongside its name (confirmed directly, the same probe), but a parameter's own `defs` can never contain a `TSDeclareFunction` entry, so no separate filter is needed to exclude them; the inner `.some()` below already only ever matches the function's own name variable when a real overload set exists. An anonymous `export default function () {}` (`node.id === null`) is never mistaken for an overload implementation either: `getDeclaredVariables` returns no name variable at all for one (confirmed directly, the same probe), which the outer `.some()` already resolves to `false` on its own, with no separate null check needed.
+ */
+function isOverloadImplementation(node: TSESTree.FunctionDeclaration, sourceCode: TSESLint.SourceCode): boolean {
+  return sourceCode.getDeclaredVariables(node).some((variable) => variable.defs.some((def) => def.node.type === AST_NODE_TYPES.TSDeclareFunction));
+}
+
+/**
+ * Whether `node` (a `MethodDefinition`) is the implementation signature of a TypeScript class-method overload set, the identical exemption isOverloadImplementation above gives a `FunctionDeclaration`: TypeScript never shows the implementation's own signature to callers, only the separate overload signatures above it (each a `MethodDefinition` whose own `value` is a `TSEmptyBodyFunctionExpression`, TypeScript's own AST shape for a body-less signature, as opposed to a real implementation's `FunctionExpression`), so a comment directly above the implementation is internal reasoning, never the public contract. `node.value.type === TSEmptyBodyFunctionExpression` is checked first and returns `false` immediately: `node` here is itself a signature, not an implementation, so it can never BE the thing this function identifies, however many earlier same-key signature siblings precede it, the exact check that keeps a later signature in a three-or-more-overload set from being wrongly treated as if it were the implementation too. Every other member is then walked for an earlier one sharing `node`'s own key (by `Identifier` name; a computed or literal key is not compared, since this rule's own enumerated MethodDefinition scope, per this file's own header comment, only ever covers the ordinary named-method shape a real overload set is written with) whose own `value` is a `TSEmptyBodyFunctionExpression`.
+ */
+function isOverloadImplementationMethod(node: TSESTree.MethodDefinition): boolean {
+  if (node.value.type === AST_NODE_TYPES.TSEmptyBodyFunctionExpression) return false;
+  if (node.key.type !== AST_NODE_TYPES.Identifier) return false;
+  const { name } = node.key;
+
+  return node.parent.body.some(
+    (member) => member.type === AST_NODE_TYPES.MethodDefinition && member.key.type === AST_NODE_TYPES.Identifier && member.key.name === name && member.value.type === AST_NODE_TYPES.TSEmptyBodyFunctionExpression,
+  );
+}
+
+/**
  * The `range` field isBeforeByRange below actually reads off each of its two arguments. Narrowed to just that (rather than the full `TSESTree.Decorator`/`ExportWrapper`, which also carry `type`/`loc`/`parent`, and, for a wrapper, `declaration`/`exportKind`) so the internal unit test can hand it plain, hand-written literal objects pinning the exact boundary a real parse can never reach, with no risk of drifting from the real parser's own shape: `range` alone can never itself drift, being always exactly `[start, end]` for any node, for any parser.
  */
 export interface RangedNode {
@@ -353,6 +375,7 @@ const preferDocComment = createRule<Options, MessageIds>({
 
     return {
       FunctionDeclaration(node) {
+        if (isOverloadImplementation(node, sourceCode)) return;
         checkAnchor(getExportWrapper(node));
       },
       ClassDeclaration(node) {
@@ -376,6 +399,7 @@ const preferDocComment = createRule<Options, MessageIds>({
       },
       MethodDefinition(node) {
         if (!isPublicMethod(node) || !isMethodOfExportedClass(node)) return;
+        if (isOverloadImplementationMethod(node)) return;
         checkAnchor(node);
       },
     };

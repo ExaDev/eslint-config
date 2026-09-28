@@ -144,6 +144,10 @@ ruleTester.run('prefer-doc-comment', rule, {
     'namespace Internal {\n  // first line of a substantial comment\n  // second line of a substantial comment\n  export function hidden() {}\n}',
     // A `declare global { ... }` augmentation: there is no such syntax as `export declare global`, so the augmentation's own TSModuleDeclaration is never itself wrapped in an export, the identical reason the non-exported `namespace` case just above is never reported either. Proven with the same `export` shape inside it, not merely relying on the absence of one: even an inline `export` inside the augmentation's own block is still never treated as reaching the module's public surface.
     'declare global {\n  // first line of a substantial comment\n  // second line of a substantial comment\n  export interface Hidden {}\n}',
+    // A TypeScript function overload set's own implementation signature: TypeScript never shows this signature to callers (only the two separate `TSDeclareFunction` overload signatures above it are ever checked against a call site), so the two-line comment directly above it is internal reasoning about how the overloads are actually implemented, never the public contract this rule should upgrade into a doc comment. Never reported, however substantial its own comment: isOverloadImplementation's own scope-based detection (the overload signatures and the implementation all share one Variable) identifies this as the implementation and skips it before checkAnchor ever runs.
+    "export function parse(a: string): number;\nexport function parse(a: number): number;\n// Internal reasoning about how these overloads\n// are actually implemented.\nexport function parse(a: string | number): number {\n  return typeof a === 'string' ? a.length : a;\n}",
+    // The identical exemption for an exported class method's own overload implementation: `run`'s own two overload signatures above it (`MethodDefinition`s whose own `value` is `TSEmptyBodyFunctionExpression`) are the real public contract; the two-line comment directly above the body-carrying implementation is internal reasoning, never reported.
+    'export class C {\n  run(a: string): void;\n  run(a: number): void;\n  // Internal reasoning about how these overloads\n  // are actually implemented.\n  run(a: string | number): void {}\n}',
   ],
   invalid: [
     // A run of two `//` lines directly above an exported function: merged into a single doc comment, verbatim.
@@ -471,6 +475,24 @@ ruleTester.run('prefer-doc-comment', rule, {
     {
       code: '// eslint-enable is what this helper emits once the temporary suppression block above it has been safely closed.\nexport function emitEnable() {}',
       output: '/**\n * eslint-enable is what this helper emits once the temporary suppression block above it has been safely closed.\n */\nexport function emitEnable() {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // An anonymous default-exported function (`node.id === null`): isOverloadImplementation's own scope lookup finds no name variable at all for one, so it is never mistaken for an overload implementation, and reported exactly like any other anonymous default export.
+    {
+      code: "// first line\n// second line\nexport default function (): number { return 0; }",
+      output: "/**\n * first line\n * second line\n */\nexport default function (): number { return 0; }",
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // The SECOND of two overload signatures for an exported class method (a `MethodDefinition` whose own `value` is `TSEmptyBodyFunctionExpression`, not the implementation): isOverloadImplementationMethod's own `value.type === TSEmptyBodyFunctionExpression` guard returns `false` immediately for it, so it is never itself mistaken for the implementation just because an EARLIER same-key signature precedes it too; still reported like any ordinary method, proving the exemption applies only to the genuine body-carrying implementation, never to another signature in the same overload set.
+    {
+      code: 'export class C {\n  run(a: string): void;\n  // Doc line one for the second overload signature.\n  // Doc line two for the second overload signature.\n  run(a: number): void;\n  run(a: string | number): void {}\n}',
+      output: 'export class C {\n  run(a: string): void;\n  /**\n   * Doc line one for the second overload signature.\n   * Doc line two for the second overload signature.\n   */\n  run(a: number): void;\n  run(a: string | number): void {}\n}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A method with a string-literal key (`node.key.type !== Identifier`, distinct from an ordinary named method's `Identifier` key): isOverloadImplementationMethod's own key-shape guard returns `false` immediately, since this rule's own MethodDefinition key comparison only ever covers the ordinary named-method shape a real overload set is written with; still reported normally, proving the guard never wrongly exempts an unrelated non-Identifier-keyed method.
+    {
+      code: "export class C {\n  // first line\n  // second line\n  'm'() {}\n}",
+      output: "export class C {\n  /**\n   * first line\n   * second line\n   */\n  'm'() {}\n}",
       errors: [{ messageId: 'preferDocComment' }],
     },
   ],
