@@ -161,6 +161,18 @@ ruleTester.run('prefer-doc-comment', rule, {
     "export function parse(a: string): number;\nexport function parse(a: number): number;\n// Internal reasoning about how these overloads\n// are actually implemented.\nexport function parse(a: string | number): number {\n  return typeof a === 'string' ? a.length : a;\n}",
     // The identical exemption for an exported class method's own overload implementation: `run`'s own two overload signatures above it (`MethodDefinition`s whose own `value` is `TSEmptyBodyFunctionExpression`) are the real public contract; the two-line comment directly above the body-carrying implementation is internal reasoning, never reported.
     'export class C {\n  run(a: string): void;\n  run(a: number): void;\n  // Internal reasoning about how these overloads\n  // are actually implemented.\n  run(a: string | number): void {}\n}',
+    // A public abstract method with the `private` accessibility modifier: isPublicClassMember's own accessibility gate, shared with an ordinary method, withholds the report exactly the same way for a TSAbstractMethodDefinition.
+    'export abstract class A {\n  // first line\n  // second line\n  private abstract run(): void;\n}',
+    // A public abstract method, but the enclosing abstract class itself is not exported: isMemberOfExportedClass's own gate, shared with an ordinary method, withholds the report exactly the same way.
+    'abstract class A {\n  // first line\n  // second line\n  abstract run(): void;\n}',
+    // An exported class's own private arrow-function-valued property: isPublicClassMember's own accessibility gate applies identically to a PropertyDefinition, never reported regardless of its own comment.
+    'export class C {\n  // first line\n  // second line\n  private arrowProp = () => 1;\n}',
+    // An exported class's own function/arrow-valued property, but the enclosing class itself is not exported: isMemberOfExportedClass's own gate applies identically to a PropertyDefinition.
+    'class C {\n  // first line\n  // second line\n  arrowProp = () => 1;\n}',
+    // A public class property with no initialiser at all (`node.value === null`): the PropertyDefinition visitor's own null check returns before ever inspecting a value type that does not exist, never reported regardless of its own comment.
+    'export class C {\n  // first line\n  // second line\n  noInit: number;\n}',
+    // A public class property whose initialiser is neither an arrow function nor a function expression: this rule's own enumerated PropertyDefinition target list only ever names those two shapes, exactly mirroring the identical restriction the `const`-assigned VariableDeclaration case already applies, so a plain value is never reported, however substantial its own comment.
+    'export class C {\n  // first line\n  // second line\n  value = 5;\n}',
   ],
   invalid: [
     // A run of two `//` lines directly above an exported function: merged into a single doc comment, verbatim.
@@ -562,6 +574,19 @@ ruleTester.run('prefer-doc-comment', rule, {
       output: "export function parse(a: string): number;\n/**\n * Doc line one for the second overload signature.\n * Doc line two for the second overload signature.\n */\nexport function parse(a: number): number;\nexport function parse(a: string | number): number {\n  return typeof a === 'string' ? a.length : a;\n}",
       errors: [{ messageId: 'preferDocComment' }],
     },
+    // A genuinely ambient function signature (`declare function`), directly above an export, with a substantial two-line comment: reported and fixed exactly like an ordinary overload signature, since TypeScript never shows either one's own implementation to callers, only the signature itself; no longer the ambient/declare-only gap an earlier version of this file's own header comment named as deliberately out of scope.
+    {
+      code: '// Doc-worthy explanation for the ambient signature\n// spanning two full lines of prose.\nexport declare function ambient(): void;',
+      output: '/**\n * Doc-worthy explanation for the ambient signature\n * spanning two full lines of prose.\n */\nexport declare function ambient(): void;',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // An ambient exported class (`export declare class`) and its own ambient method: both reported and fixed exactly like an ordinary exported class and method, since TypeScript strips only the ambient class's own MEMBER bodies, never its declaration shape, so both leading comments document the identical public contract an ordinary exported class's and method's do. Two separate reports, one per declaration, converted in the same pass since their own fix ranges never overlap.
+    {
+      code: '// Doc-worthy explanation for the ambient class\n// spanning two full lines of prose.\nexport declare class DC {\n  // Doc-worthy explanation for the ambient method\n  // spanning two full lines of prose.\n  m(): void;\n}',
+      output:
+        '/**\n * Doc-worthy explanation for the ambient class\n * spanning two full lines of prose.\n */\nexport declare class DC {\n  /**\n   * Doc-worthy explanation for the ambient method\n   * spanning two full lines of prose.\n   */\n  m(): void;\n}',
+      errors: [{ messageId: 'preferDocComment' }, { messageId: 'preferDocComment' }],
+    },
     // The exact confirmed regression this rule's own multi-asterisks withholding must prevent: a `// * ...`-prefixed markdown-bullet line directly above an export. Still reported, but the fix is now withheld (hasBulletLikeLine): naively spliced into the fixer's own template this would read as `* * fast, ...`, which eslint-plugin-jsdoc's own `jsdoc/no-multi-asterisks` rule (active alongside this one in every real `exadevConfig()`, confirmed directly against the real combined config in the describe block below) would go on to strip the leading bullet marker from in the very same `--fix` run, silently losing real content. parsesAsValidTsDoc alone cannot catch this: `* fast, skips validation` parses as perfectly valid TSDoc on its own.
     {
       code: '// Supported modes:\n// * fast, skips validation\n// * safe, validates everything\nexport function mode(): void {}',
@@ -580,18 +605,26 @@ ruleTester.run('prefer-doc-comment', rule, {
       output: null,
       errors: [{ messageId: 'preferDocComment' }],
     },
-    // A genuinely ambient function signature (`declare function`), directly above an export, with a substantial two-line comment: reported and fixed exactly like an ordinary overload signature, since TypeScript never shows either one's own implementation to callers, only the signature itself; no longer the ambient/declare-only gap an earlier version of this file's own header comment named as deliberately out of scope.
+    // A public abstract method (`abstract run(): void;`) of an exported abstract class: reported and fixed exactly like an ordinary method, the clearest possible example of a class's own public contract, needing no isOverloadImplementationMethod-style guard of its own since TypeScript's own grammar never lets an abstract method carry a body at all.
     {
-      code: '// Doc-worthy explanation for the ambient signature\n// spanning two full lines of prose.\nexport declare function ambient(): void;',
-      output: '/**\n * Doc-worthy explanation for the ambient signature\n * spanning two full lines of prose.\n */\nexport declare function ambient(): void;',
+      code: 'export abstract class A {\n  // Doc line one for run.\n  // Doc line two for run.\n  abstract run(): void;\n}',
+      output: 'export abstract class A {\n  /**\n   * Doc line one for run.\n   * Doc line two for run.\n   */\n  abstract run(): void;\n}',
       errors: [{ messageId: 'preferDocComment' }],
     },
-    // An ambient exported class (`export declare class`) and its own ambient method: both reported and fixed exactly like an ordinary exported class and method, since TypeScript strips only the ambient class's own MEMBER bodies, never its declaration shape, so both leading comments document the identical public contract an ordinary exported class's and method's do. Two separate reports, one per declaration, converted in the same pass since their own fix ranges never overlap.
+    // An exported class's own arrow-function-valued property: the class-member equivalent of the `const`-assigned arrow-function shape the VariableDeclaration case already covers, reported and fixed identically.
     {
-      code: '// Doc-worthy explanation for the ambient class\n// spanning two full lines of prose.\nexport declare class DC {\n  // Doc-worthy explanation for the ambient method\n  // spanning two full lines of prose.\n  m(): void;\n}',
+      code: 'export class C {\n  // Doc line one for arrowProp.\n  // Doc line two for arrowProp.\n  arrowProp = () => 1;\n}',
       output:
-        '/**\n * Doc-worthy explanation for the ambient class\n * spanning two full lines of prose.\n */\nexport declare class DC {\n  /**\n   * Doc-worthy explanation for the ambient method\n   * spanning two full lines of prose.\n   */\n  m(): void;\n}',
-      errors: [{ messageId: 'preferDocComment' }, { messageId: 'preferDocComment' }],
+        'export class C {\n  /**\n   * Doc line one for arrowProp.\n   * Doc line two for arrowProp.\n   */\n  arrowProp = () => 1;\n}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // The identical shape, but the property's own initialiser is a plain function expression rather than an arrow function: reported and fixed identically, proving the PropertyDefinition visitor's own type check covers both function-valued shapes, exactly like the VariableDeclaration case's own `hasFunctionInit` check does.
+    {
+      code:
+        'export class C {\n  // Doc line one for funcProp.\n  // Doc line two for funcProp.\n  funcProp = function () {\n    return 1;\n  };\n}',
+      output:
+        'export class C {\n  /**\n   * Doc line one for funcProp.\n   * Doc line two for funcProp.\n   */\n  funcProp = function () {\n    return 1;\n  };\n}',
+      errors: [{ messageId: 'preferDocComment' }],
     },
   ],
 });
