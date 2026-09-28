@@ -21,7 +21,7 @@ describe('stylisticCommentsConfig', () => {
       files: ['**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}'],
       plugins: { '@stylistic': stylistic, exadev: plugin },
       rules: {
-        '@stylistic/spaced-comment': ['error', 'always', { block: { markers: ['!'] } }],
+        '@stylistic/spaced-comment': ['error', 'always', { block: { markers: ['!'] }, line: { markers: ['#', '#region', '#endregion'] } }],
         '@stylistic/lines-between-class-members': 'error',
         '@stylistic/line-comment-position': ['error', 'above'],
         '@stylistic/padding-line-between-statements': [
@@ -69,6 +69,39 @@ describe('spaced-comment (the /*! license/banner marker)', () => {
   it('still reports the bare-default violation for an ordinary block comment missing its own leading space, proving the added marker is scoped to `!` and does not disable the rule generally', () => {
     const ruleIds = lint('/*no space here*/\nexport const x = 1;\n');
     expect(ruleIds).toContain('@stylistic/spaced-comment');
+  });
+});
+
+// A real --fix run, not just the config shape asserted above: `line.markers: ['#', '#region', '#endregion']` only matters through spaced-comment's own actual fix decision, which the config-shape test above cannot observe. Each shape is pinned against the exact confirmed regression: without any `line.markers` at all, the bare default breaks a source-map comment; with only the bare `'#'` marker, it instead breaks an unspaced `//#region`/`//#endregion` fold marker (see this file's own header comment on stylisticCommentsConfig for both confirmed probes).
+describe('spaced-comment (the # source-map and #region/#endregion line markers)', () => {
+  const linter = new LinterClass();
+
+  function fixedOutput(code: string): string {
+    return linter.verifyAndFix(code, REAL_LINTER_CONFIG, 'markers.js').output;
+  }
+
+  it('leaves a //# sourceMappingURL=... comment untouched, never rewritten to // # sourceMappingURL=...', () => {
+    const code = 'export const x = 1;\n//# sourceMappingURL=a.js.map\n';
+    expect(fixedOutput(code)).toBe(code);
+  });
+
+  it('leaves a //# sourceURL=... comment untouched, never rewritten to // # sourceURL=...', () => {
+    const code = 'export const x = 1;\n//# sourceURL=a.js\n';
+    expect(fixedOutput(code)).toBe(code);
+  });
+
+  it('leaves an unspaced //#region/#endregion pair untouched, never rewritten to //# region/#endregion', () => {
+    const code = '//#region helpers\nexport const x = 1;\n//#endregion\n';
+    expect(fixedOutput(code)).toBe(code);
+  });
+
+  it('leaves an already-spaced // #region/#endregion pair untouched too, the shape prefer-doc-comment.ts already recognises', () => {
+    const code = '// #region helpers\nexport const x = 1;\n// #endregion\n';
+    expect(fixedOutput(code)).toBe(code);
+  });
+
+  it('still reports and fixes an ordinary // line comment missing its own leading space, proving the added markers are scoped to `#` and do not disable the rule generally', () => {
+    expect(fixedOutput('//no space here\nexport const x = 1;\n')).toBe('// no space here\nexport const x = 1;\n');
   });
 });
 
