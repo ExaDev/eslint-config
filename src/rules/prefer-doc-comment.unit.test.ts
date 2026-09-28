@@ -84,6 +84,17 @@ ruleTester.run('prefer-doc-comment', rule, {
     '// c8 ignore next\nexport function coveredByC8() {}',
     '// v8 ignore next\nexport function coveredByV8() {}',
     '// istanbul ignore next\nexport function coveredByIstanbul() {}',
+    // Node's own built-in test-runner coverage directive, exempt regardless of length the same as the other coverage tools above: not one of ESLint's own core directive comments, so safe to use directly.
+    '// node:coverage ignore next\nexport function coveredByNodeCoverage() {}',
+    // The identical directive, but disabling coverage for a whole following stretch rather than a single line: recognised too, not only the `ignore` keyword.
+    '// node:coverage disable\nexport function coverageDisabled() {}',
+    // cspell's own next-line spell-check suppression, exempt regardless of length: not one of ESLint's own core directive comments either.
+    "// cspell:disable-next-line\nexport function misspeltOnPurpose() {}",
+    // cspell's own `disable`/`enable` pair, recognised the same way ESLint's own `eslint-disable`/`eslint-enable` pair is: a permanently-open suppression is exactly as real a defect as a missing re-enable, so both halves are covered, not just `disable-next-line`.
+    "// cspell:disable\nexport function spellCheckDisabled() {}",
+    "// cspell:enable\nexport function spellCheckReenabled() {}",
+    // Biome's own lint/format suppression, exempt regardless of length: the marker alone is recognised, with no need to validate the rule path or the mandatory `: reason` that follows it in a real one.
+    "// biome-ignore lint/suspicious/noExplicitAny: deliberately untyped for this fixture\nexport function biomeIgnored(): unknown { return undefined; }",
     // Exported class, but the method itself is private: never reported regardless of its own comment.
     'export class C {\n  // first line\n  // second line\n  private m() {}\n}',
     // Exported class, but the method itself is protected: never reported regardless of its own comment.
@@ -299,6 +310,24 @@ ruleTester.run('prefer-doc-comment', rule, {
     {
       code: '// Explains why this function exists and\n// what callers must guarantee.\n// eslint-enable no-console\nexport function f() {}',
       output: '/**\n * Explains why this function exists and\n * what callers must guarantee.\n * eslint-enable no-console\n */\nexport function f() {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // The exact confirmed regression this fix addresses: two prose lines followed directly by Node's own `node:coverage ignore next` directive, directly above the export. Only the prose converts; the directive is left completely untouched directly above the export, still a real coverage exclusion for Node's own test runner, never silently folded into the new doc comment's own prose (which would both destroy the directive and leave it, misleadingly, inside a `/** */` block as if it were documentation).
+    {
+      code: '// Explains why this exists and\n// what callers must guarantee.\n// node:coverage ignore next\nexport function covered(): void {}',
+      output: '/**\n * Explains why this exists and\n * what callers must guarantee.\n */\n// node:coverage ignore next\nexport function covered(): void {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // The identical confirmed regression for cspell's own next-line suppression: only the prose converts; `// cspell:disable-next-line` is left completely untouched directly above the export, still a real spell-check exclusion for the declaration's own name, never folded into the new doc comment's closing ` */` line the way an earlier build of this fix left it.
+    {
+      code: "// Explains why this exists and\n// what callers must guarantee.\n// cspell:disable-next-line\nexport function misspeltOnPurpose(): void {}",
+      output: "/**\n * Explains why this exists and\n * what callers must guarantee.\n */\n// cspell:disable-next-line\nexport function misspeltOnPurpose(): void {}",
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // The identical shape for Biome's own suppression: only the prose converts; the `biome-ignore` line, rule path and reason are all left completely untouched directly above the export.
+    {
+      code: "// Explains why this exists and\n// what callers must guarantee.\n// biome-ignore lint/suspicious/noExplicitAny: deliberately untyped for this fixture\nexport function biomeIgnored(): unknown { return undefined; }",
+      output: "/**\n * Explains why this exists and\n * what callers must guarantee.\n */\n// biome-ignore lint/suspicious/noExplicitAny: deliberately untyped for this fixture\nexport function biomeIgnored(): unknown { return undefined; }",
       errors: [{ messageId: 'preferDocComment' }],
     },
     // A `#endregion` editor folding marker directly above the export, with substantial explanation above it: only the explanation converts; `// #endregion` is left completely untouched directly above the export, still a real fold boundary for the editor, never silently removed by being folded into the new doc comment's own prose.
