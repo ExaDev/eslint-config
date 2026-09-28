@@ -161,8 +161,6 @@ ruleTester.run('prefer-doc-comment', rule, {
     "export function parse(a: string): number;\nexport function parse(a: number): number;\n// Internal reasoning about how these overloads\n// are actually implemented.\nexport function parse(a: string | number): number {\n  return typeof a === 'string' ? a.length : a;\n}",
     // The identical exemption for an exported class method's own overload implementation: `run`'s own two overload signatures above it (`MethodDefinition`s whose own `value` is `TSEmptyBodyFunctionExpression`) are the real public contract; the two-line comment directly above the body-carrying implementation is internal reasoning, never reported.
     'export class C {\n  run(a: string): void;\n  run(a: number): void;\n  // Internal reasoning about how these overloads\n  // are actually implemented.\n  run(a: string | number): void {}\n}',
-    // A genuinely ambient function signature (`declare function`), directly above an export, with a substantial two-line comment: never reported, however substantial, since TypeScript never pairs a `declare`d signature with a following implementation at all, the exact ambient/declare-only gap this file's own header comment names as deliberately out of scope, distinct from an ordinary (non-`declare`) overload signature, which IS reported (see the invalid cases below).
-    '// Doc-worthy explanation for the ambient signature\n// spanning two full lines of prose.\nexport declare function ambient(): void;',
   ],
   invalid: [
     // A run of two `//` lines directly above an exported function: merged into a single doc comment, verbatim.
@@ -581,6 +579,19 @@ ruleTester.run('prefer-doc-comment', rule, {
       code: '// Overview:\n//   * nested detail\nexport function f(): void {}',
       output: null,
       errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A genuinely ambient function signature (`declare function`), directly above an export, with a substantial two-line comment: reported and fixed exactly like an ordinary overload signature, since TypeScript never shows either one's own implementation to callers, only the signature itself; no longer the ambient/declare-only gap an earlier version of this file's own header comment named as deliberately out of scope.
+    {
+      code: '// Doc-worthy explanation for the ambient signature\n// spanning two full lines of prose.\nexport declare function ambient(): void;',
+      output: '/**\n * Doc-worthy explanation for the ambient signature\n * spanning two full lines of prose.\n */\nexport declare function ambient(): void;',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // An ambient exported class (`export declare class`) and its own ambient method: both reported and fixed exactly like an ordinary exported class and method, since TypeScript strips only the ambient class's own MEMBER bodies, never its declaration shape, so both leading comments document the identical public contract an ordinary exported class's and method's do. Two separate reports, one per declaration, converted in the same pass since their own fix ranges never overlap.
+    {
+      code: '// Doc-worthy explanation for the ambient class\n// spanning two full lines of prose.\nexport declare class DC {\n  // Doc-worthy explanation for the ambient method\n  // spanning two full lines of prose.\n  m(): void;\n}',
+      output:
+        '/**\n * Doc-worthy explanation for the ambient class\n * spanning two full lines of prose.\n */\nexport declare class DC {\n  /**\n   * Doc-worthy explanation for the ambient method\n   * spanning two full lines of prose.\n   */\n  m(): void;\n}',
+      errors: [{ messageId: 'preferDocComment' }, { messageId: 'preferDocComment' }],
     },
   ],
 });
