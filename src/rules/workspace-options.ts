@@ -128,7 +128,9 @@ export const workspaceArchitectureOptionsSchema = {
   additionalProperties: false,
 } as const;
 
-// Exported so a test can assert the EXACT message (not a loose substring pattern that a genuinely different, accidental crash elsewhere in this function could also satisfy, an unrelated "Cannot read properties of null" TypeError included, since both happen to mention a property named "groups").
+/**
+ * Exported so a test can assert the EXACT message (not a loose substring pattern that a genuinely different, accidental crash elsewhere in this function could also satisfy, an unrelated "Cannot read properties of null" TypeError included, since both happen to mention a property named "groups").
+ */
 export const MISCONFIGURATION_MESSAGE =
   'exadev workspace architecture rules require options: { groups: [{ name }, ...], ... }. See the @exadev/eslint-config README\'s "Workspace architecture" section.';
 
@@ -345,7 +347,9 @@ export function readWorkspaceArchitectureOptions(options: unknown): WorkspaceArc
   };
 }
 
-// The single source of truth for "dependencyFields omitted" everywhere this package reads a workspace package's own declared dependencies, so every call site (the graph builder, and each of the three rules' own collectTopLevelDependencies call) agrees on the same default array, not three separately-written literals that could drift.
+/**
+ * The single source of truth for "dependencyFields omitted" everywhere this package reads a workspace package's own declared dependencies, so every call site (the graph builder, and each of the three rules' own collectTopLevelDependencies call) agrees on the same default array, not three separately-written literals that could drift.
+ */
 export const DEFAULT_DEPENDENCY_FIELDS: readonly string[] = ['dependencies'];
 
 export function resolveDependencyFields(options: Pick<WorkspaceArchitectureOptions, 'dependencyFields'>): readonly string[] {

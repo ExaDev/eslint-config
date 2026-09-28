@@ -107,12 +107,16 @@ ruleTester.run('prefer-doc-comment', rule, {
     'class C {\n  // first line\n  // second line\n  m() {}\n}',
     // A public method of a class EXPRESSION assigned to an exported const, not a class DECLARATION: this rule's own enumerated target list never names a class expression, so it is never reported here either.
     'export const C = class {\n  // first line\n  // second line\n  m() {}\n};',
-    // An exported const whose init is neither an arrow function nor a function expression: this rule's own enumerated target list only ever names those two shapes for a const, so a plain value is never reported, however substantial its leading comment.
-    '// first line\n// second line\nexport const x = 5;',
-    // An exported `let` (not `const`) whose init IS an arrow function: this rule's own scope, both in its header comment and the README, is deliberately "assigned to an exported const", never `let`/`var`, so this is never reported, however substantial its leading comment.
+    // An exported `let` (not `const`) whose init IS an arrow function: this rule's own scope, both in its header comment and the README, is deliberately "an exported const declaration", never `let`/`var`, so this is never reported, however substantial its leading comment.
     '// first line\n// second line\nexport let notConst = (): number => 1;',
     // The identical shape with `var` in place of `let`: the same restriction applies regardless of which non-`const` keyword is used.
     '// first line\n// second line\nexport var alsoNotConst = (): number => 1;',
+    // An enum that is not exported at all: a substantial two-line comment on it is never reported, exactly like every other non-exported declaration shape.
+    '// first line\n// second line\nenum Direction { Up, Down }',
+    // A namespace that is not exported at all, with the substantial comment directly above the namespace itself (not an inner export): never reported, since the namespace never reaches the module's public surface, and everything inside it is already exempt by the identical isAtPublicSurface check the existing `namespace Internal` case above exercises.
+    '// first line\n// second line\nnamespace Helpers {\n  export function f() {}\n}',
+    // A default export of a plain expression, but the comment is only a single short line: not substantial, never reported.
+    '// short\nexport default 42;',
     // A public method of a class EXPRESSION that IS directly default-exported (parenthesised, so the parser keeps it a ClassExpression rather than an anonymous ClassDeclaration): still never reported, since isMethodOfExportedClass's own type check requires a genuine ClassDeclaration specifically, not merely "some kind of exported class".
     'export default (class {\n  // first line\n  // second line\n  m() {}\n});',
     // A single logical line of exactly the default threshold's own length: not substantial (strictly greater than, not greater-than-or-equal).
@@ -171,7 +175,7 @@ ruleTester.run('prefer-doc-comment', rule, {
     'class C {\n  // first line\n  // second line\n  arrowProp = () => 1;\n}',
     // A public class property with no initialiser at all (`node.value === null`): the PropertyDefinition visitor's own null check returns before ever inspecting a value type that does not exist, never reported regardless of its own comment.
     'export class C {\n  // first line\n  // second line\n  noInit: number;\n}',
-    // A public class property whose initialiser is neither an arrow function nor a function expression: this rule's own enumerated PropertyDefinition target list only ever names those two shapes, exactly mirroring the identical restriction the `const`-assigned VariableDeclaration case already applies, so a plain value is never reported, however substantial its own comment.
+    // A public class property whose initialiser is neither an arrow function nor a function expression: this rule's own enumerated PropertyDefinition target list only ever names those two shapes, so a plain value is never reported, however substantial its own comment (deliberately narrower than the `const`-assigned VariableDeclaration shape, which covers every initialiser alike).
     'export class C {\n  // first line\n  // second line\n  value = 5;\n}',
   ],
   invalid: [
@@ -248,6 +252,24 @@ ruleTester.run('prefer-doc-comment', rule, {
       output: '/**\n * first line\n * second line\n */\nexport default function foo() {}',
       errors: [{ messageId: 'preferDocComment' }],
     },
+    // A default export of a body-less function SIGNATURE (`export default function f(): void;`, a real, parseable shape confirmed directly against the installed parser, whose `ExportDefaultDeclaration` wraps a `TSDeclareFunction`): reported exactly ONCE, by the TSDeclareFunction visitor, pinning the ExportDefaultDeclaration visitor's own skip of that shape specifically. Removing that skip from the guard would report the identical comment twice, once per visitor, and fail this case's single-error assertion.
+    {
+      code: '// first line\n// second line\nexport default function f(): void;',
+      output: '/**\n * first line\n * second line\n */\nexport default function f(): void;',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A default-exported arrow function, the shape with no visitor of its own: anchored and reported on the ExportDefaultDeclaration node itself.
+    {
+      code: '// first line\n// second line\nexport default (): number => 1;',
+      output: '/**\n * first line\n * second line\n */\nexport default (): number => 1;',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A default-exported plain literal, proving the expression shape is covered generically, never arrows alone.
+    {
+      code: '// first line\n// second line\nexport default 42;',
+      output: '/**\n * first line\n * second line\n */\nexport default 42;',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
     // A public method (no accessibility modifier at all) of an exported class, indented two spaces: the fixer's own indentation tracks the comment's real column, not just column zero.
     {
       code: 'export class C {\n  // first line\n  // second line\n  m() {}\n}',
@@ -270,6 +292,36 @@ ruleTester.run('prefer-doc-comment', rule, {
     {
       code: '// first line\n// second line\nexport type T = string;',
       output: '/**\n * first line\n * second line\n */\nexport type T = string;',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // An exported enum declaration: the two-line comment directly above it documents the enum's own public contract, exactly like an exported interface's does.
+    {
+      code: '// first line\n// second line\nexport enum Direction { Up, Down }',
+      output: '/**\n * first line\n * second line\n */\nexport enum Direction { Up, Down }',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // An exported namespace declaration: the comment directly above the `export namespace` line documents the namespace's own contract, reported on the namespace itself, distinct from the pre-existing case below that reports an export INSIDE one.
+    {
+      code: '// first line\n// second line\nexport namespace Helpers {\n  export function f() {}\n}',
+      output: '/**\n * first line\n * second line\n */\nexport namespace Helpers {\n  export function f() {}\n}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A NESTED exported namespace (`export namespace B` inside an `export namespace A`): every enclosing namespace is itself exported, so isAtPublicSurface's own recursion genuinely reaches the public surface and the inner namespace's own comment is reported too.
+    {
+      code: 'export namespace A {\n  // first line\n  // second line\n  export namespace B {}\n}',
+      output: 'export namespace A {\n  /**\n   * first line\n   * second line\n   */\n  export namespace B {}\n}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // An exported value const, the init-neither-arrow-nor-function shape: the statement's own leading comment documents the exported binding's contract identically to a function-valued one.
+    {
+      code: '// first line\n// second line\nexport const TIMEOUT_MS = 5000;',
+      output: '/**\n * first line\n * second line\n */\nexport const TIMEOUT_MS = 5000;',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // An exported `const` with NO initialiser at all (an ambient `export declare const`): the identical statement shape with the identical leading-comment contract, reported and fixed the same way.
+    {
+      code: '// first line\n// second line\nexport declare const LIMIT: number;',
+      output: '/**\n * first line\n * second line\n */\nexport declare const LIMIT: number;',
       errors: [{ messageId: 'preferDocComment' }],
     },
     // The first line, after the leading `//`, itself starts with a literal `*`: still a genuine Line comment, not a Block one, so the "already a doc comment" exemption (which requires Block type specifically) never applies here, however much the text alone might resemble one. Still reported, but the fix is now withheld (hasBulletLikeLine): splicing this line in verbatim would read as `* * looks like a marker` once spliced into the fixer's own template, which eslint-plugin-jsdoc's own `jsdoc/no-multi-asterisks` rule (active alongside this one in every real `exadevConfig()`) would go on to strip in the very same `--fix` run, exactly the confirmed corruption this rule must never produce.
@@ -296,7 +348,7 @@ ruleTester.run('prefer-doc-comment', rule, {
       output: '/**\n * first line\n * second line\n */\nexport const h1 = (): void => {}, h2 = (): void => {};',
       errors: [{ messageId: 'preferDocComment' }],
     },
-    // A MIXED multi-declarator statement, only one of whose declarators is function-valued (`h2 = 5` is not): still reported, since ANY matching declarator is enough (`.some`, not `.every`, which would instead demand every declarator match).
+    // A MIXED multi-declarator statement, only one of whose declarators is function-valued (`h2 = 5` is not): still reported once on the statement as a whole, since the report is keyed on the VariableDeclaration itself and no initialiser-type gate exists for any declarator to fail.
     {
       code: '// first line\n// second line\nexport const h1 = (): void => {}, h2 = 5;',
       output: '/**\n * first line\n * second line\n */\nexport const h1 = (): void => {}, h2 = 5;',
@@ -617,14 +669,20 @@ ruleTester.run('prefer-doc-comment', rule, {
       output: null,
       errors: [{ messageId: 'preferDocComment' }],
     },
-    // A line whose only `@` sits mid-sentence, never at the trimmed line's own start (`Summary line mentions @remarks mid sentence, not as a real tag.`): an unescaped `@` is ordinarily itself a TSDoc syntax error regardless of where it sits (see the pre-existing "references an at-sign" case above, and containsCommentTerminator's own sibling reasoning for a `*\/`), so this case alone cannot pin hasTagLine's own anchor through parsesAsValidTsDoc's independent gate; confirmed directly, though, that `@microsoft/tsdoc`'s own parser accepts a RECOGNISED tag name written this way, preceded by real prose rather than a line boundary, as an ordinary inline occurrence with zero messages, so this fixture is real, valid TSDoc on its own and is the one shape that lets the two guards be told apart. This pins hasTagLine's own `^` anchor specifically: a mutant dropping it (matching `@` anywhere in the line, not just its own start) would wrongly withhold this fix, since the considered line contains `@remarks` even though it never opens with it.
+    // A line whose only `@` sits mid-sentence, never at the trimmed line's own start (`Summary line mentions @remarks mid sentence, not as a real tag.`): still reported, but the fix now withheld, since hasTagLine recognises an unescaped tag-shaped mention immediately after whitespace ANYWHERE in a considered line, not merely at the line's own start. The widening is not speculative: this exact text parses as perfectly valid TSDoc (confirmed directly, zero parser messages, so the previous line-start-only check and parsesAsValidTsDoc alike let the fix through), yet once spliced into a doc comment, TypeScript's own JSDoc parser reads the mention as a REAL tag on the symbol (confirmed directly, by linting a scratch file with this repo's own bundled config: a converted `is @deprecated upstream` made every use of the symbol fail `@typescript-eslint/no-deprecated`) and `jsdoc/escape-inline-tags` reports it as an unescaped inline tag too. This case pins the whitespace-preceded half of UNESCAPED_TAG_MENTION_PATTERN specifically; the line-start half is the tagNoGap case above.
     {
       code: '// Summary line mentions @remarks mid sentence, not as a real tag.\n// Second line to make the comment substantial.\nexport function tagMidLine(): void {}',
-      output:
-        '/**\n * Summary line mentions @remarks mid sentence, not as a real tag.\n * Second line to make the comment substantial.\n */\nexport function tagMidLine(): void {}',
+      output: null,
       errors: [{ messageId: 'preferDocComment' }],
     },
-    // A tag spelled with an UPPERCASE leading letter (`@Example`, an unusual but syntactically real TSDoc tag shape): still recognised and still withheld, pinning the `A-Z` half of hasTagLine's own character class specifically, distinct from the lowercase `@remarks`/`@1` cases above and below which only ever exercise the `a-z` half.
+    // The identical mid-line mention wrapped in a backtick code span: NOT withheld, since the backtick immediately before the `@` breaks the whitespace-preceded shape for both TypeScript's own tag scanning and `jsdoc/escape-inline-tags` alike (both confirmed directly, the same scratch run), so a genuinely backticked mention converts safely, verbatim.
+    {
+      code: '// Summary line mentions `@remarks` mid sentence, inside a code span.\n// Second line to make the comment substantial.\nexport function tagBackticked(): void {}',
+      output:
+        '/**\n * Summary line mentions `@remarks` mid sentence, inside a code span.\n * Second line to make the comment substantial.\n */\nexport function tagBackticked(): void {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A tag spelled with an UPPERCASE leading letter (`@Example`, an unusual but syntactically real TSDoc tag shape): still recognised and still withheld, pinning UNESCAPED_TAG_MENTION_PATTERN's own `\\w` character class against an uppercase-led tag name exactly as much as a lowercase one.
     {
       code: '// Summary.\n// @Example uppercase-led tag name.\nexport function tagUppercaseLetter(): void {}',
       output: null,
@@ -661,7 +719,7 @@ ruleTester.run('prefer-doc-comment', rule, {
         'export class C {\n  /**\n   * Doc line one for arrowProp.\n   * Doc line two for arrowProp.\n   */\n  arrowProp = () => 1;\n}',
       errors: [{ messageId: 'preferDocComment' }],
     },
-    // The identical shape, but the property's own initialiser is a plain function expression rather than an arrow function: reported and fixed identically, proving the PropertyDefinition visitor's own type check covers both function-valued shapes, exactly like the VariableDeclaration case's own `hasFunctionInit` check does.
+    // The identical shape, but the property's own initialiser is a plain function expression rather than an arrow function: reported and fixed identically, proving the PropertyDefinition visitor's own type check covers both function-valued shapes.
     {
       code:
         'export class C {\n  // Doc line one for funcProp.\n  // Doc line two for funcProp.\n  funcProp = function () {\n    return 1;\n  };\n}',
@@ -721,6 +779,21 @@ describe('prefer-doc-comment + the real bundled jsdoc/tsdoc config', () => {
   // Defect (a): a `// @internal` line's own description text is silently deleted by `jsdoc/empty-tags` once converted, since `@internal` is a modifier tag `empty-tags` expects to carry no text of its own. Covered for both source shapes this rule must handle identically (see extractCommentLines' own doc comment): a `//` run, and an already-consolidated bare `/* ... */` block.
   it('never converts a // run with an @internal tag into a doc comment whose description jsdoc/empty-tags would otherwise delete', () => {
     expectWithheld('// Internal helper, not part of the public API surface.\n// @internal\nexport function helperInternalLine(): void {}\n');
+  });
+
+  // The direct dogfood repro behind the whitespace-preceded half of hasTagLine's own pattern: a bare mid-line mention parses as valid TSDoc, so only the combined config can observe what happens to the converted text. Left unconverted, the comment never becomes a doc comment at all, so jsdoc/escape-inline-tags has nothing to report and the source keeps its plain meaning.
+  it('never converts a // run with a bare mid-line @deprecated mention into a doc comment that would mark the symbol deprecated', () => {
+    expectWithheld('// Exercises the legacy tseslint.config() which is @deprecated upstream, deliberately.\n// Second line to make the comment substantial.\nexport function legacyPattern(): void {}\n');
+  });
+
+  // The backtick exemption, observed through the same combined config: the mention converts, the resulting doc comment parses as valid TSDoc, and jsdoc/escape-inline-tags (which exempts markdown code spans, read directly off its own source) reports nothing against it.
+  it('converts a // run whose mid-line @deprecated mention is wrapped in a backtick code span, with no jsdoc/* or tsdoc/* rule reporting the result', () => {
+    const code = '// Exercises the legacy tseslint.config() which is `@deprecated` upstream, deliberately.\n// Second line to make the comment substantial.\nexport function legacyBackticked(): void {}\n';
+    const result = fixedOutput(code);
+    expect(result.messages.some((message) => message.ruleId?.startsWith('jsdoc/') === true || message.ruleId?.startsWith('tsdoc/') === true)).toBe(false);
+    expect(result.output).toBe(
+      '/**\n * Exercises the legacy tseslint.config() which is `@deprecated` upstream, deliberately.\n * Second line to make the comment substantial.\n */\nexport function legacyBackticked(): void {}\n',
+    );
   });
 
   it('never converts a bare block comment with an @internal tag into a doc comment whose description jsdoc/empty-tags would otherwise delete', () => {

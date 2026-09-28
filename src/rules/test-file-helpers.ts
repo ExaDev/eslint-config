@@ -1,6 +1,8 @@
 import { basenameOf } from './barrel-helpers';
 
-// The extensions a real test/spec file can carry, matching this package's own long-established TEST_FILE_PATTERNS glob (see recommended-type-checked.ts) — both derive from this one list so they can never independently drift out of sync with each other. Typed as a plain `readonly string[]`, not a narrower `as const` literal tuple, specifically so `.includes()` below accepts an arbitrary `string` extension read from a real filename without needing a cast (this codebase bans them outright).
+/**
+ * The extensions a real test/spec file can carry, matching this package's own long-established TEST_FILE_PATTERNS glob (see recommended-type-checked.ts) — both derive from this one list so they can never independently drift out of sync with each other. Typed as a plain `readonly string[]`, not a narrower `as const` literal tuple, specifically so `.includes()` below accepts an arbitrary `string` extension read from a real filename without needing a cast (this codebase bans them outright).
+ */
 export const TEST_FILE_EXTENSIONS: readonly string[] = ['ts', 'tsx', 'mts', 'cts', 'js', 'jsx', 'mjs', 'cjs'];
 
 export interface TestFileClassification {
