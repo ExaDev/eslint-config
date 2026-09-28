@@ -605,6 +605,36 @@ ruleTester.run('prefer-doc-comment', rule, {
       output: null,
       errors: [{ messageId: 'preferDocComment' }],
     },
+    // A second, separate sibling-fixer collision, the same class of defect as the bullet-line/no-multi-asterisks case above but against eslint-plugin-jsdoc's own `jsdoc/tag-lines` rule instead: a blank considered line directly above a genuine `@remarks` tag line, the canonical hand-written TSDoc convention. Still reported, but the fix is now withheld (hasBlankLineBeforeTag): spliced verbatim into the fixer's own template, the blank line would sit directly before `@remarks` in the resulting `/** ... */` block, which `jsdoc/tag-lines` (active, at its bare default, alongside this rule in every real `exadevConfig()`, confirmed directly against the real combined config in the describe block below) would go on to delete in the very same `--fix` run. parsesAsValidTsDoc alone cannot catch this: the candidate text parses as perfectly valid TSDoc on its own.
+    {
+      code: '// Summary.\n//\n// @remarks\n// Body text here.\nexport function tagCollision(): void {}',
+      output: null,
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A genuine tag line with NO blank line directly above it: never mistaken for the collision above, proving the withholding fires only for a blank line immediately adjacent to a tag, not merely a tag's own presence anywhere in the comment. This is also what pins hasBlankLineBeforeTag's own `&&`/comparison logic: a mutant loosening either side of the check (e.g. `||` in place of `&&`, or inverting the `=== 0` blank test) would wrongly withhold this fix too, since the first considered line here is non-blank and immediately precedes a tag.
+    {
+      code: '// Summary.\n// @remarks\n// Body text here.\nexport function tagNoGap(): void {}',
+      output: '/**\n * Summary.\n * @remarks\n * Body text here.\n */\nexport function tagNoGap(): void {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A genuinely blank PARAGRAPH-separator line that does NOT sit directly before any tag line: never mistaken for the tag-lines collision either, pinning hasBlankLineBeforeTag's own `startsWith('@')` check on the FOLLOWING line specifically. A mutant treating any blank line as tag-adjacent (or always/never matching `startsWith`) would wrongly withhold this fix too.
+    {
+      code: '// Summary line.\n//\n// Second paragraph, unrelated to any tag.\nexport function tagUnrelatedBlank(): void {}',
+      output: '/**\n * Summary line.\n *\n * Second paragraph, unrelated to any tag.\n */\nexport function tagUnrelatedBlank(): void {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A blank considered line as the very LAST line of the group, with no following line at all: pins hasBlankLineBeforeTag's own `?? false` fallback for the out-of-bounds "next line" lookup specifically. A `?? true` mutant would wrongly withhold this fix, since the lookup past the end of consideredLines is genuinely undefined here, never a real tag line.
+    {
+      code: '// Summary.\n// @remarks\n//\nexport function tagTrailingBlank(): void {}',
+      output: '/**\n * Summary.\n * @remarks\n *\n */\nexport function tagTrailingBlank(): void {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A tag line indented with EXTRA leading whitespace beyond the delimiter's own single conventional space, directly below a blank considered line: still recognised as tag-adjacent and still withheld, pinning hasBlankLineBeforeTag's own `.trimStart()` (on the FOLLOWING line) specifically, mirroring hasBulletLikeLine's own identical distinction above. A `.trimEnd()` mutant of that same check would leave the tag line's own leading whitespace in place, never see `@` as its first character, and wrongly let the fix through.
+    {
+      code: '// Summary.\n//\n//   @remarks nested under extra indentation\nexport function tagIndented(): void {}',
+      output: null,
+      errors: [{ messageId: 'preferDocComment' }],
+    },
     // A public abstract method (`abstract run(): void;`) of an exported abstract class: reported and fixed exactly like an ordinary method, the clearest possible example of a class's own public contract, needing no isOverloadImplementationMethod-style guard of its own since TypeScript's own grammar never lets an abstract method carry a body at all.
     {
       code: 'export abstract class A {\n  // Doc line one for run.\n  // Doc line two for run.\n  abstract run(): void;\n}',
@@ -655,5 +685,20 @@ describe('prefer-doc-comment + jsdoc/no-multi-asterisks (the real combined confi
     const code = '// Explains the export in two\n// ordinary lines of prose.\nexport function ordinary(): void {}\n';
     const result = fixedOutput(code);
     expect(result.output).toBe('/**\n * Explains the export in two\n * ordinary lines of prose.\n */\nexport function ordinary(): void {}\n');
+  });
+
+  // The exact repro this rule's own tag-lines withholding must prevent: `jsdoc/tag-lines` (bundled unconditionally at its bare default alongside this rule, see jsdoc.ts) deletes a blank line sitting directly before `@remarks` by default (its own `startLines`/`alwaysNever` default to `0`/`'never'`), even though that blank line is the canonical, hand-written TSDoc convention. Without hasBlankLineBeforeTag's own withholding, this rule's fixer would first splice the blank line straight into a `/** ... */` block, and `jsdoc/tag-lines` would then delete it in the very same `--fix` run, leaving a doc comment that no longer matches the original source line for line.
+  it('never converts a leading // comment into a doc comment whose blank line before an @-tag the sibling jsdoc/tag-lines rule would otherwise delete', () => {
+    const code = '// Summary.\n//\n// @remarks\n// Body text here.\n// @deprecated use tagged instead\nexport function taggedExport(): void {}\n';
+    const result = fixedOutput(code);
+    expect(result.output).toBe(code);
+    expect(result.messages.some((message) => message.ruleId === 'exadev/prefer-doc-comment')).toBe(true);
+    expect(result.messages.some((message) => message.ruleId === 'jsdoc/tag-lines')).toBe(false);
+  });
+
+  it('still converts a tagged // run with no blank line before the tag into a doc comment, proving the withholding is scoped to a blank line genuinely adjacent to a tag rather than disabling the fixer for any tagged comment', () => {
+    const code = '// Summary.\n// @remarks\n// Body text here.\nexport function taggedNoGap(): void {}\n';
+    const result = fixedOutput(code);
+    expect(result.output).toBe('/**\n * Summary.\n * @remarks\n * Body text here.\n */\nexport function taggedNoGap(): void {}\n');
   });
 });
