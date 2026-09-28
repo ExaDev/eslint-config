@@ -322,8 +322,9 @@ const preferDocComment = createRule<Options, MessageIds>({
         return candidate !== undefined && isTripleSlashDirective(candidate);
       });
       if (lastDirectiveIndex !== -1 && !isLineRun) return;
-      const consideredLines = lastDirectiveIndex === -1 ? lines : lines.slice(lastDirectiveIndex + 1);
-      const consideredGroup = lastDirectiveIndex === -1 ? group : group.slice(lastDirectiveIndex + 1);
+      // Unconditional `.slice(lastDirectiveIndex + 1)`, no `=== -1` branch of its own: when no directive was found at all, `lastDirectiveIndex` is `-1`, so `-1 + 1` is `0`, and `.slice(0)` already returns every element, a full copy identical in content to the array itself. A conditional branch returning `lines`/`group` unsliced for that case would be provably redundant, never observably different for any real input, the exact unkillable mutant an earlier version of this line left behind.
+      const consideredLines = lines.slice(lastDirectiveIndex + 1);
+      const consideredGroup = group.slice(lastDirectiveIndex + 1);
 
       const [firstLine] = consideredLines;
       if (firstLine === undefined) return;
