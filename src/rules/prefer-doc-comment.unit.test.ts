@@ -524,5 +524,11 @@ ruleTester.run('prefer-doc-comment', rule, {
       output: "export class C {\n  /**\n   * first line\n   * second line\n   */\n  'm'() {}\n}",
       errors: [{ messageId: 'preferDocComment' }],
     },
+    // A same-key sibling that is NOT itself a same-name overload signature (`other`, a genuinely unrelated method): isOverloadImplementationMethod's own key comparison must require the NAME to actually match, not merely "some signature-only sibling exists somewhere in the class"; `build`'s own two-line comment is still reported here, proving the sibling's own different name is what correctly withholds the exemption.
+    {
+      code: 'export class Factory {\n  other(a: string): void;\n\n  // Doc line one for build.\n  // Doc line two for build.\n  build(): void {}\n}',
+      output: 'export class Factory {\n  other(a: string): void;\n\n  /**\n   * Doc line one for build.\n   * Doc line two for build.\n   */\n  build(): void {}\n}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
   ],
 });
