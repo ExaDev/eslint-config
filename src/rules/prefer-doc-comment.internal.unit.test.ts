@@ -233,6 +233,44 @@ describe('isDirectiveComment', () => {
     },
   );
 
+  // Node's own built-in test-runner coverage directive, always separated from `node:coverage` by real whitespace, recognised for each of its own three real keywords: `ignore` (always followed by a further word of its own, `next`/`next 3`/..., exactly like c8/v8/istanbul above), and the `disable`/`enable` pair that opens and closes a whole suppressed stretch. Type-agnostic, tested with Line.
+  it.each(['node:coverage ignore next', 'node:coverage disable', 'node:coverage enable', 'node:coverage  ignore next'])('recognises %s as a directive', (text) => {
+    expect(isDirectiveComment(text, AST_TOKEN_TYPES.Line)).toBe(true);
+  });
+
+  // cspell's own spell-check suppression family: the `disable`/`enable` pair (recognised the identical reason ESLint's own `eslint-disable`/`eslint-enable` pair is, see ESLINT_FAMILY_PATTERN's own doc comment) plus its two line-scoped variants. Type-agnostic, tested with Line.
+  it.each(['cspell:disable-next-line', 'cspell:disable-line', 'cspell:disable', 'cspell:enable'])('recognises %s as a directive', (text) => {
+    expect(isDirectiveComment(text, AST_TOKEN_TYPES.Line)).toBe(true);
+  });
+
+  // Biome's own lint/format suppression: the bare marker alone is recognised, with no need to validate the rule path or the mandatory `: reason` that always follows it in a real one. Type-agnostic, tested with Line.
+  it.each(['biome-ignore lint/suspicious/noExplicitAny: reason', 'biome-ignore format: reason'])('recognises %s as a directive', (text) => {
+    expect(isDirectiveComment(text, AST_TOKEN_TYPES.Line)).toBe(true);
+  });
+
+  it('does not recognise a bare "node:coverage" with no keyword of its own following it', () => {
+    expect(isDirectiveComment('node:coverage', AST_TOKEN_TYPES.Line)).toBe(false);
+  });
+
+  it('does not recognise "node:coverage" directly followed by its own keyword with no separating whitespace at all', () => {
+    // Pins the `\s+` between "node:coverage" and its own keyword, the identical "c8ignore next" reasoning above.
+    expect(isDirectiveComment('node:coverageignore next', AST_TOKEN_TYPES.Line)).toBe(false);
+  });
+
+  it('does not recognise "cspell:disabled", a longer word sharing the marker\'s own prefix, as the bare cspell:disable directive', () => {
+    // Pins the same trailing `\b` for the new cspell alternative specifically, the identical "todoist"/"prettier-ignored" reasoning above.
+    expect(isDirectiveComment('cspell:disabled is not a real marker', AST_TOKEN_TYPES.Line)).toBe(false);
+  });
+
+  it('does not recognise "biome-ignored", a longer word sharing the marker\'s own prefix, as the bare biome-ignore directive', () => {
+    expect(isDirectiveComment('biome-ignored is not a real marker', AST_TOKEN_TYPES.Line)).toBe(false);
+  });
+
+  // cspell's own word-listing directives name specific dictionary words rather than suppressing a stretch of text, so this pattern deliberately never recognises either as a directive (see OTHER_DIRECTIVE_PATTERN's own doc comment for why).
+  it.each(['cspell:ignore mywordhere', 'cspell:words mywordhere'])('does not recognise %s as a directive, since it names a dictionary word rather than suppressing text', (text) => {
+    expect(isDirectiveComment(text, AST_TOKEN_TYPES.Line)).toBe(false);
+  });
+
   // The all-uppercase marker spelling is recognised on its own, regardless of what follows it, since no ordinary sentence opens a word that way.
   it.each(['TODO: revisit', 'FIXME: revisit', 'TODO', 'FIXME'])('recognises the all-uppercase marker %s as a directive regardless of what follows', (text) => {
     expect(isDirectiveComment(text, AST_TOKEN_TYPES.Line)).toBe(true);
