@@ -605,31 +605,44 @@ ruleTester.run('prefer-doc-comment', rule, {
       output: null,
       errors: [{ messageId: 'preferDocComment' }],
     },
-    // A second, separate sibling-fixer collision, the same class of defect as the bullet-line/no-multi-asterisks case above but against eslint-plugin-jsdoc's own `jsdoc/tag-lines` rule instead: a blank considered line directly above a genuine `@remarks` tag line, the canonical hand-written TSDoc convention. Still reported, but the fix is now withheld (hasBlankLineBeforeTag): spliced verbatim into the fixer's own template, the blank line would sit directly before `@remarks` in the resulting `/** ... */` block, which `jsdoc/tag-lines` (active, at its bare default, alongside this rule in every real `exadevConfig()`, confirmed directly against the real combined config in the describe block below) would go on to delete in the very same `--fix` run. parsesAsValidTsDoc alone cannot catch this: the candidate text parses as perfectly valid TSDoc on its own.
+    // A sibling-fixer collision, the same class of defect as the bullet-line/no-multi-asterisks case above but against eslint-plugin-jsdoc's own `jsdoc/*`/`tsdoc/*` tag-vocabulary rules instead: a blank considered line directly above a genuine `@remarks` tag line, the canonical hand-written TSDoc convention. Still reported, but the fix is now withheld (hasTagLine): spliced verbatim into the fixer's own template, `@remarks` would sit inside the resulting `/** ... */` block, and a sibling rule validating that block against JSDoc/TypeScript's own tag vocabulary rather than TSDoc's (see hasTagLine's own doc comment for the structural root cause) could go on to delete, rewrite or otherwise fight over it in the very same `--fix` run. parsesAsValidTsDoc alone cannot catch this: the candidate text parses as perfectly valid TSDoc on its own.
     {
       code: '// Summary.\n//\n// @remarks\n// Body text here.\nexport function tagCollision(): void {}',
       output: null,
       errors: [{ messageId: 'preferDocComment' }],
     },
-    // A genuine tag line with NO blank line directly above it: never mistaken for the collision above, proving the withholding fires only for a blank line immediately adjacent to a tag, not merely a tag's own presence anywhere in the comment. This is also what pins hasBlankLineBeforeTag's own `&&`/comparison logic: a mutant loosening either side of the check (e.g. `||` in place of `&&`, or inverting the `=== 0` blank test) would wrongly withhold this fix too, since the first considered line here is non-blank and immediately precedes a tag.
+    // A genuine tag line with NO blank line above it at all: still withheld, since hasTagLine fires on the tag line's own presence anywhere in the comment, never merely a blank line immediately adjacent to one. This is also what pins hasTagLine's own regex against a `.some()`-to-`.every()` mutant (only ONE of the three considered lines here starts with `@`, so an `.every()` mutant would wrongly let this fix through) and against dropping the `some()` call's own predicate function entirely.
     {
       code: '// Summary.\n// @remarks\n// Body text here.\nexport function tagNoGap(): void {}',
-      output: '/**\n * Summary.\n * @remarks\n * Body text here.\n */\nexport function tagNoGap(): void {}',
+      output: null,
       errors: [{ messageId: 'preferDocComment' }],
     },
-    // A genuinely blank PARAGRAPH-separator line that does NOT sit directly before any tag line: never mistaken for the tag-lines collision either, pinning hasBlankLineBeforeTag's own `startsWith('@')` check on the FOLLOWING line specifically. A mutant treating any blank line as tag-adjacent (or always/never matching `startsWith`) would wrongly withhold this fix too.
+    // A line whose only `@` sits mid-sentence, never at the trimmed line's own start (`Summary line mentions @remarks mid sentence, not as a real tag.`): an unescaped `@` is ordinarily itself a TSDoc syntax error regardless of where it sits (see the pre-existing "references an at-sign" case above, and containsCommentTerminator's own sibling reasoning for a `*\/`), so this case alone cannot pin hasTagLine's own anchor through parsesAsValidTsDoc's independent gate; confirmed directly, though, that `@microsoft/tsdoc`'s own parser accepts a RECOGNISED tag name written this way, preceded by real prose rather than a line boundary, as an ordinary inline occurrence with zero messages, so this fixture is real, valid TSDoc on its own and is the one shape that lets the two guards be told apart. This pins hasTagLine's own `^` anchor specifically: a mutant dropping it (matching `@` anywhere in the line, not just its own start) would wrongly withhold this fix, since the considered line contains `@remarks` even though it never opens with it.
+    {
+      code: '// Summary line mentions @remarks mid sentence, not as a real tag.\n// Second line to make the comment substantial.\nexport function tagMidLine(): void {}',
+      output:
+        '/**\n * Summary line mentions @remarks mid sentence, not as a real tag.\n * Second line to make the comment substantial.\n */\nexport function tagMidLine(): void {}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A tag spelled with an UPPERCASE leading letter (`@Example`, an unusual but syntactically real TSDoc tag shape): still recognised and still withheld, pinning the `A-Z` half of hasTagLine's own character class specifically, distinct from the lowercase `@remarks`/`@1` cases above and below which only ever exercise the `a-z` half.
+    {
+      code: '// Summary.\n// @Example uppercase-led tag name.\nexport function tagUppercaseLetter(): void {}',
+      output: null,
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A genuinely blank PARAGRAPH-separator line that does NOT sit anywhere near a real tag line: never mistaken for a tag-line collision, since the comment contains no `@`-prefixed line at all.
     {
       code: '// Summary line.\n//\n// Second paragraph, unrelated to any tag.\nexport function tagUnrelatedBlank(): void {}',
       output: '/**\n * Summary line.\n *\n * Second paragraph, unrelated to any tag.\n */\nexport function tagUnrelatedBlank(): void {}',
       errors: [{ messageId: 'preferDocComment' }],
     },
-    // A blank considered line as the very LAST line of the group, with no following line at all: pins hasBlankLineBeforeTag's own `?? false` fallback for the out-of-bounds "next line" lookup specifically. A `?? true` mutant would wrongly withhold this fix, since the lookup past the end of consideredLines is genuinely undefined here, never a real tag line.
+    // A tag line as the very LAST considered line, with a trailing blank line after it: still withheld, proving hasTagLine's own check applies to every considered line in the group, not merely ones with a following line to compare against (the shape the narrower, now-removed blank-line-before-tag predecessor needed an out-of-bounds lookup for).
     {
       code: '// Summary.\n// @remarks\n//\nexport function tagTrailingBlank(): void {}',
-      output: '/**\n * Summary.\n * @remarks\n *\n */\nexport function tagTrailingBlank(): void {}',
+      output: null,
       errors: [{ messageId: 'preferDocComment' }],
     },
-    // A tag line indented with EXTRA leading whitespace beyond the delimiter's own single conventional space, directly below a blank considered line: still recognised as tag-adjacent and still withheld, pinning hasBlankLineBeforeTag's own `.trimStart()` (on the FOLLOWING line) specifically, mirroring hasBulletLikeLine's own identical distinction above. A `.trimEnd()` mutant of that same check would leave the tag line's own leading whitespace in place, never see `@` as its first character, and wrongly let the fix through.
+    // A tag line indented with EXTRA leading whitespace beyond the delimiter's own single conventional space: still recognised as a tag line and still withheld, pinning hasTagLine's own `.trimStart()` specifically, mirroring hasBulletLikeLine's own identical distinction above. A `.trimEnd()` mutant of that same check would leave the tag line's own leading whitespace in place, never see `@` as its first character, and wrongly let the fix through.
     {
       code: '// Summary.\n//\n//   @remarks nested under extra indentation\nexport function tagIndented(): void {}',
       output: null,
@@ -666,11 +679,20 @@ const REAL_JSDOC_INTERACTION_CONFIG: Linter.Config[] = [
   ...stylisticCommentsConfig,
 ] as Linter.Config[];
 
-describe('prefer-doc-comment + jsdoc/no-multi-asterisks (the real combined config)', () => {
+describe('prefer-doc-comment + the real bundled jsdoc/tsdoc config', () => {
   const interactionLinter = new Linter();
 
   function fixedOutput(code: string) {
     return interactionLinter.verifyAndFix(code, REAL_JSDOC_INTERACTION_CONFIG, 'mode.ts');
+  }
+
+  // Asserts the withholding's own full contract for one tag shape: the output is byte-for-byte the original source (nothing was converted at all, so there is nothing left for a sibling fixer to mangle), this rule itself still reports the violation (the comment is still substantial and un-upgraded), and neither a `jsdoc/*` nor a `tsdoc/*` rule ever fires, proving the withheld `//`/`/* */` comment was never even parsed as a doc comment in the first place, exactly as a genuinely plain comment never would be.
+  function expectWithheld(code: string): void {
+    const result = fixedOutput(code);
+    expect(result.output).toBe(code);
+    expect(result.messages.some((message) => message.ruleId === 'exadev/prefer-doc-comment')).toBe(true);
+    expect(result.messages.some((message) => message.ruleId?.startsWith('jsdoc/') === true)).toBe(false);
+    expect(result.messages.some((message) => message.ruleId?.startsWith('tsdoc/') === true)).toBe(false);
   }
 
   it('never converts a markdown-bulleted // comment into a doc comment whose bullets the sibling no-multi-asterisks rule would otherwise strip', () => {
@@ -687,18 +709,45 @@ describe('prefer-doc-comment + jsdoc/no-multi-asterisks (the real combined confi
     expect(result.output).toBe('/**\n * Explains the export in two\n * ordinary lines of prose.\n */\nexport function ordinary(): void {}\n');
   });
 
-  // The exact repro this rule's own tag-lines withholding must prevent: `jsdoc/tag-lines` (bundled unconditionally at its bare default alongside this rule, see jsdoc.ts) deletes a blank line sitting directly before `@remarks` by default (its own `startLines`/`alwaysNever` default to `0`/`'never'`), even though that blank line is the canonical, hand-written TSDoc convention. Without hasBlankLineBeforeTag's own withholding, this rule's fixer would first splice the blank line straight into a `/** ... */` block, and `jsdoc/tag-lines` would then delete it in the very same `--fix` run, leaving a doc comment that no longer matches the original source line for line.
-  it('never converts a leading // comment into a doc comment whose blank line before an @-tag the sibling jsdoc/tag-lines rule would otherwise delete', () => {
-    const code = '// Summary.\n//\n// @remarks\n// Body text here.\n// @deprecated use tagged instead\nexport function taggedExport(): void {}\n';
-    const result = fixedOutput(code);
-    expect(result.output).toBe(code);
-    expect(result.messages.some((message) => message.ruleId === 'exadev/prefer-doc-comment')).toBe(true);
-    expect(result.messages.some((message) => message.ruleId === 'jsdoc/tag-lines')).toBe(false);
+  // The exact repro this rule's own tag-line withholding must prevent: a genuine `@`-tag anywhere in the comment, converted verbatim into a `/** ... */` block, would then be validated by `jsdoc/check-tag-names` against JSDoc/TypeScript's own tag vocabulary rather than TSDoc's (jsdoc.ts spreads `flat/recommended-tsdoc-error` with no `settings.jsdoc` override of its own), a pre-existing gap on `main` this rule now exposes rather than causes. Without hasTagLine's own withholding, this rule's fixer would splice `@remarks`/`@deprecated` straight into a `/** ... */` block and a sibling `jsdoc/*`/`tsdoc/*` rule could then delete, rewrite or otherwise fight over either tag in the very same `--fix` run, leaving a doc comment that no longer matches the original source line for line.
+  it('never converts a leading // comment into a doc comment whose @remarks/@deprecated tags a sibling jsdoc/* rule could otherwise mangle', () => {
+    expectWithheld('// Summary.\n//\n// @remarks\n// Body text here.\n// @deprecated use tagged instead\nexport function taggedExport(): void {}\n');
   });
 
-  it('still converts a tagged // run with no blank line before the tag into a doc comment, proving the withholding is scoped to a blank line genuinely adjacent to a tag rather than disabling the fixer for any tagged comment', () => {
-    const code = '// Summary.\n// @remarks\n// Body text here.\nexport function taggedNoGap(): void {}\n';
-    const result = fixedOutput(code);
-    expect(result.output).toBe('/**\n * Summary.\n * @remarks\n * Body text here.\n */\nexport function taggedNoGap(): void {}\n');
+  it('never converts a tagged // run with no blank line before the tag either, proving the withholding fires on the tag line’s own presence, not merely a blank line adjacent to one', () => {
+    expectWithheld('// Summary.\n// @remarks\n// Body text here.\nexport function taggedNoGap(): void {}\n');
+  });
+
+  // Defect (a): a `// @internal` line's own description text is silently deleted by `jsdoc/empty-tags` once converted, since `@internal` is a modifier tag `empty-tags` expects to carry no text of its own. Covered for both source shapes this rule must handle identically (see extractCommentLines' own doc comment): a `//` run, and an already-consolidated bare `/* ... */` block.
+  it('never converts a // run with an @internal tag into a doc comment whose description jsdoc/empty-tags would otherwise delete', () => {
+    expectWithheld('// Internal helper, not part of the public API surface.\n// @internal\nexport function helperInternalLine(): void {}\n');
+  });
+
+  it('never converts a bare block comment with an @internal tag into a doc comment whose description jsdoc/empty-tags would otherwise delete', () => {
+    expectWithheld('/*\n * Internal helper, not part of the public API surface.\n * @internal\n */\nexport function helperInternalBlock(): void {}\n');
+  });
+
+  // Defect (b): `@public`/`@readonly` are themselves deleted outright by `jsdoc/check-tag-names`, changing what the comment means rather than merely reformatting it.
+  it('never converts a // run with an @public tag into a doc comment jsdoc/check-tag-names would otherwise delete the tag from', () => {
+    expectWithheld('// Summary for the public export.\n// @public\nexport function publicTagged(): void {}\n');
+  });
+
+  it('never converts a // run with an @readonly tag into a doc comment jsdoc/check-tag-names would otherwise delete the tag from', () => {
+    expectWithheld('// Summary for the readonly export.\n// @readonly\nexport function readonlyTagged(): void {}\n');
+  });
+
+  // Defect (c): `@typeParam` is rewritten to `@template` by jsdoc/check-tag-names' own suggested-name fixer, which then fails tsdoc/syntax (`@template` is not itself valid TSDoc), adding an error the fix cannot clear.
+  it('never converts a // run with an @typeParam tag into a doc comment jsdoc/check-tag-names would otherwise rewrite to the TSDoc-invalid @template', () => {
+    expectWithheld('// Identity helper summary line.\n// @typeParam T the type being preserved.\nexport function typeParamTagged<T>(value: T): T {\n  return value;\n}\n');
+  });
+
+  // Defect (d): `@virtual` is rewritten to `@abstract` by the same suggested-name fixer, leaving check-tag-names/empty-tags/tsdoc/syntax errors and an ESLintCircularFixesWarning behind.
+  it('never converts a // run with an @virtual tag into a doc comment jsdoc/check-tag-names would otherwise rewrite to @abstract', () => {
+    expectWithheld('// Overridable behaviour summary line.\n// @virtual\nexport function virtualTagged(): void {}\n');
+  });
+
+  // Defect (e): `@override` triggers a live fight between check-tag-names and empty-tags, again with an ESLintCircularFixesWarning plus leftover errors.
+  it('never converts a // run with an @override tag into a doc comment jsdoc/check-tag-names and jsdoc/empty-tags would otherwise fight over', () => {
+    expectWithheld('// Overriding behaviour summary line.\n// @override\nexport function overrideTagged(): void {}\n');
   });
 });
