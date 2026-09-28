@@ -23,7 +23,7 @@ describe('stylisticCommentsConfig', () => {
       rules: {
         '@stylistic/spaced-comment': ['error', 'always', { block: { markers: ['!'] }, line: { markers: ['#', '#region', '#endregion'] } }],
         '@stylistic/lines-between-class-members': 'error',
-        '@stylistic/line-comment-position': ['error', 'above'],
+        '@stylistic/line-comment-position': ['error', { position: 'above', ignorePattern: '^\\s*cspell:disable-line\\b' }],
         '@stylistic/padding-line-between-statements': [
           'error',
           { blankLine: 'always', prev: 'directive', next: '*' },
@@ -132,6 +132,30 @@ describe('multiline-comment-style (deliberately not enabled, in any file)', () =
   it('leaves an ordinary run of `//` lines with no directive at all as standalone lines too, proving the rule is off rather than merely blind to directive-shaped input', () => {
     const code = '// first line\n// second line\nconst x = 1;\n';
     expect(fixedOutput(code, 'plain.ts')).toBe(code);
+  });
+});
+
+// A real Linter run pinning the ignorePattern's own reason for existing: `cspell:disable-line` suppresses spell-checking for the very line it sits on, so it only ever works as a trailing comment, and the rule has no autofix, so without the exemption its report demands a hand-move that silently retargets the suppression at the previous line. The companion cases prove the exemption is scoped to the directive line alone, never a general off switch for the rule.
+describe('line-comment-position (the cspell:disable-line ignorePattern)', () => {
+  const linter = new LinterClass();
+
+  function lint(code: string): (string | null)[] {
+    return linter.verify(code, REAL_LINTER_CONFIG, 'cspell.ts').map((message) => message.ruleId);
+  }
+
+  it('does not report a trailing // cspell:disable-line, the one directive that only works in trailing position', () => {
+    const ruleIds = lint("const word = 'qwxzzyv'; // cspell:disable-line\nexport function f() {}\n");
+    expect(ruleIds).not.toContain('@stylistic/line-comment-position');
+  });
+
+  it('still reports an ordinary trailing // comment, proving the ignorePattern exempts the directive alone and does not disable the rule generally', () => {
+    const ruleIds = lint("const word = 'ordinary'; // trailing note\nexport function f() {}\n");
+    expect(ruleIds).toContain('@stylistic/line-comment-position');
+  });
+
+  it('still reports a trailing comment merely opening with cspell:disable-line-shaped prose (no word boundary after it), proving the pattern is bounded rather than a bare prefix match', () => {
+    const ruleIds = lint("const word = 'ordinary'; // cspell:disable-liner is not a directive\nexport function f() {}\n");
+    expect(ruleIds).toContain('@stylistic/line-comment-position');
   });
 });
 
