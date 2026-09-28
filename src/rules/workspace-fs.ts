@@ -16,7 +16,9 @@ export interface WorkspaceFs {
   readonly realpathSync: (path: string) => string;
 }
 
-// The real, filesystem-backed WorkspaceFs, threaded through as the default everywhere a WorkspaceFs parameter is accepted, exactly as findNearestPackageJson is the default ReadPackageJsonFn in barrel-auto-detect.ts.
+/**
+ * The real, filesystem-backed WorkspaceFs, threaded through as the default everywhere a WorkspaceFs parameter is accepted, exactly as findNearestPackageJson is the default ReadPackageJsonFn in barrel-auto-detect.ts.
+ */
 export const realWorkspaceFs: WorkspaceFs = {
   existsSync,
   readFileSync: (path) => readFileSync(path, 'utf8'),

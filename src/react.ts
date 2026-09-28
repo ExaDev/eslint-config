@@ -2,7 +2,9 @@ import type { TSESLint } from '@typescript-eslint/utils';
 import type { ConfigArrayValue } from './config-types';
 import { readFlatConfig, tryRequire, type RequireFn } from './optional-plugin';
 
-// A .jsx/.tsx file existing is itself unambiguous evidence a project writes JSX -- unlike eslint-plugin-react merely being resolvable, which can happen via unrelated hoisting in a monorepo without a single JSX file anywhere in the linted project. Scoping every React-family rule block to this glob is what makes package-presence-based auto-detection safe: even if the plugin resolves for an unrelated reason, its rules are never matched against a file that isn't JSX in the first place, since ESLint's own flat-config `files` matching happens per linted file, at lint time, not at config-build time.
+/**
+ * A .jsx/.tsx file existing is itself unambiguous evidence a project writes JSX -- unlike eslint-plugin-react merely being resolvable, which can happen via unrelated hoisting in a monorepo without a single JSX file anywhere in the linted project. Scoping every React-family rule block to this glob is what makes package-presence-based auto-detection safe: even if the plugin resolves for an unrelated reason, its rules are never matched against a file that isn't JSX in the first place, since ESLint's own flat-config `files` matching happens per linted file, at lint time, not at config-build time.
+ */
 export const JSX_FILE_PATTERNS: readonly string[] = ['**/*.jsx', '**/*.tsx'];
 
 export interface ReactConfigOptions {

@@ -8,7 +8,9 @@ import type { Rule } from 'eslint';
  */
 export type BarrelMode = 'banned' | 'single' | 'siblings';
 
-// Reusable across rules: the basename an index file has, matching ts/tsx/js/jsx/mjs/mts/cjs/cts. Identical to no-non-barrel-index's own INDEX_BASENAME — deliberately duplicated as the single declared constant both modules import, rather than each rule re-deriving the regex.
+/**
+ * Reusable across rules: the basename an index file has, matching ts/tsx/js/jsx/mjs/mts/cjs/cts. Identical to no-non-barrel-index's own INDEX_BASENAME — deliberately duplicated as the single declared constant both modules import, rather than each rule re-deriving the regex.
+ */
 export const INDEX_BASENAME = /^index\.[cm]?[tj]sx?$/;
 
 /**
