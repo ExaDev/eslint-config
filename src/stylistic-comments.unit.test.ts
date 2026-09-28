@@ -50,14 +50,15 @@ describe('stylisticCommentsConfig', () => {
   });
 });
 
+// Shared by every real-Linter `describe` block below, each of which exercises stylisticCommentsConfig's own actual pass/fail/fix decisions rather than just its shape: built once, at file scope, so the single `as Linter.Config[]` cast (the same cast jsdoc.unit.test.ts's own `lint` helper uses once) appears here only, not once per test block.
+const REAL_LINTER_CONFIG: Linter.Config[] = [{ files: ['**'], languageOptions: { sourceType: 'module', ecmaVersion: 2022 } }, ...stylisticCommentsConfig] as Linter.Config[];
+
 // A real Linter run, not just the config shape asserted above: `block.markers: ['!']` only matters through spaced-comment's own actual pass/fail decision, which the config-shape test above cannot observe (a mutant swapping `'!'` for any other single character would still produce an object of the identical shape).
 describe('spaced-comment (the /*! license/banner marker)', () => {
   const linter = new LinterClass();
 
   function lint(code: string): (string | null)[] {
-    const config: Linter.Config[] = [{ files: ['**'], languageOptions: { sourceType: 'module', ecmaVersion: 2022 } }, ...stylisticCommentsConfig] as Linter.Config[];
-
-    return linter.verify(code, config, 'banner.js').map((message) => message.ruleId);
+    return linter.verify(code, REAL_LINTER_CONFIG, 'banner.js').map((message) => message.ruleId);
   }
 
   it('reports no spaced-comment violation for a /*! banner with no space of its own between the ! and the delimiter', () => {
@@ -80,9 +81,7 @@ describe('multiline-comment-style (deliberately not enabled, in any file)', () =
   const prettierIgnoreCode = '// A lookup table laid out by hand.\n// prettier-ignore\nconst grid = [\n  [1, 0, 0],\n];\n';
 
   function fixedOutput(code: string, filename: string): string {
-    const config: Linter.Config[] = [{ files: ['**'], languageOptions: { sourceType: 'module', ecmaVersion: 2022 } }, ...stylisticCommentsConfig] as Linter.Config[];
-
-    return linter.verifyAndFix(code, config, filename).output;
+    return linter.verifyAndFix(code, REAL_LINTER_CONFIG, filename).output;
   }
 
   it('leaves two consecutive triple-slash reference directives untouched in a .d.ts file', () => {
@@ -108,9 +107,7 @@ describe('padding-line-between-statements (consecutive directives and imports st
   const linter = new LinterClass();
 
   function fixedOutput(code: string): string {
-    const config: Linter.Config[] = [{ files: ['**'], languageOptions: { sourceType: 'module', ecmaVersion: 2022 } }, ...stylisticCommentsConfig] as Linter.Config[];
-
-    return linter.verifyAndFix(code, config, 'padding.ts').output;
+    return linter.verifyAndFix(code, REAL_LINTER_CONFIG, 'padding.ts').output;
   }
 
   it('does not insert a blank line between two consecutive directives, and treats a trailing CommonJS require alongside two ES imports as one unbroken import-like run, but still requires one after the directive prologue before the run starts', () => {
@@ -134,9 +131,7 @@ describe('spaced-comment (triple-slash reference directive)', () => {
   const linter = new LinterClass();
 
   function fixedOutput(code: string): string {
-    const config: Linter.Config[] = [{ files: ['**'], languageOptions: { sourceType: 'module', ecmaVersion: 2022 } }, ...stylisticCommentsConfig] as Linter.Config[];
-
-    return linter.verifyAndFix(code, config, 'reference.ts').output;
+    return linter.verifyAndFix(code, REAL_LINTER_CONFIG, 'reference.ts').output;
   }
 
   it('leaves a spaced triple-slash reference directive untouched, the shape TypeScript itself always emits', () => {
