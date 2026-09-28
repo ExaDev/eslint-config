@@ -2,6 +2,8 @@ import { Linter } from 'eslint';
 import { RuleTester } from '@typescript-eslint/rule-tester';
 import tseslint from 'typescript-eslint';
 import { describe, expect, it } from 'vitest';
+import jsdocAndTsdoc from '../jsdoc';
+import stylisticCommentsConfig from '../stylistic-comments';
 import rule from './prefer-doc-comment';
 
 describe('rule metadata', () => {
@@ -260,10 +262,10 @@ ruleTester.run('prefer-doc-comment', rule, {
       output: '/**\n * first line\n * second line\n */\nexport type T = string;',
       errors: [{ messageId: 'preferDocComment' }],
     },
-    // The first line, after the leading `//`, itself starts with a literal `*`: still a genuine Line comment, not a Block one, so the "already a doc comment" exemption (which requires Block type specifically) never applies here, however much the text alone might resemble one.
+    // The first line, after the leading `//`, itself starts with a literal `*`: still a genuine Line comment, not a Block one, so the "already a doc comment" exemption (which requires Block type specifically) never applies here, however much the text alone might resemble one. Still reported, but the fix is now withheld (hasBulletLikeLine): splicing this line in verbatim would read as `* * looks like a marker` once spliced into the fixer's own template, which eslint-plugin-jsdoc's own `jsdoc/no-multi-asterisks` rule (active alongside this one in every real `exadevConfig()`) would go on to strip in the very same `--fix` run, exactly the confirmed corruption this rule must never produce.
     {
       code: '//* looks like a marker\n// second line\nexport function foo() {}',
-      output: '/**\n * * looks like a marker\n * second line\n */\nexport function foo() {}',
+      output: null,
       errors: [{ messageId: 'preferDocComment' }],
     },
     // A trailing comment on the PRECEDING statement's own line, followed by a genuine run of standalone doc lines above the export: getLeadingCommentGroup's backward walk stops at the trailing comment, so only the two standalone lines are converted, leaving the trailing note on the preceding statement's own line completely untouched.
@@ -562,5 +564,52 @@ ruleTester.run('prefer-doc-comment', rule, {
       output: "export function parse(a: string): number;\n/**\n * Doc line one for the second overload signature.\n * Doc line two for the second overload signature.\n */\nexport function parse(a: number): number;\nexport function parse(a: string | number): number {\n  return typeof a === 'string' ? a.length : a;\n}",
       errors: [{ messageId: 'preferDocComment' }],
     },
+    // The exact confirmed regression this rule's own multi-asterisks withholding must prevent: a `// * ...`-prefixed markdown-bullet line directly above an export. Still reported, but the fix is now withheld (hasBulletLikeLine): naively spliced into the fixer's own template this would read as `* * fast, ...`, which eslint-plugin-jsdoc's own `jsdoc/no-multi-asterisks` rule (active alongside this one in every real `exadevConfig()`, confirmed directly against the real combined config in the describe block below) would go on to strip the leading bullet marker from in the very same `--fix` run, silently losing real content. parsesAsValidTsDoc alone cannot catch this: `* fast, skips validation` parses as perfectly valid TSDoc on its own.
+    {
+      code: '// Supported modes:\n// * fast, skips validation\n// * safe, validates everything\nexport function mode(): void {}',
+      output: null,
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A bare BLOCK comment where only SOME of its own content lines carry a leading `* ` marker: stripStarredBlockPrefix's own `every` check requires every non-blank line to share the marker before stripping it from any of them, so a partially-starred block is left completely verbatim, including the literal `*` on its own starred line. Still reported, but the fix is withheld for the identical reason as the markdown-bullet case above: that leftover `*` would read as a repeated delimiter once spliced into the fixer's own template.
+    {
+      code: '/*\n * Overview of the modes.\n   fast mode, no leading star\n */\nexport function mixedStars() {}',
+      output: null,
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A nested bullet indented UNDER its own leading whitespace (`//   * nested detail`, the extra two spaces being the author's own deliberate content indentation, never delimiter padding, per extractCommentLines' own doc comment): still recognised as bullet-shaped and still withheld, pinning hasBulletLikeLine's own `.trimStart()` specifically. A `.trimEnd()` mutant of that same check would leave this line's own leading whitespace in place, never see the `*` as the line's first character, and wrongly let the fix through, exactly the regression this case pins.
+    {
+      code: '// Overview:\n//   * nested detail\nexport function f(): void {}',
+      output: null,
+      errors: [{ messageId: 'preferDocComment' }],
+    },
   ],
+});
+
+// Defect regression: the real jsdoc/no-multi-asterisks rule is bundled unconditionally, at its bare default, alongside this rule in every real `exadevConfig()` (see jsdoc.ts/stylistic-comments.ts), and its own fixer strips a leading `*` from a JSDoc block's middle line in the SAME `--fix` run this rule's own fixer runs in. A RuleTester run of this rule in isolation (every case above) can never observe that: it exercises this rule's own fixer alone, never a SECOND rule's fixer running against the exact text the first one just produced. Exercised here against the real, unmocked jsdocAndTsdoc and stylisticCommentsConfig arrays combined through a real Linter, not against prefer-doc-comment alone.
+const REAL_JSDOC_INTERACTION_CONFIG: Linter.Config[] = [
+  { files: ['**'], languageOptions: { sourceType: 'module', parser: tseslint.parser } },
+  ...jsdocAndTsdoc,
+  ...stylisticCommentsConfig,
+] as Linter.Config[];
+
+describe('prefer-doc-comment + jsdoc/no-multi-asterisks (the real combined config)', () => {
+  const interactionLinter = new Linter();
+
+  function fixedOutput(code: string) {
+    return interactionLinter.verifyAndFix(code, REAL_JSDOC_INTERACTION_CONFIG, 'mode.ts');
+  }
+
+  it('never converts a markdown-bulleted // comment into a doc comment whose bullets the sibling no-multi-asterisks rule would otherwise strip', () => {
+    const code = '// Supported modes:\n// * fast, skips validation\n// * safe, validates everything\nexport function mode(): void {}\n';
+    const result = fixedOutput(code);
+    expect(result.output).toBe(code);
+    expect(result.messages.some((message) => message.ruleId === 'exadev/prefer-doc-comment')).toBe(true);
+    expect(result.messages.some((message) => message.ruleId === 'jsdoc/no-multi-asterisks')).toBe(false);
+  });
+
+  it('still converts an ordinary, non-bulleted // run into a doc comment, proving the withholding is scoped to bullet-shaped lines rather than disabling the fixer generally', () => {
+    const code = '// Explains the export in two\n// ordinary lines of prose.\nexport function ordinary(): void {}\n';
+    const result = fixedOutput(code);
+    expect(result.output).toBe('/**\n * Explains the export in two\n * ordinary lines of prose.\n */\nexport function ordinary(): void {}\n');
+  });
 });
