@@ -530,5 +530,23 @@ ruleTester.run('prefer-doc-comment', rule, {
       output: 'export class Factory {\n  other(a: string): void;\n\n  /**\n   * Doc line one for build.\n   * Doc line two for build.\n   */\n  build(): void {}\n}',
       errors: [{ messageId: 'preferDocComment' }],
     },
+    // A same-named STATIC overload set sitting elsewhere in the class must never exempt an unrelated INSTANCE implementation of the identical name: `make`'s own instance implementation, with its own substantial two-line comment, is still reported here, proving isOverloadImplementationMethod's own `member.static === node.static` check is what correctly tells the two apart, a same-named `static`/instance pair never being one overload set to TypeScript itself.
+    {
+      code: 'export class Factory {\n  static make(a: string): Factory;\n  static make(a: number): Factory;\n  static make(_a: unknown): Factory {\n    return new Factory();\n  }\n\n  // Two-line public contract for\n  // the instance accessor.\n  make(): number {\n    return 0;\n  }\n}',
+      output: 'export class Factory {\n  static make(a: string): Factory;\n  static make(a: number): Factory;\n  static make(_a: unknown): Factory {\n    return new Factory();\n  }\n\n  /**\n   * Two-line public contract for\n   * the instance accessor.\n   */\n  make(): number {\n    return 0;\n  }\n}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // The identical static/instance mismatch, but with the static overload set declared AFTER the instance implementation instead of before it: still reported, proving the exemption is withheld regardless of source order once `static`-ness itself already differs.
+    {
+      code: "export class Widget {\n  // Two-line public contract for\n  // the instance renderer.\n  render(): string {\n    return '';\n  }\n\n  static render(a: string): Widget;\n  static render(a: number): Widget;\n  static render(_a: unknown): Widget {\n    return new Widget();\n  }\n}",
+      output: "export class Widget {\n  /**\n   * Two-line public contract for\n   * the instance renderer.\n   */\n  render(): string {\n    return '';\n  }\n\n  static render(a: string): Widget;\n  static render(a: number): Widget;\n  static render(_a: unknown): Widget {\n    return new Widget();\n  }\n}",
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A same-key, same-`static`-ness (both instance) signature sibling declared AFTER the implementation, with no earlier one at all: isOverloadImplementationMethod's own ordering requirement (`isBeforeByRange`) is what correctly withholds the exemption here, isolated from the `static` check above (both members are equally non-static throughout), since a same-key signature declared later belongs to a different, later member, never the one this implementation itself realises. `find`'s own two-line comment is still reported.
+    {
+      code: 'export class Repository {\n  // Doc line one for find.\n  // Doc line two for find.\n  find(a: string): number {\n    return a.length;\n  }\n\n  find(a: number): number;\n}',
+      output: 'export class Repository {\n  /**\n   * Doc line one for find.\n   * Doc line two for find.\n   */\n  find(a: string): number {\n    return a.length;\n  }\n\n  find(a: number): number;\n}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
   ],
 });
