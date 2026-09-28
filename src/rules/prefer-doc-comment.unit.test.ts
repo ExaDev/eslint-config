@@ -159,6 +159,8 @@ ruleTester.run('prefer-doc-comment', rule, {
     "export function parse(a: string): number;\nexport function parse(a: number): number;\n// Internal reasoning about how these overloads\n// are actually implemented.\nexport function parse(a: string | number): number {\n  return typeof a === 'string' ? a.length : a;\n}",
     // The identical exemption for an exported class method's own overload implementation: `run`'s own two overload signatures above it (`MethodDefinition`s whose own `value` is `TSEmptyBodyFunctionExpression`) are the real public contract; the two-line comment directly above the body-carrying implementation is internal reasoning, never reported.
     'export class C {\n  run(a: string): void;\n  run(a: number): void;\n  // Internal reasoning about how these overloads\n  // are actually implemented.\n  run(a: string | number): void {}\n}',
+    // A genuinely ambient function signature (`declare function`), directly above an export, with a substantial two-line comment: never reported, however substantial, since TypeScript never pairs a `declare`d signature with a following implementation at all, the exact ambient/declare-only gap this file's own header comment names as deliberately out of scope, distinct from an ordinary (non-`declare`) overload signature, which IS reported (see the invalid cases below).
+    '// Doc-worthy explanation for the ambient signature\n// spanning two full lines of prose.\nexport declare function ambient(): void;',
   ],
   invalid: [
     // A run of two `//` lines directly above an exported function: merged into a single doc comment, verbatim.
@@ -546,6 +548,12 @@ ruleTester.run('prefer-doc-comment', rule, {
     {
       code: 'export class Repository {\n  // Doc line one for find.\n  // Doc line two for find.\n  find(a: string): number {\n    return a.length;\n  }\n\n  find(a: number): number;\n}',
       output: 'export class Repository {\n  /**\n   * Doc line one for find.\n   * Doc line two for find.\n   */\n  find(a: string): number {\n    return a.length;\n  }\n\n  find(a: number): number;\n}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
+    // A function overload signature (`TSDeclareFunction` with `declare: false`), with its own substantial two-line comment, sitting between two other members of the same overload set: reported and fixed exactly like the analogous class-method overload-signature case above, since a body-less (non-`declare`) signature is the set's own real public contract, never the internal-reasoning shape a `declare`d ambient signature or a body-carrying implementation is.
+    {
+      code: "export function parse(a: string): number;\n// Doc line one for the second overload signature.\n// Doc line two for the second overload signature.\nexport function parse(a: number): number;\nexport function parse(a: string | number): number {\n  return typeof a === 'string' ? a.length : a;\n}",
+      output: "export function parse(a: string): number;\n/**\n * Doc line one for the second overload signature.\n * Doc line two for the second overload signature.\n */\nexport function parse(a: number): number;\nexport function parse(a: string | number): number {\n  return typeof a === 'string' ? a.length : a;\n}",
       errors: [{ messageId: 'preferDocComment' }],
     },
   ],
