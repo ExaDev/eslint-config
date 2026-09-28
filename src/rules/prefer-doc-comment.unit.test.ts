@@ -550,6 +550,12 @@ ruleTester.run('prefer-doc-comment', rule, {
       output: 'export class Repository {\n  /**\n   * Doc line one for find.\n   * Doc line two for find.\n   */\n  find(a: string): number {\n    return a.length;\n  }\n\n  find(a: number): number;\n}',
       errors: [{ messageId: 'preferDocComment' }],
     },
+    // An EARLIER same-key, same-`static`-ness sibling that is itself body-carrying (not a signature): isOverloadImplementationMethod's own `value.type === TSEmptyBodyFunctionExpression` check on the SIBLING is what correctly withholds the exemption here, distinct from the ordering/`static` checks above, which this fixture already satisfies (the first `build` is both earlier and equally non-static); a same-named method that already has real code of its own is never an overload signature, so the second `build`'s own two-line comment is still reported.
+    {
+      code: 'export class Cache {\n  build(): void {}\n\n  // Two-line public contract\n  // for the second build.\n  build(): void {}\n}',
+      output: 'export class Cache {\n  build(): void {}\n\n  /**\n   * Two-line public contract\n   * for the second build.\n   */\n  build(): void {}\n}',
+      errors: [{ messageId: 'preferDocComment' }],
+    },
     // A function overload signature (`TSDeclareFunction` with `declare: false`), with its own substantial two-line comment, sitting between two other members of the same overload set: reported and fixed exactly like the analogous class-method overload-signature case above, since a body-less (non-`declare`) signature is the set's own real public contract, never the internal-reasoning shape a `declare`d ambient signature or a body-carrying implementation is.
     {
       code: "export function parse(a: string): number;\n// Doc line one for the second overload signature.\n// Doc line two for the second overload signature.\nexport function parse(a: number): number;\nexport function parse(a: string | number): number {\n  return typeof a === 'string' ? a.length : a;\n}",
