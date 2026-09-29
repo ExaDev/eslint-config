@@ -48,6 +48,11 @@ function workspacePatterns(fs: WorkspaceFs, root: string, rootManifest: Record<s
   return fs.existsSync(yamlPath) ? readWorkspacePackages(fs.readFileSync(yamlPath)) : manifestWorkspaces(rootManifest);
 }
 
+/** The `name` the `package.json` in `dir` declares, undefined when it has none, declares a non-string or the directory has no `package.json`. A manifest that is not valid JSON throws, naming its path. */
+export function readPackageName(fs: WorkspaceFs, dir: string): string | undefined {
+  return toPackage(dir, readManifest(fs, dir)).name;
+}
+
 /**
  * Whether `dir` is a workspace root: it holds a `pnpm-workspace.yaml`, or a `package.json` whose `workspaces` field lists at least one pattern.
  */

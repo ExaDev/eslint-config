@@ -8,7 +8,7 @@ const throwingRequireFn = () => {
 };
 
 const PACKAGE_JSON_RULES = ['exadev/turbo-script-convention', 'exadev/turbo-script-has-task', 'exadev/no-fix-in-cached-task-script'];
-const TURBO_JSON_RULES = ['exadev/turbo-task-has-script', 'exadev/turbo-task-outputs'];
+const TURBO_JSON_RULES = ['exadev/turbo-task-has-script', 'exadev/turbo-task-outputs', 'exadev/turbo-task-config-inputs', 'exadev/turbo-task-graph', 'exadev/turbo-json-hygiene'];
 const BLOCKS_WITHOUT_BOUNDARIES = 2;
 const BLOCKS_WITH_BOUNDARIES = 3;
 

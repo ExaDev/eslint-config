@@ -1,6 +1,7 @@
 import { containsTokenRun, tokenizeCommand } from './command-tokens';
 import { delegatesTo, invokedTurboWords, runsBoundaries, type TurboDelegate } from './turbo-commands';
 import { baseTaskName, isGraphOnly, ROOT_TASK_PREFIX, type TurboJson, type TurboTask } from './turbo-json';
+import type { TaskGraphRequirement } from './turbo-options';
 import type { TurboPackage } from './turbo-workspace';
 
 // The pure decisions behind the turbo rules, independent of ESLint and momoa so each can be unit-tested against plain maps.
@@ -197,4 +198,23 @@ export function checkBoundariesScripts(commands: ReadonlyMap<string, string | un
   }
 
   return problems;
+}
+
+/**
+ * The `dependsOn` entries the `taskGraph` option requires of the task at `key`. A requirement names a task either exactly (`_build`, `//#_build`, `web#_build`) or, when written without a package qualifier, all of its package entries too: `_build` also covers `web#_build`, since a `package#task` entry replaces the generic task instead of adding to it, but not `//#_build`, the root package's own task, which only a requirement written `//#_build` covers.
+ */
+export function requiredEdges(key: string, graph: readonly TaskGraphRequirement[]): readonly string[] {
+  const covers = (task: string): boolean => task === key || (!task.includes('#') && !key.startsWith(ROOT_TASK_PREFIX) && baseTaskName(key) === task);
+
+  return [...new Set(graph.filter(({ task }) => covers(task)).flatMap(({ dependsOn }) => dependsOn))];
+}
+
+/** The entries of `required` that `task` does not list in its `dependsOn`, compared as written. */
+export function missingEdges(task: TurboTask, required: readonly string[]): readonly string[] {
+  return required.filter((edge) => !task.dependsOn.includes(edge));
+}
+
+/** Whether `schema`, a turbo.json's `$schema`, is `https://<host>/schema.json` for one of `hosts`. */
+export function isKnownSchema(schema: string | undefined, hosts: readonly string[]): boolean {
+  return hosts.some((host) => schema === `https://${host}/schema.json`);
 }
