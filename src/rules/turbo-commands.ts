@@ -9,13 +9,18 @@ function isShellControl(token: string): boolean {
 }
 
 /**
- * Whether `command` is `delegate task` and nothing more than flags for turbo after it: `turbo run _lint` and `turbo run _lint --force` delegate, while `tsc && turbo run _lint`, `turbo run _lint && tsc` and `turbo run _lint2` do not. Compared token by token as the other script rules do, so the spacing and quoting of the command do not matter.
+ * Whether `command` is `delegate task` and nothing more than flags for turbo after it: `turbo run _lint`, `turbo run _lint --force` and `turbo run _lint --filter web` delegate, while `tsc && turbo run _lint`, `turbo run _lint && tsc`, `turbo run _lint2` and `turbo run _lint _typecheck` do not. A word after the task must start with a dash or directly follow a token that does (a flag's value), so a second task or any other positional word is rejected; a word that follows a bare flag is taken as its value, since the command line does not say which flags take one. Compared token by token as the other script rules do, so the spacing and quoting of the command do not matter.
  */
 export function delegatesTo(command: string, input: Readonly<{ delegate: TurboDelegate; task: string }>): boolean {
   const expected = tokenizeCommand(`${input.delegate} ${input.task}`);
   const tokens = tokenizeCommand(command);
+  const rest = tokens.slice(expected.length);
 
-  return expected.every((token, index) => tokens[index] === token) && !tokens.some(isShellControl);
+  return (
+    expected.every((token, index) => tokens[index] === token) &&
+    !tokens.some(isShellControl) &&
+    rest.every((token, index) => token.startsWith('-') || rest[index - 1]?.startsWith('-') === true)
+  );
 }
 
 // The final path segment of a token, so `pnpm exec ./node_modules/.bin/turbo` and `turbo` both name the turbo binary.
