@@ -282,7 +282,7 @@ This exists for a project that wants real `package.json` canonicalization withou
 | `false` | Force off — always `[]`, no resolution attempted |
 | `undefined` / omitted | Auto-detect (the default): on unless the project already has a syncpack config (a `.syncpackrc*`/`syncpack.config.*` file, or a `"syncpack"` key in its own `package.json`), since syncpack already produces this exact order for free |
 
-Like React/Next.js support, this needs its own optional peer resolvable — `pnpm add -D @eslint/json` — and, unlike them, also needs its `json/json` language registered for the file (this option's own config block does that for you; nothing extra to wire up).
+Like React/Next.js support, this needs its own optional peer resolvable — `@eslint/json` is declared in `peerDependenciesMeta` as optional, so install it in your project with `pnpm add -D @eslint/json` — and, unlike them, also needs its `json/json` language registered for the file (this option's own config block does that for you; nothing extra to wire up).
 
 Bundled into `exadevConfig()`'s default output the same way React/Next.js auto-detection is — `packageJsonKeyOrder: true`/`false` only forces the tri-state explicitly, it isn't the only way to reach it. Not part of `plugin.configs.recommended`, and not available as a `plugin.configs.packageJsonKeyOrder` explicit-tier config the way `.react`/`.nextjs` are, since wiring it through `plugin.configs` would need `plugin.ts` and this option's own config builder to import each other.
 
@@ -365,7 +365,7 @@ export default defineConfig(
 );
 ```
 
-Both entry points need `@eslint/json` resolvable (`pnpm add -D @eslint/json`), the same optional peer [package.json key ordering](#optional-packagejson-key-ordering) uses; unlike that feature, workspace architecture has no tri-state auto-detection at all, since there is nothing to detect it against, only whether the option was given.
+Both entry points need `@eslint/json` resolvable (an optional peer dependency of this package: `pnpm add -D @eslint/json` in your project), the same optional peer [package.json key ordering](#optional-packagejson-key-ordering) uses; unlike that feature, workspace architecture has no tri-state auto-detection at all, since there is nothing to detect it against, only whether the option was given.
 
 ### Options
 
