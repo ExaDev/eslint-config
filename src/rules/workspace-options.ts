@@ -2,6 +2,20 @@
 
 import { assertIsError, regExpConstructorContext } from './workspace-errors';
 import { isRecord } from '../is-record';
+import { hasOnlyKeys } from './option-keys';
+import {
+  readAllow,
+  readDevOnly,
+  readExemptTargetGroups,
+  readRequiredFiles,
+  readRequiredScripts,
+  workspaceConstraintOptionsSchema,
+  type AllowedEdge,
+  type ExemptTargetGroup,
+  type PackageSelector,
+  type RequiredFiles,
+  type RequiredScripts,
+} from './workspace-constraint-options';
 
 export interface SliceBySegment {
   readonly segment: number;
@@ -66,6 +80,16 @@ export interface WorkspaceArchitectureOptions {
   readonly isolatedGroups?: readonly (readonly [string, string])[];
   // Enables package-name-mirrors-path. Omitted entirely (the default), that rule is a no-op: an opt-in feature, not an always-on one, since a workspace with an established naming convention this rule cannot express should not be forced to adopt one that fits.
   readonly naming?: NamingOptions;
+  // Documented exceptions to the direction and isolation checks of no-uphill-dependency, one per edge, each with a required reason. An entry that no longer matches a declared dependency, or matches one the checks would have allowed anyway, is itself reported. no-dependency-cycle ignores this option: an allowed edge still may not close a cycle.
+  readonly allow?: readonly AllowedEdge[];
+  // Groups whose incoming edges are exempt from no-uphill-dependency's checks when declared under the listed dependency fields (a shared test-database package consumed as a devDependency by every layer, say).
+  readonly exemptTargetGroups?: readonly ExemptTargetGroup[];
+  // Enables package-has-files: files that must exist in every package the selector matches.
+  readonly requiredFiles?: readonly RequiredFiles[];
+  // Enables dev-dependency-only: packages that may appear only under devDependencies of other workspace packages.
+  readonly devOnly?: readonly PackageSelector[];
+  // Enables required-scripts: scripts that must exist, optionally with constrained content, in every package the selector matches.
+  readonly requiredScripts?: readonly RequiredScripts[];
 }
 
 export const workspaceArchitectureOptionsSchema = {
@@ -123,6 +147,7 @@ export const workspaceArchitectureOptionsSchema = {
       properties: { scope: { type: 'string' }, separator: { type: 'string' } },
       additionalProperties: false,
     },
+    ...workspaceConstraintOptionsSchema,
   },
   required: ['groups'],
   additionalProperties: false,
@@ -139,15 +164,11 @@ function fail(): never {
 }
 
 // Every key this reader recognises at each level it validates, checked against the object's own actual keys so an unknown or misspelled one (a typo'd "rankskip" alongside, or instead of, the real "rankSkip") fails loudly here rather than being silently dropped by the whitelisted reconstruction below and never reaching ESLint's own schema at all (workspaceArchitectureConfig builds its rule options by calling this reader on the caller's raw object BEFORE that validation ever sees it; see readWorkspaceArchitectureOptions' own doc comment).
-const TOP_LEVEL_KEYS = ['root', 'packages', 'dependencyFields', 'groups', 'nameRanks', 'defaultRank', 'rankSkip', 'isolatedGroups', 'naming'] as const;
+const TOP_LEVEL_KEYS = ['root', 'packages', 'dependencyFields', 'groups', 'nameRanks', 'defaultRank', 'rankSkip', 'isolatedGroups', 'naming', 'allow', 'exemptTargetGroups', 'requiredFiles', 'devOnly', 'requiredScripts'] as const;
 const GROUP_KEYS = ['name', 'path', 'rank', 'slice', 'naming'] as const;
 const RANK_RULE_KEYS = ['pattern', 'rank'] as const;
 const RANK_SKIP_KEYS = ['maxDistance', 'exemptRanks'] as const;
 const NAMING_KEYS = ['scope', 'separator'] as const;
-
-function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
-  return Object.keys(value).every((key) => allowed.includes(key));
-}
 
 function asOptionalString(value: unknown): string | undefined {
   if (value === undefined) return undefined;
@@ -297,6 +318,11 @@ function asOptionalNaming(value: unknown): NamingOptions | undefined {
 }
 
 /**
+ * The single source of truth for "dependencyFields omitted" everywhere this package reads a workspace package's own declared dependencies, so every call site (the graph builder, and each of the three rules' own collectTopLevelDependencies call) agrees on the same default array, not three separately-written literals that could drift.
+ */
+export const DEFAULT_DEPENDENCY_FIELDS: readonly string[] = ['dependencies'];
+
+/**
  * The runtime safety net behind workspaceArchitectureOptionsSchema above: ESLint's own schema validation does run whenever the config is used in a real lint (rejecting malformed rule options there too, the same division of labour barrel-policy.ts's readMode establishes for its own, much smaller options shape), but workspaceArchitectureConfig() (src/workspace-architecture.ts) builds its rule options by calling this reader on the caller's raw object BEFORE that validation ever inspects it, and previously reconstructed a whitelisted object that silently dropped any unknown or misspelled top-level key rather than rejecting it, leaving ESLint's own schema nothing left to catch. This reader now rejects an unknown key at every level it validates (top level, group, slice, rankSkip, naming, nameRanks entries) itself, so a genuinely malformed options object still fails loudly and specifically here, whichever entry point it arrives through, rather than crashing later with a confusing TypeError deep inside graph construction or being silently ignored.
  */
 export function readWorkspaceArchitectureOptions(options: unknown): WorkspaceArchitectureOptions {
@@ -318,6 +344,8 @@ export function readWorkspaceArchitectureOptions(options: unknown): WorkspaceArc
   const rankSkip = asOptionalRankSkip(options['rankSkip']);
   const isolatedGroups = asOptionalIsolatedGroups(options['isolatedGroups']);
   const naming = asOptionalNaming(options['naming']);
+  const constraintContext = { groupNames: new Set(groups.map((group) => group.name)), dependencyFields: dependencyFields ?? DEFAULT_DEPENDENCY_FIELDS };
+  const { allow, exemptTargetGroups, requiredFiles, devOnly, requiredScripts } = options;
 
   if (isolatedGroups !== undefined) {
     const groupNames = new Set(groups.map((group) => group.name));
@@ -344,13 +372,13 @@ export function readWorkspaceArchitectureOptions(options: unknown): WorkspaceArc
     ...(rankSkip !== undefined && { rankSkip }),
     ...(isolatedGroups !== undefined && { isolatedGroups }),
     ...(naming !== undefined && { naming }),
+    ...(allow !== undefined && { allow: readAllow(allow) }),
+    ...(exemptTargetGroups !== undefined && { exemptTargetGroups: readExemptTargetGroups(exemptTargetGroups, constraintContext) }),
+    ...(requiredFiles !== undefined && { requiredFiles: readRequiredFiles(requiredFiles, constraintContext) }),
+    ...(devOnly !== undefined && { devOnly: readDevOnly(devOnly, constraintContext) }),
+    ...(requiredScripts !== undefined && { requiredScripts: readRequiredScripts(requiredScripts, constraintContext) }),
   };
 }
-
-/**
- * The single source of truth for "dependencyFields omitted" everywhere this package reads a workspace package's own declared dependencies, so every call site (the graph builder, and each of the three rules' own collectTopLevelDependencies call) agrees on the same default array, not three separately-written literals that could drift.
- */
-export const DEFAULT_DEPENDENCY_FIELDS: readonly string[] = ['dependencies'];
 
 export function resolveDependencyFields(options: Pick<WorkspaceArchitectureOptions, 'dependencyFields'>): readonly string[] {
   return options.dependencyFields ?? DEFAULT_DEPENDENCY_FIELDS;
