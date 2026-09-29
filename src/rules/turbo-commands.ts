@@ -43,12 +43,31 @@ export function invokedTurboWords(command: string): readonly string[] {
   });
 }
 
+// Package manager flags that take no value, so the word after one is still the script (or `run`). A flag that takes a value (`--filter boundaries`) must not be skipped: the command line does not say which flags those are, and skipping them would read the flag's value as the script.
+const VALUELESS_MANAGER_FLAGS: ReadonlySet<string> = new Set(['-s', '--silent', '-q', '--quiet', '--if-present', '-w', '--workspace-root']);
+
+const PACKAGE_MANAGERS: readonly string[] = ['pnpm', 'npm', 'yarn', 'bun'];
+
+function skipValuelessFlags(tokens: readonly string[]): readonly string[] {
+  const next = tokens.findIndex((token) => !VALUELESS_MANAGER_FLAGS.has(token));
+
+  return next === -1 ? [] : tokens.slice(next);
+}
+
+// Whether `tokens`, the words after a package manager, name the `boundaries` script: directly or after `run`, with valueless manager flags allowed before either.
+function namesBoundariesScript(tokens: readonly string[]): boolean {
+  const afterFlags = skipValuelessFlags(tokens);
+  const script = afterFlags[0] === 'run' ? skipValuelessFlags(afterFlags.slice(1)) : afterFlags;
+
+  return script[0] === 'boundaries';
+}
+
 /**
- * Whether `command` runs boundary checking: `turbo boundaries` directly, or the `boundaries` package script through a package manager (`pnpm boundaries`, `npm run boundaries`). A bare word `boundaries` elsewhere, such as the value of a flag or a task run by `turbo run`, does not count.
+ * Whether `command` runs boundary checking: `turbo boundaries` directly, or the `boundaries` package script through a package manager (`pnpm boundaries`, `npm run boundaries`, `pnpm run -s boundaries`). A bare word `boundaries` elsewhere, such as the value of a flag or a task run by `turbo run`, does not count.
  */
 export function runsBoundaries(command: string): boolean {
   const tokens = tokenizeCommand(command);
-  const runsScript = ['pnpm', 'npm', 'yarn', 'bun'].some((manager) => containsTokenRun(tokens, [manager, 'boundaries']) || containsTokenRun(tokens, [manager, 'run', 'boundaries']));
+  const runsScript = tokens.some((token, index) => PACKAGE_MANAGERS.includes(token) && namesBoundariesScript(tokens.slice(index + 1)));
 
   return runsScript || containsTokenRun(tokens, ['turbo', 'boundaries']);
 }
