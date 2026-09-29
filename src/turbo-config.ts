@@ -10,8 +10,8 @@ export interface TurboConfigOptions extends TurboOptions {
   readonly requireFn?: RequireFn;
 }
 
-/** The source files a `@boundaries-ignore` comment can appear in. */
-const SOURCE_FILE_GLOBS: readonly string[] = ['**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}'];
+/** The JavaScript and TypeScript source files the source-level turbo rules apply to: where a `@boundaries-ignore` comment can appear and where `process.env` is read. */
+export const SOURCE_FILE_GLOBS: readonly string[] = ['**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}'];
 
 function buildSourceBlock(options: TurboOptions): ConfigArrayValue[number] {
   return { files: [...SOURCE_FILE_GLOBS], plugins: { exadev: plugin }, rules: { 'exadev/no-boundaries-ignore': ['error', options] } };

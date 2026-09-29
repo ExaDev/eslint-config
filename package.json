@@ -33,6 +33,7 @@
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-turbo": "2.11.5",
     "husky": "^9.1.7",
     "lint-staged": "^17.2.0",
     "publint": "^0.3.21",
@@ -75,6 +76,7 @@
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-turbo": "^2.11.5",
     "typescript": ">=4.8.4",
     "typescript-eslint": ">=8.0.0"
   },
@@ -92,6 +94,9 @@
       "optional": true
     },
     "eslint-plugin-react-hooks": {
+      "optional": true
+    },
+    "eslint-plugin-turbo": {
       "optional": true
     }
   },
