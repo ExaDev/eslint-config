@@ -4,7 +4,7 @@
 
 > A real ESLint plugin (not a shareable config) exposing custom rules shared across ExaDev projects. Also published under the unscoped alias `exadev-eslint-config`.
 
-**Contents:** [Why](#why) · [Getting started](#getting-started) · [The lighter option](#the-lighter-option-the-plugin-named-export) · [Optional features](#optional-features) · [Rules](#rules) · [Barrel policy](#barrel-policy) · [Workspace architecture](#workspace-architecture) · [Development](#development) · [License](#license)
+**Contents:** [Why](#why) · [Getting started](#getting-started) · [The lighter option](#the-lighter-option-the-plugin-named-export) · [Optional features](#optional-features) · [Rules](#rules) · [Barrel policy](#barrel-policy) · [Workspace architecture](#workspace-architecture) · [Turbo](#turbo) · [Development](#development) · [License](#license)
 
 ## Why
 
@@ -167,6 +167,7 @@ export default tseslint.config(
 | [RFC 8785 canonical JSON formatting](#rfc-8785-canonical-json-formatting) | Always on | Not optional |
 | [package.json key ordering](#optional-packagejson-key-ordering) | On, unless the project already has a syncpack config | `exadevConfig({ packageJsonKeyOrder })` |
 | [Workspace architecture rules](#workspace-architecture) | Off unless given (no sensible default for `groups`) | `exadevConfig({ workspaceArchitecture })` / `workspaceArchitectureConfig(options)` |
+| [Turbo rules](#turbo) | Off unless given (only a repository can say it uses turbo) | `exadevConfig({ turbo })` / `turboConfig(options)` |
 
 Every tri-state option above (`true`/`false`/`undefined`) is passed through the named `exadevConfig(options, ...userConfigs)` factory export:
 
@@ -317,6 +318,15 @@ Bundled into `exadevConfig()`'s default output the same way React/Next.js auto-d
 | `package-has-files` | | **Requires configured files to exist inside every matching workspace package.** ESLint cannot report a file that does not exist, so the diagnostic is anchored on the package's own `package.json`, listing the missing paths. Entries may be globs. Opt-in: a no-op unless the shared `requiredFiles` option is given. See [Required files](#required-files). |
 | `dev-dependency-only` | | **A package may only appear under `devDependencies` of other workspace packages.** Reports a restricted package listed under `dependencies`, `peerDependencies` or `optionalDependencies`, at the offending entry. Opt-in: a no-op unless the shared `devOnly` option is given. See [Dev-only packages](#dev-only-packages). |
 | `required-scripts` | | **Requires configured `scripts` in every matching workspace package,** optionally with an exact command or required and forbidden flags. Opt-in: a no-op unless the shared `requiredScripts` option is given. See [Required scripts](#required-scripts). |
+| `turbo-script-convention` | | **Public scripts delegate to turbo.** In the root package every prefixed script (`_lint`) needs a public counterpart (`lint`) that is `turbo run _lint`, with only flags after it; in any other package a bare script named after a task the root orchestrates is reported. See [Turbo](#turbo). Opt-in via `exadevConfig({ turbo })` or `turboConfig()`. A JSON-language rule. |
+| `turbo-script-has-task` | | **Every prefixed script is configured as a turbo task,** since turbo runs a script only when a task names it. See [Turbo](#turbo). |
+| `turbo-task-has-script` | | **Every task in the root `turbo.json` is implemented and reachable.** A task no package implements is skipped silently by turbo; a `//#` task or an aggregate nothing depends on or invokes never runs. See [Turbo](#turbo). |
+| `turbo-task-outputs` | | **Cached tasks declare `outputs`, persistent tasks disable caching.** A task with no `outputs` key caches its log only. See [Turbo](#turbo). |
+| `no-fix-in-cached-task-script` | | **A script that runs as a cached turbo task passes no fixing flag** (`--fix`, `--write` by default). See [Turbo](#check-and-fix-are-separate-tasks). |
+| `turbo-boundaries-config` | | **The root `turbo.json` opts in to `turbo boundaries`** with a `boundaries` key. See [Turbo boundaries](#turbo-boundaries). |
+| `turbo-package-tags` | | **Every workspace package has a `turbo.json` that extends the root and carries tags,** including its group name when groups are configured. See [Turbo boundaries](#turbo-boundaries). |
+| `turbo-boundaries-script` | | **The root package has a `boundaries` script equal to `turbo boundaries`,** invoked from the configured aggregate script. See [Turbo boundaries](#turbo-boundaries). |
+| `no-boundaries-ignore` | | **Bans the `@boundaries-ignore` comment** outside files listed with a reason. A JavaScript and TypeScript rule. See [Turbo boundaries](#turbo-boundaries). |
 | `test-file-kind` | | **A test file's name must declare its own test kind.** A filename suffix immediately before `.test`/`.spec` (e.g. `foo.unit.test.ts`), one of a configurable `{ kinds }` set (default: `unit`, `integration`, `e2e`). A naming-discipline rule, not a content classifier — it checks only the filename, never what the file actually tests. Self-scoped to real test/spec files (`context.filename`), so it never misfires when applied unscoped and never relies on a consumer's own `files` config. Requires no type information. |
 
 ## Barrel policy
@@ -534,6 +544,94 @@ export default exadevConfig({
 });
 ```
 
+## Turbo
+
+Nine rules keep a repository that uses [turbo](https://turborepo.dev) honest about what turbo actually runs. Turbo skips a task silently when no package has a script of that name, restores only a task's log when `outputs` is missing, and caches a task under a hash taken before the task runs; none of that shows up as an error. They share one options object, `TurboOptions`, and all are off unless the `turbo` option is given, since only a repository can say it uses turbo. Enable them through `exadevConfig({ turbo })` or the standalone `turboConfig(options)`, which returns the blocks to spread into `defineConfig(...)`:
+
+```ts
+// eslint.config.ts
+import { defineConfig } from 'eslint/config';
+import { turboConfig } from '@exadev/eslint-config';
+
+export default defineConfig(
+  // ...your own config...
+  ...turboConfig(),
+);
+```
+
+Both need `@eslint/json` resolvable, the same optional peer the other JSON rules use. `turbo.json` is linted as JSONC because turbo accepts comments there. Every rule does nothing in a `package.json` that belongs to no turbo repository, that is, one with no `turbo.json` that does not `extends` another at or above it (the nearest one in a workspace root wins, so a package configuration that forgot `extends` is not mistaken for the root).
+
+### Options
+
+| Field | Meaning |
+| --- | --- |
+| `root` | The repository root. Defaults to the nearest ancestor holding a root `turbo.json`. |
+| `packages` | Workspace package globs, in the dialect of the [workspace architecture](#workspace-architecture) `packages` option. Defaults to `pnpm-workspace.yaml`'s `packages`, then `package.json`'s `workspaces`. A repository declaring neither is a single package. An empty `packages: []` in `pnpm-workspace.yaml`, the usual way to give turbo a root in a single-package repository, is read as no members. |
+| `prefix` | What marks a script as the implementation of a task. Defaults to `_`. |
+| `delegate` | The command a public script uses: `'turbo run'` (default) or `'turbo'`. |
+| `exemptTasks` | Task names the task checks skip. A name exempts the task in every form: `lint` covers `lint`, `//#lint` and `web#lint`. |
+| `requireEmptyOutputs` | Also require `outputs` on graph-only and uncached tasks. |
+| `fixFlags` | The flags `no-fix-in-cached-task-script` looks for. Defaults to `--fix` and `--write`. |
+| `boundaries` | `{ aggregateScript?, groups?, allowIgnore? }`. Giving it at all enables the four [`turbo boundaries`](#turbo-boundaries) rules. |
+
+### Scripts delegate to underscore tasks
+
+Repositories that use turbo tend to keep the real commands in underscore-prefixed scripts (`_lint`, `_typecheck`, `_test`, `_build`) and expose thin public scripts that delegate (`"lint": "turbo run _lint"`). `turbo-script-convention` checks that the convention holds. In the root package every prefixed script needs a public script of the same name without the prefix, and that script must be the delegating command followed by nothing but flags (`turbo run _lint --force` passes; `eslint .`, `tsc --noEmit && turbo run _typecheck` and `turbo run _lint && tsc` do not). In any other package a prefixed script needs no public counterpart, and a bare script named after a task the root orchestrates (`lint` when the root has `_lint`) is reported, since the public name belongs to the root. The rule reads the command line as written and never what running it does.
+
+`turbo-script-has-task` is the other direction for scripts: a prefixed script must be configured as a task, either in the root `turbo.json` (under its own name, as `//#name` in the root package, or as `package#name` in a member) or in the member's own `turbo.json`. A prefixed script that no task names is never run by turbo.
+
+### Tasks and scripts match
+
+`turbo-task-has-script` lints the root `turbo.json`. A task that no package implements is reported on its key, with three shapes exempt because turbo treats them differently. A junction task, one with `dependsOn` and no script anywhere, only groups other tasks. A `//#name` task is implemented by the root package's script `name`, whatever the script holds (a `":"` no-op or an unprefixed name such as `test:coverage` both count). A `package#name` task is implemented by the package of that name. Any other task is implemented by a workspace member's script, or by the root package's when the repository has no members, since turbo runs the root package for a task only then.
+
+It also reports dead configuration: a `//#name` task or an aggregate (a task with `dependsOn`) that no other task lists in `dependsOn` or `with`, and that no root script invokes through turbo (`turbo run x`, `turbo x`, behind `pnpm` or by path), never runs. A root task that is only reachable from a CI workflow is not seen, because ESLint cannot read workflow files; give it a root script or list it in `exemptTasks`. A package's `turbo.json`, which extends the root, is not checked here.
+
+### Cached tasks declare outputs
+
+A task with no `outputs` key caches its log only, the same as `outputs: []` ([turbo configuration reference](https://turborepo.dev/docs/reference/configuration#outputs), [latest archived copy](https://web.archive.org/web/https://turborepo.dev/docs/reference/configuration)). A build task that forgot the key looks configured but restores nothing on a cache hit, and nothing separates it from a lint task that legitimately produces no files. `turbo-task-outputs` requires every cached task to declare `outputs`, using `[]` where there are none, so the absence is always a stated choice, and reports on the task key. A task that sets `cache: false`, or that only wires other tasks together (nothing but `dependsOn` and `description`), is exempt unless `requireEmptyOutputs` is set. A persistent task never completes, so it must set `cache: false`; that is reported instead of the outputs problem.
+
+In a package's `turbo.json` a task is judged as merged over the root task of the same name, so a partial override that inherits `outputs` passes, and a problem the root already has is reported at the root only.
+
+### Check and fix are separate tasks
+
+Turbo hashes a task's inputs before the task runs. A task that then rewrites those inputs is stored under a key that no longer describes the files. This was confirmed against the installed turbo with a cached task whose script rewrites one of its inputs: the first run misses and rewrites, the second run misses again because the rewritten file hashes differently, the third hits; and restoring the file to its earlier content hits the first run's entry, replaying its log while leaving the file unfixed. So a cached check that passes `--fix` reports success on a cache hit without applying the fix its log describes, and rewrites files during CI.
+
+`no-fix-in-cached-task-script` reports a script that turbo.json configures as a cached task (any script with a task entry that is not `cache: false`, found the way `turbo-script-has-task` finds it) and that passes one of `fixFlags`. The fix is an uncached task beside a fix-free check:
+
+```json
+{
+  "scripts": {
+    "_lint": "eslint . --cache --max-warnings 0",
+    "_lint:fix": "eslint . --fix --cache --max-warnings 0",
+    "lint": "turbo run _lint",
+    "lint:fix": "turbo run _lint:fix"
+  }
+}
+```
+
+with `"_lint:fix": { "cache": false }` in `turbo.json`.
+
+### Turbo boundaries
+
+[`turbo boundaries`](https://turborepo.dev/docs/reference/boundaries) (experimental) checks source imports against package directories, declared dependencies and per-package tag rules. It only applies tag rules once the root `turbo.json` has a `boundaries` key and packages carry `tags`. These four rules check that a repository has opted in; they do not check that the command passes. Trialled on a workspace with a large number of packages, `turbo boundaries` failed on every package whose `eslint.config.ts` or `stryker.config.ts` imported a shared file from the workspace root, reporting each as an import leaving the package. The command is therefore unusable on a workspace that shares configuration through root imports unless it uses `@boundaries-ignore` comments or another way of sharing configuration, and a passing rule set here does not imply a passing `turbo boundaries`. Never run `turbo boundaries --ignore=all`: on a copy it rewrote an import into a comment followed by an orphaned string literal, and the rerun passed only because the import had gone.
+
+Tags cover allow and deny relations but not rank, rank skipping or cycles, so `no-uphill-dependency` and `no-dependency-cycle` remain useful alongside them.
+
+- `turbo-boundaries-config` requires the root `turbo.json` to have a `boundaries` key; `"boundaries": {}` is enough to opt in.
+- `turbo-package-tags` requires every workspace package to have its own `turbo.json` with `"extends": ["//"]` and a non-empty top-level `tags` list (the shape the [package configuration reference](https://turborepo.dev/docs/reference/package-configurations) documents). With `boundaries.groups` (`{ name, path? }`, `path` defaulting to `name`, relative to the repository root), the tags must also include the name of the group the package's directory falls under, the longest matching path, so the layout is declared once and the tags cannot drift from it. A workspace package under no group throws rather than being skipped. Diagnostics land on the package's `package.json`, the one file every package has.
+- `turbo-boundaries-script` requires the root package's `boundaries` script to be exactly `turbo boundaries`, and, with `boundaries.aggregateScript`, that script (the one run before pushing) to invoke it, directly or as `pnpm boundaries` or `npm run boundaries`.
+- `no-boundaries-ignore` bans the `@boundaries-ignore` comment, the same stance `noInlineConfig` takes on `eslint-disable`. A comment counts the way turbo reads it: its text, trimmed, starts with the directive. `turbo boundaries --ignore=all` inserts one above every import it reports, so the check could otherwise be silenced wholesale without anyone deciding to. Where a few reasoned exceptions are wanted, `boundaries.allowIgnore` lists `{ files, reason }` entries; `files` are globs relative to ESLint's working directory and `reason` is required.
+
+```ts
+turboConfig({
+  boundaries: {
+    aggregateScript: 'check',
+    groups: [{ name: 'core' }, { name: 'features' }, { name: 'targets' }],
+    allowIgnore: [{ files: ['scripts/**'], reason: 'build scripts import the workspace root config' }],
+  },
+});
+```
+
 ## Development
 
 ### Build, test, and lint
@@ -552,7 +650,7 @@ pnpm build
 - Each rule has a co-located `*.unit.test.ts` exercising it with ESLint's [`RuleTester`](https://eslint.org/docs/latest/integrate/nodejs-api#ruletester) under [Vitest](https://vitest.dev). [`vitest.setup.ts`](vitest.setup.ts) wires `RuleTester.describe`/`.it`/`.itOnly` to Vitest's `describe`/`it` explicitly (no `test.globals`). Each test uses typescript-eslint's parser for TypeScript-only fixtures; none need type information.
 - Every test file's own name declares its kind via a filename suffix immediately before `.test`/`.spec` — `.unit`, `.integration`, or `.e2e` by default (`exadev/test-file-kind`, part of `recommended`; see [Rules](#rules)) — so a file's test kind is always visible from its name alone, without opening it, and downstream tooling (e.g. a Vitest project split by test kind) can select by filename glob rather than by convention nobody enforces. This package's own tests are exclusively `.unit.test.ts` today (a `.internal.unit.test.ts` variant exists for a handful of files that also test non-exported internals directly, `internal` just being an ordinary extra name segment — see [`no-mutable-union-array-param.internal.unit.test.ts`](src/rules/no-mutable-union-array-param.internal.unit.test.ts)).
 - `pnpm test` always measures [coverage](https://vitest.dev/guide/coverage) (`@vitest/coverage-v8`), scoped to `src/**/*.ts` excluding `*.test.ts`. Text output in terminal; `html`/`lcov` in `coverage/` (gitignored alongside `.eslintcache` and `dist/`).
-- The `lint`/`typecheck`/`test`/`build` npm scripts wrap [turbo](https://turborepo.dev) tasks named `_lint`/`_typecheck`/`_test`/`_build` — run `pnpm build`, not `turbo run build`.
+- The `lint`/`typecheck`/`test`/`build` npm scripts wrap [turbo](https://turborepo.dev) tasks named `_lint`/`_typecheck`/`_test`/`_build` — run `pnpm build`, not `turbo run build`. `pnpm lint:fix` runs the uncached `_lint:fix` task, which is the only one that rewrites files; this repo lints its own scripts with the [Turbo](#turbo) rules.
 - `pnpm build` runs [`tsdown`](https://tsdown.dev) from [`src/index.ts`](src/index.ts), bundling the whole module graph into ESM + CJS + declarations. `prepublishOnly` re-runs lint, typecheck, `test`, `tsdown`, [`publint`](https://publint.dev), and [`attw`](https://github.com/arethetypeswrong/arethetypeswrong.github.io) `--pack`.
 
 ### Architecture
@@ -583,14 +681,18 @@ pnpm build
   - `fileGlobsSchema` and `readFileGlobs` are the option schema and runtime validator for a glob list; a list needs at least one include and may not repeat a glob.
 - [`src/rules/file-reference.ts`](src/rules/file-reference.ts) is the option shape for a rule that reads another file: `{ path, relativeTo? }`, resolved against the linted file's directory (`file`, the default) or the workspace root (`root`, found the way the workspace architecture rules find it).
   - `readReferencedJson` parses the target as JSONC through [`src/rules/jsonc.ts`](src/rules/jsonc.ts) (comments, trailing commas and a leading byte order mark), returning `undefined` for a missing file and throwing, naming the path, for one that does not parse.
+- [`src/turbo-config.ts`](src/turbo-config.ts) builds the turbo blocks (`buildTurboConfig` internally, `turboConfig` publicly) from the one shared options object in [`src/rules/turbo-options.ts`](src/rules/turbo-options.ts).
+  - The pure decisions live in [`src/rules/turbo-checks.ts`](src/rules/turbo-checks.ts), independent of ESLint, so they are tested against plain maps; the rules are thin visitors over them. [`src/rules/turbo-json.ts`](src/rules/turbo-json.ts) reads the parts of a `turbo.json` the rules need and finds the root one, [`src/rules/turbo-workspace.ts`](src/rules/turbo-workspace.ts) lists the packages and their scripts, and [`src/rules/turbo-commands.ts`](src/rules/turbo-commands.ts) reads a script command for a delegation, the tasks it invokes, or a boundaries run.
+  - Rules that read sibling and ancestor files take a `WorkspaceFs` through their factory, and their tests use [`src/rules/memory-fs.ts`](src/rules/memory-fs.ts), an in-memory implementation, rather than fixture trees on disk.
 - [`src/create-config.ts`](src/create-config.ts) is config assembly's single source of truth.
-  - `exadevConfig(options, ...userConfigs)` concatenates, in order: `buildGitignoreConfig`, `recommendedTypeChecked`, `jsdocAndTsdoc`, `jsonCanonicalConfig`, `stylisticCommentsConfig`, `buildReactConfig`, `buildNextjsConfig`, `buildPackageJsonKeyOrderConfig` (each tri-state builder fed its matching option), `buildWorkspaceArchitectureConfig` (only when `workspaceArchitecture` is given; there is no auto-detected default), and any trailing user configs.
+  - `exadevConfig(options, ...userConfigs)` concatenates, in order: `buildGitignoreConfig`, `recommendedTypeChecked`, `jsdocAndTsdoc`, `jsonCanonicalConfig`, `stylisticCommentsConfig`, `buildReactConfig`, `buildNextjsConfig`, `buildPackageJsonKeyOrderConfig` (each tri-state builder fed its matching option), `buildWorkspaceArchitectureConfig` (only when `workspaceArchitecture` is given; there is no auto-detected default), `buildTurboConfig` (only when `turbo` is given, likewise), and any trailing user configs.
   - `defaultConfig` is `exadevConfig()` evaluated once, eagerly, at module load.
 - [`src/stylistic-comments.ts`](src/stylistic-comments.ts) builds `stylisticCommentsConfig`: the hand-picked `@stylistic/eslint-plugin` rules plus this package's own `exadev/prefer-doc-comment`, in two blocks (one scoped to every JS/TS file, one scoped to JSX files only for the three JSX-specific rules). See [Stylistic comment, class-member and JSX rules](#stylistic-comment-class-member-and-jsx-rules).
 - [`src/index.ts`](src/index.ts) is the entry point, still a pure re-export barrel:
   ```ts
   export { defaultConfig as default, exadevConfig } from './create-config';
   export { publicPlugin as plugin } from './plugin';
+  export { turboConfig } from './turbo-config';
   export { workspaceArchitectureConfig } from './workspace-architecture';
   export type { GroupSpec, NamingOptions, RankRule, RankSkipOptions, SliceSpec, WorkspaceArchitectureOptions } from './rules/workspace-options';
   export type { AllowedEdge, ExemptTargetGroup, PackageSelector, PackageSelectorFields, RequiredFiles, RequiredScripts, ScriptContent, ScriptRequirement } from './rules/workspace-constraint-options';
