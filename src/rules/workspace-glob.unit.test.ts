@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  anyPathMatchesGlob,
   expandBraces,
   expandGlob,
   isExcludePattern,
@@ -427,5 +428,92 @@ describe('resolveWorkspacePackageDirs', () => {
       ['/root/core/kv', '/root/ore/thing'],
     );
     expect([...resolveWorkspacePackageDirs(fs, '/root', ['core/*', 'ore/*'])].sort()).toEqual(['core/kv', 'ore/thing']);
+  });
+});
+
+describe('anyPathMatchesGlob', () => {
+  // An entry is a directory exactly when the tree lists its own contents.
+  function treeFs(tree: Record<string, readonly string[]>): WorkspaceFs {
+    return {
+      existsSync: (path) => path in tree,
+      readFileSync: () => {
+        throw new Error('not used in these tests');
+      },
+      readdirSync: (path) => (tree[path] ?? []).map((name) => ({ name, isDirectory: () => `${path}/${name}` in tree })),
+      realpathSync: () => {
+        throw new Error('not used in these tests');
+      },
+    };
+  }
+
+  const fs = treeFs({
+    '/pkg': ['src', 'package.json', '.env', 'node_modules', 'docs'],
+    '/pkg/src': ['errors.ts', 'fake.ts', 'nested', '.hidden'],
+    '/pkg/src/nested': ['a.conformance.ts', 'deep'],
+    '/pkg/src/nested/deep': ['b.conformance.ts'],
+    '/pkg/src/.hidden': ['c.conformance.ts'],
+    '/pkg/node_modules': ['dep.ts'],
+    '/pkg/docs': [],
+  });
+
+  it('matches a literal file path that exists and not one that does not', () => {
+    expect(anyPathMatchesGlob(fs, '/pkg', 'src/errors.ts')).toBe(true);
+    expect(anyPathMatchesGlob(fs, '/pkg', 'src/missing.ts')).toBe(false);
+  });
+
+  it('matches a literal directory and a dot-prefixed literal file', () => {
+    expect(anyPathMatchesGlob(fs, '/pkg', 'docs')).toBe(true);
+    expect(anyPathMatchesGlob(fs, '/pkg', '.env')).toBe(true);
+  });
+
+  it('matches a wildcard in the last segment against files', () => {
+    expect(anyPathMatchesGlob(fs, '/pkg', 'src/*.ts')).toBe(true);
+    expect(anyPathMatchesGlob(fs, '/pkg', 'src/f?ke.ts')).toBe(true);
+    expect(anyPathMatchesGlob(fs, '/pkg', 'src/*.json')).toBe(false);
+  });
+
+  it('matches ** across zero or more directories, at any depth', () => {
+    expect(anyPathMatchesGlob(fs, '/pkg', 'src/**/errors.ts')).toBe(true);
+    expect(anyPathMatchesGlob(fs, '/pkg', 'src/**/*.conformance.ts')).toBe(true);
+    expect(anyPathMatchesGlob(fs, '/pkg', 'src/nested/**/b.conformance.ts')).toBe(true);
+    expect(anyPathMatchesGlob(fs, '/pkg', 'src/**/*.nothing.ts')).toBe(false);
+  });
+
+  it('never descends into node_modules through **, nor matches its entries', () => {
+    expect(anyPathMatchesGlob(fs, '/pkg', '**/dep.ts')).toBe(false);
+    expect(anyPathMatchesGlob(fs, '/pkg', 'node_modules')).toBe(false);
+  });
+
+  it('does not let a wildcard or ** reach a dot-prefixed name, but an explicit dot does', () => {
+    expect(anyPathMatchesGlob(fs, '/pkg', '**/c.conformance.ts')).toBe(false);
+    expect(anyPathMatchesGlob(fs, '/pkg', 'src/*/c.conformance.ts')).toBe(false);
+    expect(anyPathMatchesGlob(fs, '/pkg', 'src/.hidden/c.conformance.ts')).toBe(true);
+    expect(anyPathMatchesGlob(fs, '/pkg', '*')).toBe(true);
+  });
+
+  it('expands braces, matching when any alternative matches', () => {
+    expect(anyPathMatchesGlob(fs, '/pkg', 'src/{errors,nope}.ts')).toBe(true);
+    expect(anyPathMatchesGlob(fs, '/pkg', 'src/{nope,none}.ts')).toBe(false);
+  });
+
+  it('matches a directory glob only through directories, not through a file of that name', () => {
+    expect(anyPathMatchesGlob(fs, '/pkg', 'src/errors.ts/x')).toBe(false);
+    expect(anyPathMatchesGlob(fs, '/pkg', 'src/*/deep/b.conformance.ts')).toBe(true);
+  });
+
+  it('matches nothing in a directory that does not exist', () => {
+    expect(anyPathMatchesGlob(fs, '/missing', 'src/errors.ts')).toBe(false);
+  });
+
+  it('normalises ./ prefixes and repeated slashes', () => {
+    expect(anyPathMatchesGlob(fs, '/pkg', './src//errors.ts')).toBe(true);
+  });
+
+  it('a pattern that normalises to the package directory itself matches', () => {
+    expect(anyPathMatchesGlob(fs, '/pkg', '.')).toBe(true);
+  });
+
+  it('keeps directory globs unchanged: a workspace package glob still finds only directories', () => {
+    expect(expandGlob(fs, '/pkg', 'src/*')).toEqual(['src/nested']);
   });
 });

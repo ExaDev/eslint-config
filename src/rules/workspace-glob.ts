@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { listSubdirectories, type WorkspaceFs } from './workspace-fs';
+import { listEntryNames, listSubdirectories, type WorkspaceFs } from './workspace-fs';
 import { requireChar, splitPathSegments } from './workspace-path';
 
 // Reimplements pnpm-workspace.yaml's own "packages:" glob dialect directly against the real directory tree, rather than via Node's fs.globSync: that API only stabilised in Node 22, below this package's own >=20 engines floor. The current pnpm CLI (verified against the installed 12.4.1 binary: it is a compiled Rust executable, not the older TypeScript CLI, and its strings hold no "fast-glob" at all) does not literally resolve these globs through the fast-glob JS library; what stays true, checked against the same binary's own embedded exclusion string, is the documented DIALECT (https://pnpm.io/pnpm-workspace_yaml) this matcher follows: brace expansion ('{core,lib}/*' is two patterns, not one literal path), a wildcard segment never matching a name starting with "." ("A '*' never matches a name beginning with a dot, so 'packages/*' skips 'packages/.cache'"), and a "./" prefix or "." / ".." segment normalising the same way path.posix.normalize would ("./packages/*" and "packages//*" select the same projects). Every "packages:" glob is a directory glob (it names where a package's own directory lives, never a file), so this matcher only ever walks real subdirectories: '**' matches zero or more whole path segments; every other segment (a bare '*', a '[...]' character class, a literal name, or a partial pattern mixing literal text with '*'/'?'/'[...]' such as 'app-*' or '[a-z]-web') is matched against one real directory name at a time via segmentToRegExp below. node_modules and bower_components are never descended into or matched, mirroring the exact two-entry exclusion list ("**/node_modules/**", "**/bower_components/**") the installed pnpm binary itself embeds: a hoisted or npm-nested node_modules, or a bower_components left over from an older tool, is real content in the tree, never a workspace package.
@@ -76,7 +76,21 @@ function listRealSubdirectories(fs: WorkspaceFs, dir: string): readonly string[]
   return listSubdirectories(fs, dir).filter((name) => name !== 'node_modules' && name !== 'bower_components');
 }
 
-function walkPattern(fs: WorkspaceFs, root: string, segments: readonly string[], matchedSoFar: readonly string[]): string[] {
+// The last pattern segment of a file glob matches entries of any kind, every earlier segment (and every segment of a directory glob) only directories. node_modules and bower_components are excluded at every level, for the same reason as above.
+function listMatchableNames(fs: WorkspaceFs, dir: string, includeFiles: boolean): readonly string[] {
+  if (!includeFiles) return listRealSubdirectories(fs, dir);
+
+  return listEntryNames(fs, dir).filter((name) => name !== 'node_modules' && name !== 'bower_components');
+}
+
+interface WalkState {
+  readonly matchedSoFar: readonly string[];
+  // Whether the last pattern segment also matches files, as anyPathMatchesGlob needs; a workspace package glob only ever matches directories.
+  readonly leafIncludesFiles: boolean;
+}
+
+function walkPattern(fs: WorkspaceFs, root: string, segments: readonly string[], state: WalkState): string[] {
+  const { matchedSoFar, leafIncludesFiles } = state;
   const [segment, ...rest] = segments;
   if (segment === undefined) return [matchedSoFar.join('/')];
 
@@ -84,9 +98,9 @@ function walkPattern(fs: WorkspaceFs, root: string, segments: readonly string[],
 
   if (segment === '**') {
     // Consuming zero segments of '**' tries the rest of the pattern from here; consuming one real directory level and trying '**' again from there covers every deeper match, exactly the recursive-doublestar shape a glob's own "zero or more" semantics require. '**' never itself opens with a literal dot, so a dot-prefixed directory is never a level '**' descends into either, the same rule a single wildcard segment follows below.
-    const results = walkPattern(fs, root, rest, matchedSoFar);
+    const results = walkPattern(fs, root, rest, state);
     for (const child of listRealSubdirectories(fs, currentDir).filter((name) => !name.startsWith('.'))) {
-      results.push(...walkPattern(fs, root, segments, [...matchedSoFar, child]));
+      results.push(...walkPattern(fs, root, segments, { ...state, matchedSoFar: [...matchedSoFar, child] }));
     }
 
     return results;
@@ -94,10 +108,10 @@ function walkPattern(fs: WorkspaceFs, root: string, segments: readonly string[],
 
   const pattern = segmentToRegExp(segment);
   const allowDotMatch = segmentRequestsDotMatch(segment);
-  const candidates = listRealSubdirectories(fs, currentDir).filter((name) => (allowDotMatch || !name.startsWith('.')) && pattern.test(name));
+  const candidates = listMatchableNames(fs, currentDir, leafIncludesFiles && rest.length === 0).filter((name) => (allowDotMatch || !name.startsWith('.')) && pattern.test(name));
   const results: string[] = [];
   for (const candidate of candidates) {
-    results.push(...walkPattern(fs, root, rest, [...matchedSoFar, candidate]));
+    results.push(...walkPattern(fs, root, rest, { ...state, matchedSoFar: [...matchedSoFar, candidate] }));
   }
 
   return results;
@@ -190,12 +204,23 @@ export function expandGlob(fs: WorkspaceFs, root: string, pattern: string): read
   const matches = new Set<string>();
   for (const expandedPattern of expandBraces(pattern)) {
     const segments = normalizeGlobSegments(splitPathSegments(expandedPattern));
-    for (const match of walkPattern(fs, root, segments, [])) {
+    for (const match of walkPattern(fs, root, segments, { matchedSoFar: [], leafIncludesFiles: false })) {
       matches.add(match);
     }
   }
 
   return [...matches];
+}
+
+/**
+ * Whether at least one existing path under `root` matches `pattern`, in the same glob dialect as expandGlob (braces, `*`, `?`, `[...]`, `**`; a wildcard never matches a dot-prefixed name). Unlike a workspace package glob, the last segment matches files as well as directories, so `src/**\/*.conformance.ts` finds a file. A pattern with no glob syntax is a literal path, and matches when that path exists.
+ */
+export function anyPathMatchesGlob(fs: WorkspaceFs, root: string, pattern: string): boolean {
+  return expandBraces(pattern).some((expandedPattern) => {
+    const segments = normalizeGlobSegments(splitPathSegments(expandedPattern));
+
+    return walkPattern(fs, root, segments, { matchedSoFar: [], leafIncludesFiles: true }).length > 0;
+  });
 }
 
 /** Whether `pattern` is an exclude entry in pnpm-workspace.yaml's own glob list: a leading "!", never a trailing one. Exported so this exact asymmetry (as opposed to, say, "ends with '!'") is tested directly, independent of resolveWorkspacePackageDirs' own real-filesystem scenarios below. */

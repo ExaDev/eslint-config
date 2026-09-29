@@ -37,3 +37,12 @@ export function listSubdirectories(fs: WorkspaceFs, dir: string): readonly strin
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name);
 }
+
+/**
+ * Every entry name (file or directory) in `dir`, with the same missing-directory-lists-as-empty stance as listSubdirectories.
+ */
+export function listEntryNames(fs: WorkspaceFs, dir: string): readonly string[] {
+  if (!fs.existsSync(dir)) return [];
+
+  return fs.readdirSync(dir).map((entry) => entry.name);
+}
