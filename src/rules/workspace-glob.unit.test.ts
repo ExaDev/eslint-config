@@ -174,9 +174,9 @@ describe('expandBraces', () => {
     expect(expandBraces('{a,{b,c}}/*')).toEqual(['a/*', 'b/*', 'c/*']);
   });
 
-  it('throws for an unmatched "{", naming the "packages" option as the escape hatch', () => {
+  it('throws for an unmatched "{", naming the offending pattern', () => {
     expect(() => expandBraces('{core,lib/*')).toThrow(/unmatched "\{"/);
-    expect(() => expandBraces('{core,lib/*')).toThrow(/"packages" rule option/);
+    expect(() => expandBraces('{core,lib/*')).toThrow(/"\{core,lib\/\*"/);
   });
 });
 
