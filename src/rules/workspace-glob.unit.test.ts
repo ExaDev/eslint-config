@@ -432,14 +432,25 @@ describe('resolveWorkspacePackageDirs', () => {
 });
 
 describe('anyPathMatchesGlob', () => {
-  // An entry is a directory exactly when the tree lists its own contents.
+  // An entry is a directory exactly when the tree lists its own contents. Like the real filesystem, a file exists but cannot be listed: reading one throws.
   function treeFs(tree: Record<string, readonly string[]>): WorkspaceFs {
+    const isFile = (path: string): boolean => {
+      const slash = path.lastIndexOf('/');
+
+      return !(path in tree) && (tree[path.slice(0, slash)] ?? []).includes(path.slice(slash + 1));
+    };
+
     return {
-      existsSync: (path) => path in tree,
+      existsSync: (path) => path in tree || isFile(path),
       readFileSync: () => {
         throw new Error('not used in these tests');
       },
-      readdirSync: (path) => (tree[path] ?? []).map((name) => ({ name, isDirectory: () => `${path}/${name}` in tree })),
+      readdirSync: (path) => {
+        const entries = tree[path];
+        if (entries === undefined) throw new Error(`ENOTDIR or ENOENT: ${path}`);
+
+        return entries.map((name) => ({ name, isDirectory: () => `${path}/${name}` in tree }));
+      },
       realpathSync: () => {
         throw new Error('not used in these tests');
       },
@@ -447,12 +458,13 @@ describe('anyPathMatchesGlob', () => {
   }
 
   const fs = treeFs({
-    '/pkg': ['src', 'package.json', '.env', 'node_modules', 'docs'],
+    '/pkg': ['src', 'package.json', '.env', 'node_modules', 'bower_components', 'docs'],
     '/pkg/src': ['errors.ts', 'fake.ts', 'nested', '.hidden'],
     '/pkg/src/nested': ['a.conformance.ts', 'deep'],
     '/pkg/src/nested/deep': ['b.conformance.ts'],
     '/pkg/src/.hidden': ['c.conformance.ts'],
     '/pkg/node_modules': ['dep.ts'],
+    '/pkg/bower_components': ['dep.ts'],
     '/pkg/docs': [],
   });
 
@@ -482,6 +494,8 @@ describe('anyPathMatchesGlob', () => {
   it('never descends into node_modules through **, nor matches its entries', () => {
     expect(anyPathMatchesGlob(fs, '/pkg', '**/dep.ts')).toBe(false);
     expect(anyPathMatchesGlob(fs, '/pkg', 'node_modules')).toBe(false);
+    expect(anyPathMatchesGlob(fs, '/pkg', 'bower_components')).toBe(false);
+    expect(anyPathMatchesGlob(fs, '/pkg', 'bower_components/dep.ts')).toBe(false);
   });
 
   it('does not let a wildcard or ** reach a dot-prefixed name, but an explicit dot does', () => {

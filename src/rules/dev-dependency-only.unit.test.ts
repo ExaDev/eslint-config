@@ -74,9 +74,9 @@ ruleTester.run('dev-dependency-only', rule, {
     { code: manifest({ dependencies: { 'shared-testkit': '*' } }), filename: filenameOf('feature'), options: [{ groups: GROUPS }] },
     // A manifest that is not a graph member is skipped.
     { code: manifest({ dependencies: { 'shared-testkit': '*' } }), filename: '/fixture/dist/feature/package.json', options: [{ groups: GROUPS, devOnly: DEV_ONLY }] },
-    // A nested object is not the manifest.
+    // A nested object is not the manifest, even when it names the same package.
     {
-      code: JSON.stringify({ name: 'feature', nested: { dependencies: { 'shared-testkit': '*' } } }),
+      code: JSON.stringify({ name: 'feature', nested: { name: 'feature', dependencies: { 'shared-testkit': '*' } } }),
       filename: filenameOf('feature'),
       options: [{ groups: GROUPS, devOnly: DEV_ONLY }],
     },

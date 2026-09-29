@@ -85,10 +85,10 @@ ruleTester.run('required-scripts', rule, {
     { code: manifest('orders'), filename: filenameOf('orders'), options: [{ groups: GROUPS }] },
     // Not a graph member.
     { code: manifest('orders'), filename: '/fixture/dist/orders/package.json', options: [{ groups: GROUPS, requiredScripts: TYPECHECK_AND_TEST }] },
-    // A nested object is not the manifest.
+    // A nested object is not the manifest, even when it names the same package: it would lack the scripts the real top level has.
     {
-      code: JSON.stringify({ name: 'kv-contract', nested: { name: 'orders', scripts: {} } }),
-      filename: filenameOf('kv-contract'),
+      code: JSON.stringify({ name: 'orders', scripts: { typecheck: 'tsc', test: 'vitest' }, nested: { name: 'orders' } }),
+      filename: filenameOf('orders'),
       options: [{ groups: GROUPS, requiredScripts: TYPECHECK_AND_TEST }],
     },
     // Content constraints satisfied: exact command, required flag in either spelling, forbidden flag absent.

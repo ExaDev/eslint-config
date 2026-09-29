@@ -36,12 +36,12 @@ describe('readAllow', () => {
   });
 
   it('rejects an empty or non-string from or to', () => {
-    expect(() => readAllow([{ ...edge, from: '' }])).toThrow('"from" must be a non-empty string.');
-    expect(() => readAllow([{ ...edge, to: 1 }])).toThrow('"to" must be a non-empty string.');
+    expect(() => readAllow([{ ...edge, from: '' }])).toThrow('@exadev/eslint-config: "allow" "from" must be a non-empty string.');
+    expect(() => readAllow([{ ...edge, to: 1 }])).toThrow('@exadev/eslint-config: "allow" "to" must be a non-empty string.');
   });
 
   it('rejects the same edge listed twice but allows the same source or target in different pairs', () => {
-    expect(() => readAllow([edge, { ...edge, reason: 'again' }])).toThrow('lists the edge from "@s/a" to "@s/b" more than once.');
+    expect(() => readAllow([edge, { ...edge, reason: 'again' }])).toThrow('@exadev/eslint-config: "allow" lists the edge from "@s/a" to "@s/b" more than once.');
     const distinct = [edge, { ...edge, from: '@s/z' }, { ...edge, to: '@s/z' }];
     expect(readAllow(distinct)).toEqual(distinct);
   });
@@ -63,13 +63,13 @@ describe('readExemptTargetGroups', () => {
   });
 
   it('rejects a group that is not declared, or an empty group name', () => {
-    expect(() => readExemptTargetGroups([{ group: 'nope', fields: ['devDependencies'] }], CONTEXT)).toThrow('names a group not declared in "groups" ("nope").');
-    expect(() => readExemptTargetGroups([{ group: '', fields: ['devDependencies'] }], CONTEXT)).toThrow('"group" must be a non-empty string.');
+    expect(() => readExemptTargetGroups([{ group: 'nope', fields: ['devDependencies'] }], CONTEXT)).toThrow('@exadev/eslint-config: "exemptTargetGroups" names a group not declared in "groups" ("nope").');
+    expect(() => readExemptTargetGroups([{ group: '', fields: ['devDependencies'] }], CONTEXT)).toThrow('@exadev/eslint-config: "exemptTargetGroups" "group" must be a non-empty string.');
   });
 
   it('rejects a group listed twice', () => {
     const entry = { group: 'test', fields: ['devDependencies'] };
-    expect(() => readExemptTargetGroups([entry, entry], CONTEXT)).toThrow('lists group "test" more than once.');
+    expect(() => readExemptTargetGroups([entry, entry], CONTEXT)).toThrow('@exadev/eslint-config: "exemptTargetGroups" lists group "test" more than once.');
   });
 
   it('rejects an empty fields list and a non-string field', () => {
@@ -127,6 +127,15 @@ describe('selectors, through readDevOnly', () => {
     expect(() => readDevOnly([{ namePattern: '' }], CONTEXT)).toThrow('"namePattern" must be a non-empty string.');
   });
 
+  it('chains the RegExp SyntaxError as the cause of the error it throws', () => {
+    expect.assertions(1);
+    try {
+      readDevOnly(['('], CONTEXT);
+    } catch (error) {
+      expect(error).toHaveProperty('cause', expect.any(SyntaxError));
+    }
+  });
+
   it('compiles patterns with the u flag, as nameRanks does', () => {
     expect(() => readDevOnly(['\\-'], CONTEXT)).toThrow('not a valid regular expression');
   });
@@ -157,8 +166,8 @@ describe('readRequiredFiles', () => {
   });
 
   it('rejects an empty, absolute or escaping path but allows dots inside a name', () => {
-    expect(() => readRequiredFiles([{ packages: 'x', files: [''] }], CONTEXT)).toThrow('"files" entries must be a non-empty string.');
-    expect(() => readRequiredFiles([{ packages: 'x', files: ['/etc/passwd'] }], CONTEXT)).toThrow('path "/etc/passwd" must be relative to the package directory and stay inside it.');
+    expect(() => readRequiredFiles([{ packages: 'x', files: [''] }], CONTEXT)).toThrow('@exadev/eslint-config: "requiredFiles" "files" entries must be a non-empty string.');
+    expect(() => readRequiredFiles([{ packages: 'x', files: ['/etc/passwd'] }], CONTEXT)).toThrow('@exadev/eslint-config: "requiredFiles" path "/etc/passwd" must be relative to the package directory and stay inside it.');
     expect(() => readRequiredFiles([{ packages: 'x', files: ['a/../../b'] }], CONTEXT)).toThrow('stay inside it');
     expect(readRequiredFiles([{ packages: 'x', files: ['..a/b..c', '.env'] }], CONTEXT)[0]?.files).toEqual(['..a/b..c', '.env']);
   });
@@ -200,8 +209,8 @@ describe('readRequiredScripts', () => {
   });
 
   it('rejects an empty script name, string or object', () => {
-    expect(() => readRequiredScripts([{ match: 'x', scripts: [''] }], CONTEXT)).toThrow('a script name must be a non-empty string.');
-    expect(() => readRequiredScripts([{ match: 'x', scripts: [{ name: '' }] }], CONTEXT)).toThrow('"name" must be a non-empty string.');
+    expect(() => readRequiredScripts([{ match: 'x', scripts: [''] }], CONTEXT)).toThrow('@exadev/eslint-config: "requiredScripts" a script name must be a non-empty string.');
+    expect(() => readRequiredScripts([{ match: 'x', scripts: [{ name: '' }] }], CONTEXT)).toThrow('@exadev/eslint-config: "requiredScripts" "name" must be a non-empty string.');
   });
 
   it('rejects a script requirement that is neither a string nor an object with only the known keys', () => {
@@ -210,14 +219,14 @@ describe('readRequiredScripts', () => {
   });
 
   it('rejects a non-string equals', () => {
-    expect(() => readRequiredScripts([{ match: 'x', scripts: [{ name: 'a', equals: 1 }] }], CONTEXT)).toThrow('"equals" must be a string.');
+    expect(() => readRequiredScripts([{ match: 'x', scripts: [{ name: 'a', equals: 1 }] }], CONTEXT)).toThrow('@exadev/eslint-config: "requiredScripts" "equals" must be a string.');
   });
 
   it('rejects empty, non-array or token-less includes and excludes', () => {
     expect(() => readRequiredScripts([{ match: 'x', scripts: [{ name: 'a', includes: [] }] }], CONTEXT)).toThrow('"includes" must not be empty.');
     expect(() => readRequiredScripts([{ match: 'x', scripts: [{ name: 'a', excludes: '--x' }] }], CONTEXT)).toThrow('"requiredScripts" must be an array.');
     expect(() => readRequiredScripts([{ match: 'x', scripts: [{ name: 'a', excludes: [''] }] }], CONTEXT)).toThrow('"excludes" must be a non-empty string.');
-    expect(() => readRequiredScripts([{ match: 'x', scripts: [{ name: 'a', includes: ['  '] }] }], CONTEXT)).toThrow('"includes" entry "  " contains no tokens.');
+    expect(() => readRequiredScripts([{ match: 'x', scripts: [{ name: 'a', includes: ['  '] }] }], CONTEXT)).toThrow('@exadev/eslint-config: "requiredScripts" "includes" entry "  " contains no tokens.');
   });
 
   it('validates the selector', () => {

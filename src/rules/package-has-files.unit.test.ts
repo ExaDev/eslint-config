@@ -70,11 +70,11 @@ ruleTester.run('package-has-files', rule, {
     { code: JSON.stringify({ name: 'order-contract' }), filename: filenameOf('order-contract'), options: [{ groups: GROUPS }] },
     // A manifest that is not a graph member (a stale copy elsewhere) is skipped.
     { code: JSON.stringify({ name: 'order-contract' }), filename: '/fixture/dist/order-contract/package.json', options: [{ groups: GROUPS, requiredFiles: CONTRACT_FILES }] },
-    // A nested object that looks like a manifest is not the manifest.
+    // A nested object is not the manifest, even when its name resolves to the same package: the real top level declares no name, which the name pattern cannot match, while the nested one declares the package's graph key and would.
     {
-      code: JSON.stringify({ name: 'plain', nested: { name: 'order-contract' } }),
-      filename: filenameOf('plain'),
-      options: [{ groups: GROUPS, requiredFiles: CONTRACT_FILES }],
+      code: JSON.stringify({ nested: { name: 'packages/nameless' } }),
+      filename: filenameOf('nameless'),
+      options: [{ groups: GROUPS, requiredFiles: [{ packages: '.*', files: ['README.md'] }] }],
     },
     // A name pattern never matches a package that declares no name.
     { code: JSON.stringify({ version: '1.0.0' }), filename: filenameOf('nameless'), options: [{ groups: GROUPS, requiredFiles: [{ packages: '.*', files: ['README.md'] }] }] },

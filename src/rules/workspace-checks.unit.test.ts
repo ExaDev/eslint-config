@@ -316,6 +316,14 @@ describe('exemptDependencyNames', () => {
     expect(exemptDependencyNames([{ name: 'zod', field: 'devDependencies' }], graph, exemptions).size).toBe(0);
   });
 
+  it('judges a name only by its own occurrences, not by other dependencies declared under other fields', () => {
+    const declared = [
+      { name: 'kv-contract', field: 'dependencies' },
+      { name: 'shared-testkit', field: 'devDependencies' },
+    ];
+    expect([...exemptDependencyNames(declared, graph, exemptions)]).toEqual(['shared-testkit']);
+  });
+
   it('picks the exemption of the target\'s own group among several', () => {
     const several = [
       { group: 'core', fields: ['dependencies'] },

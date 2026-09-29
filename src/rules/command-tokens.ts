@@ -8,10 +8,8 @@ function unquote(token: string): string {
  * Splits a shell command line into comparable tokens: whitespace-separated, one layer of surrounding quotes removed, and a `--flag=value` option split into `--flag` and `value` so it compares equal to `--flag value`. Shell operators are not interpreted, they are simply tokens, so a token run is found wherever it sits in a chained command.
  */
 export function tokenizeCommand(command: string): readonly string[] {
-  return command
-    .split(/\s+/u)
-    .filter((token) => token.length > 0)
-    .map(unquote)
+  return [...command.matchAll(/\S+/gu)]
+    .map(([token]) => unquote(token))
     .flatMap((token) => {
       const equalsIndex = token.indexOf('=');
       if (!token.startsWith('-') || equalsIndex === -1) return [token];
