@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOUNDARIES_COMMAND, checkBoundariesScripts, checkConvention, checkTaskScripts, fixFlagsIn, isExemptTask, outputProblem, tagProblem } from './turbo-checks';
+import { BOUNDARIES_COMMAND, checkBoundariesScripts, checkConvention, checkTaskScripts, fixFlagsIn, implementingScripts, isExemptTask, outputProblem, tagProblem } from './turbo-checks';
 import type { TurboJson, TurboTask } from './turbo-json';
 import type { TurboPackage } from './turbo-workspace';
 
@@ -97,6 +97,33 @@ describe('checkConvention', () => {
 
   it('skips a shadowed task that is exempt', () => {
     expect(run({ lint: 'eslint .' }, false, { exempt: new Set(['_lint']) })).toEqual([]);
+  });
+});
+
+describe('implementingScripts', () => {
+  const root = pkg('root', { lint: 'a', _lint: 'b' });
+  const web = pkg('web', { _lint: 'c' }, 'packages/web');
+  const api = pkg('api', { _test: 'd' }, 'packages/api');
+
+  it('is the root package for a // key when it has the script, and nothing otherwise', () => {
+    expect(implementingScripts('//#lint', { root, members: [web] })).toEqual([{ pkg: root, command: 'a' }]);
+    expect(implementingScripts('//#missing', { root, members: [web] })).toEqual([]);
+  });
+
+  it('is the named member for a package# key when it has the script', () => {
+    expect(implementingScripts('web#_lint', { root, members: [web, api] })).toEqual([{ pkg: web, command: 'c' }]);
+    expect(implementingScripts('api#_lint', { root, members: [web, api] })).toEqual([]);
+    expect(implementingScripts('other#_lint', { root, members: [web, api] })).toEqual([]);
+  });
+
+  it('is every member with the script for a bare key, and the root package only when there are no members', () => {
+    const ui = pkg('ui', { _lint: 'e' }, 'packages/ui');
+    expect(implementingScripts('_lint', { root, members: [web, api, ui] })).toEqual([
+      { pkg: web, command: 'c' },
+      { pkg: ui, command: 'e' },
+    ]);
+    expect(implementingScripts('_lint', { root, members: [api] })).toEqual([]);
+    expect(implementingScripts('_lint', { root, members: [] })).toEqual([{ pkg: root, command: 'b' }]);
   });
 });
 

@@ -70,18 +70,30 @@ function referencedKey(entry: string): string {
   return entry.startsWith('^') ? entry.slice(1) : entry;
 }
 
-function isImplemented(key: string, packages: Readonly<{ root: TurboPackage; members: readonly TurboPackage[] }>): boolean {
-  if (key.startsWith(ROOT_TASK_PREFIX)) return packages.root.scripts.has(key.slice(ROOT_TASK_PREFIX.length));
+/** A package that implements a task, with the command of the script that does. */
+export interface TaskImplementation {
+  readonly pkg: TurboPackage;
+  readonly command: string;
+}
+
+function withScript(candidates: readonly TurboPackage[], script: string): readonly TaskImplementation[] {
+  return candidates.flatMap((pkg) => {
+    const command = pkg.scripts.get(script);
+
+    return command === undefined ? [] : [{ pkg, command }];
+  });
+}
+
+/**
+ * The packages whose script implements the task `key`, each with that script's command: the root package for a `//#` key, the member of that name for a `package#` key, and otherwise every workspace member with a script of that name, or the root package when the repository has no members (turbo runs the root package for a bare task only then).
+ */
+export function implementingScripts(key: string, packages: Readonly<{ root: TurboPackage; members: readonly TurboPackage[] }>): readonly TaskImplementation[] {
+  const { root, members } = packages;
+  if (key.startsWith(ROOT_TASK_PREFIX)) return withScript([root], key.slice(ROOT_TASK_PREFIX.length));
   const separator = key.lastIndexOf('#');
-  if (separator !== -1) {
-    const name = key.slice(separator + 1);
+  if (separator !== -1) return withScript(members.filter((member) => member.name === key.slice(0, separator)), key.slice(separator + 1));
 
-    return packages.members.some((member) => member.name === key.slice(0, separator) && member.scripts.has(name));
-  }
-  // Turbo runs a repository's root package for a task only when the repository has no other package.
-  const runners = packages.members.length === 0 ? [packages.root] : packages.members;
-
-  return runners.some((runner) => runner.scripts.has(key));
+  return withScript(members.length === 0 ? [root] : members, key);
 }
 
 // Whether something makes turbo run the task. `turbo run name` runs `//#name` as well as any `name` task, and inside a `//#` task a bare `dependsOn` or `with` entry `name` resolves to `//#name` (both checked against turbo 2.10.8 with `--dry=json`), so a `//#` task is also reached through its bare name from a root script or from another `//#` task.
@@ -108,7 +120,7 @@ export function checkTaskScripts(input: Readonly<{ tasks: ReadonlyMap<string, Tu
   for (const [key, task] of tasks) {
     if (isExemptTask(key, exempt)) continue;
     const hasDependencies = task.dependsOn.length > 0;
-    if (!hasDependencies && !isImplemented(key, { root, members })) problems.push({ kind: 'unimplementedTask', task: key });
+    if (!hasDependencies && implementingScripts(key, { root, members }).length === 0) problems.push({ kind: 'unimplementedTask', task: key });
     if (!key.startsWith(ROOT_TASK_PREFIX) && !hasDependencies) continue;
     if (!isReachable(key, { tasks, invoked })) problems.push({ kind: 'unreachableTask', task: key });
   }

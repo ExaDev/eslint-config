@@ -46,3 +46,15 @@ export function listEntryNames(fs: WorkspaceFs, dir: string): readonly string[] 
 
   return fs.readdirSync(dir).map((entry) => entry.name);
 }
+
+/**
+ * The names of the files directly inside `dir` (directories left out), with the same missing-directory-lists-as-empty stance as listSubdirectories.
+ */
+export function listFileNames(fs: WorkspaceFs, dir: string): readonly string[] {
+  if (!fs.existsSync(dir)) return [];
+
+  return fs
+    .readdirSync(dir)
+    .filter((entry) => !entry.isDirectory())
+    .map((entry) => entry.name);
+}
