@@ -6,7 +6,7 @@ on:
   pull_request:
   workflow_dispatch:
 
-# Cancels a superseded run when a branch or PR gets pushed to again, so a stale commit's mutation job doesn't keep burning CI minutes after a newer commit has already replaced it. Scoped away from main: cancel-in-progress only fires off main so a merge landing mid-release never kills the release/publish jobs, which run solely on a push to main.
+# Cancels a superseded run when a branch or PR gets pushed to again, so a stale commit's jobs don't keep burning CI minutes after a newer commit has already replaced it. Scoped away from main: cancel-in-progress only fires off main so a merge landing mid-release never kills the release/publish jobs, which run solely on a push to main.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
@@ -92,6 +92,8 @@ jobs:
 
   mutation:
     name: Mutation
+    # Manual only: run it from the Actions tab (workflow_dispatch) when a change warrants a full mutation pass. It is not a required check and does not gate a release.
+    if: github.event_name == 'workflow_dispatch'
     # Deliberately not the resolved runner: a cold run mutates thousands of mutants against over a thousand tests, which on the fleet's CPU-limited pods ran the full 60 minutes without finishing, while a 2-vCPU hosted runner needs well over half an hour for the same work. Blacksmith's 4-vCPU pool is billed outside GitHub's spending limit, so it does not depend on the fleet heartbeat. Stryker sizes its worker pool from the CPU count, which is accurate on a VM and not inside a throttled pod.
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 60
@@ -122,7 +124,7 @@ jobs:
 
   required-checks:
     name: Required Checks
-    needs: [determine-runner, commitlint, lint, typecheck, mutation]
+    needs: [determine-runner, commitlint, lint, typecheck]
     # Always runs, even if a dependency failed, so it can report that failure itself rather than being skipped -- a required check that's silently absent blocks a PR indefinitely instead of failing it visibly.
     if: always()
     runs-on: ${{ fromJson(needs.determine-runner.outputs.selected-runner) }}
@@ -138,7 +140,7 @@ jobs:
 
   release:
     name: Release
-    needs: [commitlint, lint, typecheck, mutation]
+    needs: [commitlint, lint, typecheck]
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     # Stays on a GitHub-hosted runner: npm trusted publishing (OIDC) is only supported from GitHub-hosted runners, so this job cannot move to the fleet or Blacksmith.
     runs-on: ubuntu-latest
