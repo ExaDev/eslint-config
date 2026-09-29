@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkDependencies, dependencyPathExists, expectedPackageName, last } from './workspace-checks';
+import { applyAllowList, checkDependencies, dependencyPathExists, exemptDependencyNames, expectedPackageName, last, matchesSelector, type WorkspaceViolation } from './workspace-checks';
 import type { WorkspacePackageInfo } from './workspace-graph';
 import type { GroupSpec } from './workspace-options';
 
@@ -263,5 +263,142 @@ describe('expectedPackageName', () => {
   it("'drop-group' falls back to the group's own name at the root of a group nested under its own path, not the path's own last segment", () => {
     const nestedRootGroup: GroupSpec = { name: 'web', path: 'apps/web' };
     expect(expectedPackageName('apps/web', nestedRootGroup, { scope: '@x' })).toBe('@x/web');
+  });
+});
+
+describe('checkDependencies with exemptTargets', () => {
+  const low = pkg({ name: 'low', rank: 0 });
+  const testkit = pkg({ name: 'shared-testkit', rank: 5, group: 'test' });
+  const graph = new Map([low, testkit].map((entry) => [entry.name, entry]));
+
+  it('skips every check for an exempt dependency but still checks the others', () => {
+    expect(checkDependencies('low', low, ['shared-testkit'], { graph })).toHaveLength(1);
+    expect(checkDependencies('low', low, ['shared-testkit'], { graph, exemptTargets: new Set(['shared-testkit']) })).toEqual([]);
+    expect(checkDependencies('low', low, ['shared-testkit'], { graph, exemptTargets: new Set(['other']) })).toHaveLength(1);
+  });
+});
+
+describe('exemptDependencyNames', () => {
+  const graph = new Map([
+    pkg({ name: 'shared-testkit', group: 'test' }),
+    pkg({ name: 'kv-contract', group: 'core' }),
+  ].map((entry) => [entry.name, entry]));
+  const exemptions = [{ group: 'test', fields: ['devDependencies'] }];
+
+  it('exempts a package in an exempt group declared only under an exempt field', () => {
+    expect([...exemptDependencyNames([{ name: 'shared-testkit', field: 'devDependencies' }], graph, exemptions)]).toEqual(['shared-testkit']);
+  });
+
+  it('does not exempt it when declared under a field the exemption does not list', () => {
+    expect(exemptDependencyNames([{ name: 'shared-testkit', field: 'dependencies' }], graph, exemptions).size).toBe(0);
+  });
+
+  it('does not exempt it when any occurrence is under another field', () => {
+    const declared = [
+      { name: 'shared-testkit', field: 'devDependencies' },
+      { name: 'shared-testkit', field: 'dependencies' },
+    ];
+    expect(exemptDependencyNames(declared, graph, exemptions).size).toBe(0);
+    expect(exemptDependencyNames([...declared].reverse(), graph, exemptions).size).toBe(0);
+  });
+
+  it('exempts it when every occurrence is under an exempt field', () => {
+    const declared = [
+      { name: 'shared-testkit', field: 'devDependencies' },
+      { name: 'shared-testkit', field: 'peerDependencies' },
+    ];
+    const both = [{ group: 'test', fields: ['devDependencies', 'peerDependencies'] }];
+    expect(exemptDependencyNames(declared, graph, both).has('shared-testkit')).toBe(true);
+  });
+
+  it('does not exempt a package outside every exempt group, or a name that is not a workspace member', () => {
+    expect(exemptDependencyNames([{ name: 'kv-contract', field: 'devDependencies' }], graph, exemptions).size).toBe(0);
+    expect(exemptDependencyNames([{ name: 'zod', field: 'devDependencies' }], graph, exemptions).size).toBe(0);
+  });
+
+  it('picks the exemption of the target\'s own group among several', () => {
+    const several = [
+      { group: 'core', fields: ['dependencies'] },
+      { group: 'test', fields: ['devDependencies'] },
+    ];
+    expect([...exemptDependencyNames([{ name: 'shared-testkit', field: 'devDependencies' }], graph, several)]).toEqual(['shared-testkit']);
+  });
+
+  it('exempts nothing when no exemptions are configured', () => {
+    expect(exemptDependencyNames([{ name: 'shared-testkit', field: 'devDependencies' }], graph, undefined).size).toBe(0);
+    expect(exemptDependencyNames([{ name: 'shared-testkit', field: 'devDependencies' }], graph, []).size).toBe(0);
+  });
+});
+
+describe('applyAllowList', () => {
+  const violation = (dependencyName: string): WorkspaceViolation => ({ dependencyName, messageId: 'uphillRank', data: {} });
+  const entry = (from: string, to: string) => ({ from, to, reason: 'documented' });
+
+  it('drops a violation on an allowed edge and reports nothing stale', () => {
+    const result = applyAllowList('a', { violations: [violation('b'), violation('c')], dependencyNames: ['b', 'c'] }, [entry('a', 'b')]);
+    expect(result.violations).toEqual([violation('c')]);
+    expect(result.stale).toEqual([]);
+  });
+
+  it('keeps every violation and reports nothing when the list is empty', () => {
+    const result = applyAllowList('a', { violations: [violation('b')], dependencyNames: ['b'] }, []);
+    expect(result).toEqual({ violations: [violation('b')], stale: [] });
+  });
+
+  it('reports an entry whose dependency is no longer declared as undeclared', () => {
+    const result = applyAllowList('a', { violations: [], dependencyNames: ['x'] }, [entry('a', 'b')]);
+    expect(result.stale).toEqual([{ entry: entry('a', 'b'), kind: 'undeclared' }]);
+  });
+
+  it('reports an entry on a declared dependency that violates nothing as unneeded', () => {
+    const result = applyAllowList('a', { violations: [violation('other')], dependencyNames: ['b', 'other'] }, [entry('a', 'b')]);
+    expect(result.stale).toEqual([{ entry: entry('a', 'b'), kind: 'unneeded' }]);
+  });
+
+  it('only considers entries whose source is the package being checked', () => {
+    const result = applyAllowList('a', { violations: [violation('b')], dependencyNames: ['b'] }, [entry('z', 'b'), entry('z', 'gone')]);
+    expect(result.violations).toEqual([violation('b')]);
+    expect(result.stale).toEqual([]);
+  });
+
+  it('reports each stale entry, in declaration order, alongside used ones', () => {
+    const result = applyAllowList(
+      'a',
+      { violations: [violation('b')], dependencyNames: ['b', 'c'] },
+      [entry('a', 'gone'), entry('a', 'b'), entry('a', 'c')],
+    );
+    expect(result.stale.map((item) => [item.entry.to, item.kind])).toEqual([
+      ['gone', 'undeclared'],
+      ['c', 'unneeded'],
+    ]);
+  });
+});
+
+describe('matchesSelector', () => {
+  const target = { group: 'core', name: '@s/kv-contract' };
+
+  it('treats a string as a name pattern tested against the declared name', () => {
+    expect(matchesSelector('-contract$', target)).toBe(true);
+    expect(matchesSelector('^kv', target)).toBe(false);
+  });
+
+  it('matches an object selector on group, on name pattern, or on both together', () => {
+    expect(matchesSelector({ group: 'core' }, target)).toBe(true);
+    expect(matchesSelector({ group: 'test' }, target)).toBe(false);
+    expect(matchesSelector({ namePattern: 'kv-' }, target)).toBe(true);
+    expect(matchesSelector({ namePattern: 'zz' }, target)).toBe(false);
+    expect(matchesSelector({ group: 'core', namePattern: 'kv-' }, target)).toBe(true);
+    expect(matchesSelector({ group: 'core', namePattern: 'zz' }, target)).toBe(false);
+    expect(matchesSelector({ group: 'test', namePattern: 'kv-' }, target)).toBe(false);
+  });
+
+  it('never matches a name pattern against a package that declares no name', () => {
+    expect(matchesSelector('.*', { group: 'core', name: undefined })).toBe(false);
+    expect(matchesSelector({ namePattern: '.*' }, { group: 'core', name: undefined })).toBe(false);
+    expect(matchesSelector({ group: 'core' }, { group: 'core', name: undefined })).toBe(true);
+  });
+
+  it('compiles the pattern with the u flag', () => {
+    expect(() => matchesSelector('\\-', target)).toThrow();
   });
 });

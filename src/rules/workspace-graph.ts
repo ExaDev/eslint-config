@@ -163,6 +163,15 @@ export function manifestRelativeDir(fs: WorkspaceFs, root: string, filename: str
   return relative(realRoot, realManifestDir).split(sep).join('/');
 }
 
+/**
+ * The graph entry the manifest being linted corresponds to, or undefined when it corresponds to none. `relativeDir` is the manifest's own workspace-root-relative directory (manifestRelativeDir) and `declaredName` its top-level "name" when it has one: a package that declares no name is keyed by its relativeDir, exactly as collectCandidates keys it. The entry must also sit at the same relativeDir the manifest does: a stale or duplicated copy of a real package's package.json elsewhere in the tree (a build output directory that copies its source manifest verbatim, say) can share its declared name, and checking it under the real package's entry would report facts the real package never declared, or report the same real violation once per copy.
+ */
+export function findLintedPackage(graph: WorkspaceGraph, relativeDir: string, declaredName: string | undefined): WorkspacePackageInfo | undefined {
+  const info = graph.packagesByName.get(declaredName ?? relativeDir);
+
+  return info?.relativeDir === relativeDir ? info : undefined;
+}
+
 function readPackagesFromYaml(fs: WorkspaceFs, root: string): readonly string[] {
   const yamlPath = join(root, 'pnpm-workspace.yaml');
   if (!fs.existsSync(yamlPath)) {

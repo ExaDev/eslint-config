@@ -47,6 +47,15 @@ describe('collectTopLevelDependencies', () => {
     expect(result.map((entry) => entry.name)).toEqual(['a', 'b']);
   });
 
+  it('records the field each entry was declared under', () => {
+    const json = '{"dependencies": {"a": "1"}, "devDependencies": {"b": "2"}, "a": 1}';
+    const result = collectTopLevelDependencies(rootObjectOf(json), ['dependencies', 'devDependencies']);
+    expect(result.map((entry) => [entry.name, entry.field])).toEqual([
+      ['a', 'dependencies'],
+      ['b', 'devDependencies'],
+    ]);
+  });
+
   it('ignores a configured field that is not present at all', () => {
     const result = collectTopLevelDependencies(rootObjectOf('{"dependencies": {"a": "1"}}'), ['dependencies', 'peerDependencies']);
     expect(result.map((entry) => entry.name)).toEqual(['a']);

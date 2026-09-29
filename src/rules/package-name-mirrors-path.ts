@@ -1,6 +1,6 @@
 import type { JSONRuleDefinition, JSONRuleVisitor } from '@eslint/json';
 import type { ObjectNode } from '@humanwhocodes/momoa';
-import { loadWorkspaceGraph, manifestRelativeDir, type WorkspaceRuleDeps } from './workspace-graph';
+import { findLintedPackage, loadWorkspaceGraph, manifestRelativeDir, type WorkspaceRuleDeps } from './workspace-graph';
 import { readWorkspaceArchitectureOptions, workspaceArchitectureOptionsSchema, type GroupSpec, type WorkspaceArchitectureOptions } from './workspace-options';
 import { expectedPackageName } from './workspace-checks';
 import { readDeclaredName } from './workspace-json-helpers';
@@ -62,10 +62,8 @@ export function createPackageNameMirrorsPathRule(deps: WorkspaceRuleDeps = {}): 
           // pnpm allows a workspace package to declare no "name" at all (readDeclaredName returns undefined for one); buildWorkspaceGraph keys such a package by its own relativeDir for exactly this reason (see workspace-graph.ts), so it is looked up the same way here rather than being silently skipped: a package with no name plainly does not mirror its path either.
           const relativeDir = manifestRelativeDir(fs, graph.root, context.filename);
           const declared = readDeclaredName(node);
-          const self = graph.packagesByName.get(declared?.name ?? relativeDir);
+          const self = findLintedPackage(graph, relativeDir, declared?.name);
           if (self === undefined) return;
-          // The manifest currently being linted must be the SAME file buildWorkspaceGraph resolved this graph entry from, not a stale or duplicated copy declaring the identical name (or sharing the identical relativeDir key) elsewhere in the tree (a build output directory that copies its source package.json verbatim, say): checking a copy under the real package's own entry would check ITS path against the real package's expected name.
-          if (self.relativeDir !== relativeDir) return;
           const group = findGroupSpec(options.groups, self.group);
 
           const expected = expectedPackageName(self.relativeDir, group, naming);

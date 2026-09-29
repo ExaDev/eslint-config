@@ -6,6 +6,7 @@ import {
   findOwningGroup,
   getWorkspaceGraph,
   loadWorkspaceGraph,
+  findLintedPackage,
   manifestRelativeDir,
   readDeclaredManifest,
   resetWorkspaceGraphCache,
@@ -728,5 +729,35 @@ describe('loadWorkspaceGraph', () => {
     const graph = loadWorkspaceGraph(filename, { groups });
     expect(graph.root).toBe(FIXTURE_ROOT);
     expect(graph.packagesByName.has('kv-contract')).toBe(true);
+  });
+});
+
+describe('findLintedPackage', () => {
+  const info = { name: '@s/a', relativeDir: 'core/a', group: 'core', rank: 0, slice: undefined };
+  const nameless = { name: 'core/nameless', relativeDir: 'core/nameless', group: 'core', rank: 0, slice: undefined };
+  const graph = {
+    root: '/root',
+    packagesByName: new Map([
+      [info.name, info],
+      [nameless.name, nameless],
+    ]),
+    dependencyNamesByName: new Map(),
+  };
+
+  it('finds a package by its declared name when the manifest sits at that entry\'s own directory', () => {
+    expect(findLintedPackage(graph, 'core/a', '@s/a')).toBe(info);
+  });
+
+  it('finds a nameless package by its directory', () => {
+    expect(findLintedPackage(graph, 'core/nameless', undefined)).toBe(nameless);
+  });
+
+  it('finds nothing for a name that is not a member', () => {
+    expect(findLintedPackage(graph, 'core/a', '@s/other')).toBeUndefined();
+    expect(findLintedPackage(graph, 'core/unknown', undefined)).toBeUndefined();
+  });
+
+  it('finds nothing for a duplicated manifest that shares a member\'s name from a different directory', () => {
+    expect(findLintedPackage(graph, 'dist/a', '@s/a')).toBeUndefined();
   });
 });
