@@ -1,3 +1,10 @@
+## [2.23.1](https://github.com/ExaDev/eslint-config/compare/v2.23.0...v2.23.1) (2026-09-29)
+
+
+### Bug Fixes
+
+* declare @eslint/json as an optional peer dependency ([5a776ff](https://github.com/ExaDev/eslint-config/commit/5a776ff8151447a49b3e925543f80dcd6a6890a9))
+
 # [2.23.0](https://github.com/ExaDev/eslint-config/compare/v2.22.2...v2.23.0) (2026-09-28)
 
 
