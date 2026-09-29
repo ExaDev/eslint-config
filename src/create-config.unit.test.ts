@@ -60,6 +60,36 @@ describe('exadevConfig', () => {
     expect(hasTurboRule(withoutTurbo)).toBe(false);
   });
 
+  describe('turbo boundaries groups with workspaceArchitecture', () => {
+    const base = { react: false, nextjs: false, packageJsonKeyOrder: false, gitignore: false } as const;
+    const workspaceArchitecture = { groups: [{ name: 'core', rank: 0 }, { name: 'targets', path: 'apps', rank: 1 }] };
+    const tagRuleOptions = (blocks: ReturnType<typeof exadevConfig>): unknown => blocks.map((block) => block.rules?.['exadev/turbo-package-tags']).find((rule) => rule !== undefined);
+
+    it('takes the boundary groups from the workspace groups, keeping each path', () => {
+      const result = exadevConfig({ ...base, workspaceArchitecture, turbo: { boundaries: { aggregateScript: 'check' } } });
+      expect(tagRuleOptions(result)).toEqual(['error', expect.objectContaining({ boundaries: { aggregateScript: 'check', groups: [{ name: 'core' }, { name: 'targets', path: 'apps' }] } })]);
+    });
+
+    it('leaves the boundary groups unset without workspaceArchitecture', () => {
+      const result = exadevConfig({ ...base, turbo: { boundaries: {} } });
+      expect(tagRuleOptions(result)).toEqual(['error', expect.objectContaining({ boundaries: {} })]);
+    });
+
+    it('does not enable the boundaries rules when turbo has no boundaries option', () => {
+      const result = exadevConfig({ ...base, workspaceArchitecture, turbo: {} });
+      expect(tagRuleOptions(result)).toBeUndefined();
+    });
+
+    it('throws when boundaries.groups repeats the workspace groups', () => {
+      expect(() => exadevConfig({ ...base, workspaceArchitecture, turbo: { boundaries: { groups: [{ name: 'core' }] } } })).toThrow('"turbo.boundaries.groups" duplicates "workspaceArchitecture.groups"');
+    });
+
+    it('accepts boundaries.groups when there is no workspaceArchitecture to duplicate', () => {
+      const result = exadevConfig({ ...base, turbo: { boundaries: { groups: [{ name: 'core' }] } } });
+      expect(tagRuleOptions(result)).toEqual(['error', expect.objectContaining({ boundaries: { groups: [{ name: 'core' }] } })]);
+    });
+  });
+
   it('appends trailing user configs, in order, after everything else', () => {
     const extraA: TSESLint.FlatConfig.Config = { rules: { 'no-console': 'warn' } };
     const extraB: TSESLint.FlatConfig.Config = { files: ['**/*.spec.ts'] };
