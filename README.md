@@ -571,9 +571,9 @@ Both need `@eslint/json` resolvable, the same optional peer the other JSON rules
 | `packages` | Workspace package globs, in the dialect of the [workspace architecture](#workspace-architecture) `packages` option. Defaults to `pnpm-workspace.yaml`'s `packages`, then `package.json`'s `workspaces`. A repository declaring neither is a single package. An empty `packages: []` in `pnpm-workspace.yaml`, the usual way to give turbo a root in a single-package repository, is read as no members. |
 | `prefix` | What marks a script as the implementation of a task. Defaults to `_`. |
 | `delegate` | The command a public script uses: `'turbo run'` (default) or `'turbo'`. |
-| `exemptTasks` | Task names the task checks skip. A name exempts the task in every form: `lint` covers `lint`, `//#lint` and `web#lint`. |
+| `exemptTasks` | Task names the checks skip, applied to script names as well as task keys, so it also exempts a script from `turbo-script-convention`, `turbo-script-has-task` and `no-fix-in-cached-task-script`. A name exempts the task in every form: `lint` covers `lint`, `//#lint` and `web#lint`. |
 | `requireEmptyOutputs` | Also require `outputs` on graph-only and uncached tasks. |
-| `fixFlags` | The flags `no-fix-in-cached-task-script` looks for. Defaults to `--fix` and `--write`. |
+| `fixFlags` | The flags `no-fix-in-cached-task-script` looks for, compared as whole words. Defaults to `--fix` and `--write`; a short form such as `-w` is not included by default, since it also means `--watch` or `--workspace-root` in other tools, so add it here where it means write. |
 | `boundaries` | `{ aggregateScript?, groups?, allowIgnore? }`. Giving it at all enables the [`turbo boundaries`](#turbo-boundaries) rules. |
 
 ### Scripts delegate to underscore tasks
