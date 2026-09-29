@@ -8,7 +8,7 @@ import stylisticCommentsConfig from './stylistic-comments';
 
 describe('exadevConfig', () => {
   it('with every optional feature forced off, returns exactly the base recommendedTypeChecked plus jsdocAndTsdoc plus jsonCanonicalConfig plus stylisticCommentsConfig length, regardless of what is installed', () => {
-    expect(exadevConfig({ react: false, nextjs: false, packageJsonKeyOrder: false, gitignore: false })).toHaveLength(
+    expect(exadevConfig({ react: false, nextjs: false, turboEnv: false, packageJsonKeyOrder: false, gitignore: false })).toHaveLength(
       recommendedTypeChecked.length + jsdocAndTsdoc.length + jsonCanonicalConfig.length + stylisticCommentsConfig.length,
     );
   });
@@ -20,6 +20,7 @@ describe('exadevConfig', () => {
     const NEXTJS_BLOCK_COUNT = 1;
     const PACKAGE_JSON_KEY_ORDER_BLOCK_COUNT = 1;
     const GITIGNORE_BLOCK_COUNT = 1;
+    const TURBO_ENV_BLOCK_COUNT = 1;
     const result = exadevConfig();
     expect(result).toHaveLength(
       recommendedTypeChecked.length +
@@ -29,7 +30,8 @@ describe('exadevConfig', () => {
         REACT_FAMILY_BLOCK_COUNT +
         NEXTJS_BLOCK_COUNT +
         PACKAGE_JSON_KEY_ORDER_BLOCK_COUNT +
-        GITIGNORE_BLOCK_COUNT,
+        GITIGNORE_BLOCK_COUNT +
+        TURBO_ENV_BLOCK_COUNT,
     );
   });
 
@@ -38,6 +40,7 @@ describe('exadevConfig', () => {
     const result = exadevConfig({
       react: false,
       nextjs: false,
+      turboEnv: false,
       packageJsonKeyOrder: false,
       gitignore: false,
       workspaceArchitecture: { groups: [{ name: 'core', rank: 0 }] },
@@ -45,6 +48,14 @@ describe('exadevConfig', () => {
     expect(result).toHaveLength(
       recommendedTypeChecked.length + jsdocAndTsdoc.length + jsonCanonicalConfig.length + stylisticCommentsConfig.length + WORKSPACE_ARCHITECTURE_BLOCK_COUNT,
     );
+  });
+
+  it('turboEnv wires in the eslint-plugin-turbo block when true or auto-detected, and not when false', () => {
+    const base = { react: false, nextjs: false, packageJsonKeyOrder: false, gitignore: false } as const;
+    const hasEnvRule = (blocks: ReturnType<typeof exadevConfig>) => blocks.some((block) => block.rules !== undefined && 'turbo/no-undeclared-env-vars' in block.rules);
+    expect(hasEnvRule(exadevConfig({ ...base, turboEnv: true }))).toBe(true);
+    expect(hasEnvRule(exadevConfig(base))).toBe(true);
+    expect(hasEnvRule(exadevConfig({ ...base, turboEnv: false }))).toBe(false);
   });
 
   it('turbo, when given, wires in turboConfig\'s blocks, before any trailing user configs', () => {

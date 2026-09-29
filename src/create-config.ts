@@ -10,6 +10,7 @@ import recommendedTypeChecked from './recommended-type-checked';
 import stylisticCommentsConfig from './stylistic-comments';
 import { toPublicConfigArray } from './to-public-config-array';
 import { buildTurboConfig } from './turbo-config';
+import { buildTurboEnvConfig } from './turbo-env';
 import type { TurboOptions } from './rules/turbo-options';
 import { buildWorkspaceArchitectureConfig } from './workspace-architecture';
 import type { WorkspaceArchitectureOptions } from './rules/workspace-options';
@@ -17,6 +18,8 @@ import type { WorkspaceArchitectureOptions } from './rules/workspace-options';
 export interface ExadevConfigOptions {
   readonly react?: boolean;
   readonly nextjs?: boolean;
+  // true: report environment variables read in source that no turbo.json declares (eslint-plugin-turbo's no-undeclared-env-vars), throwing if eslint-plugin-turbo isn't resolvable. false: never. undefined (the default): auto-detect -- on if eslint-plugin-turbo is installed. Separate from `turbo`, which configures this package's own turbo rules and is off unless given. See src/turbo-env.ts.
+  readonly turboEnv?: boolean;
   // true: enforce package.json key order (see src/rules/package-json-key-order.ts) regardless of syncpack. false: never enforce it. undefined (the default): auto-detect -- enabled unless the consumer's own project already has syncpack configured, since syncpack already produces this exact order for free.
   readonly packageJsonKeyOrder?: boolean;
   // true: derive ESLint's ignores from .gitignore, throwing if no .gitignore exists. false: never derive it. undefined (the default): auto-detect -- on if the consumer's project has a .gitignore, silently off if it doesn't (a project with no .gitignore at all -- no version control set up yet -- has nothing for this to read).
@@ -54,6 +57,7 @@ export function exadevConfig(options: ExadevConfigOptions = {}, ...userConfigs: 
     ...stylisticCommentsConfig,
     ...buildReactConfig({ enabled: options.react }),
     ...buildNextjsConfig({ enabled: options.nextjs }),
+    ...buildTurboEnvConfig({ enabled: options.turboEnv }),
     ...buildPackageJsonKeyOrderConfig({ enabled: options.packageJsonKeyOrder }),
     ...(options.workspaceArchitecture !== undefined ? buildWorkspaceArchitectureConfig(options.workspaceArchitecture) : []),
     ...(options.turbo !== undefined ? buildTurboConfig(withWorkspaceGroups(options.turbo, options.workspaceArchitecture)) : []),
