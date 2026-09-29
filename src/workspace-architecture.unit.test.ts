@@ -32,6 +32,26 @@ describe('workspaceArchitectureConfig', () => {
     expect(config?.rules?.['exadev/package-name-mirrors-path']).toStrictEqual(['error', { groups: MINIMAL.groups, naming: { scope: '@acme' } }]);
   });
 
+  it('wires each opt-in rule only when its own option is given', () => {
+    const optIns = {
+      requiredFiles: [{ packages: 'x', files: ['src/errors.ts'] }],
+      devOnly: ['-testkit$'],
+      requiredScripts: [{ match: 'x', scripts: ['typecheck'] }],
+    };
+    const plain = workspaceArchitectureConfig(MINIMAL)[0]?.rules ?? {};
+    for (const rule of ['package-has-files', 'dev-dependency-only', 'required-scripts']) expect(plain).not.toHaveProperty(`exadev/${rule}`);
+
+    const rules = workspaceArchitectureConfig({ ...MINIMAL, ...optIns })[0]?.rules;
+    expect(rules?.['exadev/package-has-files']).toStrictEqual(['error', { ...MINIMAL, ...optIns }]);
+    expect(rules?.['exadev/dev-dependency-only']).toStrictEqual(['error', { ...MINIMAL, ...optIns }]);
+    expect(rules?.['exadev/required-scripts']).toStrictEqual(['error', { ...MINIMAL, ...optIns }]);
+
+    const onlyDevOnly = workspaceArchitectureConfig({ ...MINIMAL, devOnly: optIns.devOnly })[0]?.rules ?? {};
+    expect(onlyDevOnly).toHaveProperty('exadev/dev-dependency-only');
+    expect(onlyDevOnly).not.toHaveProperty('exadev/package-has-files');
+    expect(onlyDevOnly).not.toHaveProperty('exadev/required-scripts');
+  });
+
   it('validates its own options through readWorkspaceArchitectureOptions, throwing for a missing "groups"', () => {
     expect(() => workspaceArchitectureConfig({} as never)).toThrow(/groups/);
   });
