@@ -52,6 +52,18 @@ describe('readTurboOptions', () => {
     expect(readTurboOptions({ requireEmptyOutputs: false })).toEqual({ requireEmptyOutputs: false });
   });
 
+  it('lists the accepted keys in the message', () => {
+    expect(() => readTurboOptions('x')).toThrow(
+      `${PREFIX}"turbo options" must be an object with only the keys "root", "packages", "prefix", "delegate", "exemptTasks", "requireEmptyOutputs", "fixFlags", "boundaries".`,
+    );
+    expect(() => readTurboOptions({ boundaries: { groups: [{ nope: 1 }] } })).toThrow(`${PREFIX}"boundaries.groups entry" must be an object with only the keys "name", "path".`);
+  });
+
+  it('accepts both delegate forms', () => {
+    expect(readTurboOptions({ delegate: 'turbo run' })).toEqual({ delegate: 'turbo run' });
+    expect(readTurboOptions({ delegate: 'turbo' })).toEqual({ delegate: 'turbo' });
+  });
+
   it.each([
     ['a non-object', 'x', 'turbo options'],
     ['null', null, 'turbo options'],

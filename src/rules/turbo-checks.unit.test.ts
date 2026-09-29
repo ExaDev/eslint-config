@@ -170,6 +170,18 @@ describe('checkTaskScripts', () => {
     expect(check({ all: { dependsOn: ['^_build'] }, _build: {} }, root, [pkg('a', { _build: 'b' }, 'packages/a')])).toEqual([]);
   });
 
+  it('reports an aggregate that only unrelated tasks depend on', () => {
+    const members = [pkg('a', { _lint: 'e' }, 'packages/a')];
+    const root = pkg('root', { r: 'turbo run other' });
+    expect(check({ check: { dependsOn: ['_lint'] }, other: { dependsOn: ['_lint'] }, _lint: {} }, root, members)).toEqual([{ kind: 'unreachableTask', task: 'check' }]);
+  });
+
+  it('accepts an aggregate another task reaches through a ^ dependency', () => {
+    const members = [pkg('a', { _lint: 'e' }, 'packages/a')];
+    const root = pkg('root', { r: 'turbo run outer' });
+    expect(check({ inner: { dependsOn: ['_lint'] }, outer: { dependsOn: ['^inner'] }, _lint: {} }, root, members)).toEqual([]);
+  });
+
   it('reports an aggregate nothing depends on or invokes', () => {
     const problems = check({ check: { dependsOn: ['_lint'] }, _lint: {} }, pkg('root', { lint: 'turbo run _lint' }), [pkg('a', { _lint: 'e' }, 'packages/a')]);
     expect(problems).toEqual([{ kind: 'unreachableTask', task: 'check' }]);

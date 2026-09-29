@@ -158,17 +158,18 @@ export const BOUNDARIES_COMMAND = 'turbo boundaries';
  */
 export function checkBoundariesScripts(commands: ReadonlyMap<string, string | undefined>, aggregateScript: string | undefined): readonly BoundariesScriptProblem[] {
   const problems: BoundariesScriptProblem[] = [];
-  const boundaries = commands.get('boundaries');
+  const boundaries = commands.get('boundaries') ?? '';
   if (!commands.has('boundaries')) {
     problems.push({ kind: 'missingBoundariesScript', script: 'boundaries', actual: '' });
-  } else if (tokenizeCommand(boundaries ?? '').join(' ') !== BOUNDARIES_COMMAND) {
-    problems.push({ kind: 'boundariesScriptMismatch', script: 'boundaries', actual: boundaries ?? '' });
+  } else if (tokenizeCommand(boundaries).join(' ') !== BOUNDARIES_COMMAND) {
+    problems.push({ kind: 'boundariesScriptMismatch', script: 'boundaries', actual: boundaries });
   }
   if (aggregateScript === undefined) return problems;
+  const aggregate = commands.get(aggregateScript) ?? '';
   if (!commands.has(aggregateScript)) {
     problems.push({ kind: 'missingAggregateScript', script: aggregateScript, actual: '' });
-  } else if (!runsBoundaries(commands.get(aggregateScript) ?? '')) {
-    problems.push({ kind: 'aggregateSkipsBoundaries', script: aggregateScript, actual: commands.get(aggregateScript) ?? '' });
+  } else if (!runsBoundaries(aggregate)) {
+    problems.push({ kind: 'aggregateSkipsBoundaries', script: aggregateScript, actual: aggregate });
   }
 
   return problems;

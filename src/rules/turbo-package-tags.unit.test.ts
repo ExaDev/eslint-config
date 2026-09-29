@@ -103,6 +103,12 @@ ruleTester.run('turbo-package-tags', rule, {
       options: [{ boundaries: { groups: GROUPS } }],
       errors: [{ message: 'The turbo.json of package "loose" must carry the tag "core", the name of the group its directory belongs to.' }],
     },
+    // A nested object in the manifest is not checked a second time.
+    {
+      code: JSON.stringify({ name: 'bare', nested: { name: 'inner' } }, null, 2),
+      filename: '/repo/core/bare/package.json',
+      errors: [{ messageId: 'missingTurboJson', data: { name: 'bare' } }],
+    },
     // A package with no name is identified by its directory.
     {
       code: manifest(undefined),

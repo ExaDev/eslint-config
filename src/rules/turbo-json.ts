@@ -92,12 +92,11 @@ export interface TurboRoot {
   readonly turbo: TurboJson;
 }
 
-// The directories from `startDir` up to the filesystem root, nearest first.
-function ancestorDirs(startDir: string): readonly string[] {
-  const dirs: string[] = [];
-  for (let dir = resolve(startDir); !dirs.includes(dir); dir = dirname(dir)) dirs.push(dir);
+// `dir` and each directory above it up to the filesystem root, nearest first.
+function ancestorDirs(dir: string): readonly string[] {
+  const parent = dirname(dir);
 
-  return dirs;
+  return parent === dir ? [dir] : [dir, ...ancestorDirs(parent)];
 }
 
 /**
@@ -111,7 +110,7 @@ export function findTurboRoot(fs: WorkspaceFs, startDir: string, rootOption: str
     return turbo === undefined ? undefined : { dir, turbo };
   }
 
-  const candidates = ancestorDirs(startDir).flatMap((dir) => {
+  const candidates = ancestorDirs(resolve(startDir)).flatMap((dir) => {
     const turbo = readTurboJsonAt(fs, dir);
 
     return turbo === undefined || turbo.extends !== undefined ? [] : [{ dir, turbo }];
