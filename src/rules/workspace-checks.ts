@@ -1,4 +1,5 @@
 import type { WorkspacePackageInfo } from './workspace-graph';
+import type { AllowedEdge, ExemptTargetGroup, PackageSelector } from './workspace-constraint-options';
 import type { GroupSpec, NamingOptions, NamingStrategy, RankSkipOptions } from './workspace-options';
 import { splitPathSegments } from './workspace-path';
 
@@ -19,6 +20,8 @@ export interface CheckDependenciesContext {
   readonly graph: ReadonlyMap<string, WorkspacePackageInfo>;
   readonly rankSkip?: RankSkipOptions;
   readonly isolatedGroups?: readonly (readonly [string, string])[];
+  // Dependency names exempt from every check below, as decided by exemptDependencyNames.
+  readonly exemptTargets?: ReadonlySet<string>;
 }
 
 // Absence handled here, at the one place that actually decides isolation, rather than a `?? []` fallback at the call site: "no isolatedGroups configured" and "isolatedGroups configured but this particular pair is not in it" are the same real answer (never isolated), so the explicit undefined check states that directly instead of manufacturing an empty array purely to make .some() have something to iterate over.
@@ -48,7 +51,7 @@ export function checkDependencies(
 
   for (const dependencyName of dependencyNames) {
     const dependency = context.graph.get(dependencyName);
-    if (dependency === undefined) continue;
+    if (dependency === undefined || context.exemptTargets?.has(dependencyName) === true) continue;
 
     if (isIsolatedPair(self.group, dependency.group, context.isolatedGroups)) {
       violations.push({
@@ -88,6 +91,70 @@ export function checkDependencies(
   }
 
   return violations;
+}
+
+/**
+ * The dependency names whose edges an `exemptTargetGroups` entry exempts: a workspace package in an exempt group, every occurrence of which is declared under one of that group's exempt fields. A name that also appears under any other configured field is not exempt, so a package cannot hide a runtime edge behind a devDependencies entry of the same name.
+ */
+export function exemptDependencyNames(
+  dependencies: readonly { readonly name: string; readonly field: string }[],
+  graph: ReadonlyMap<string, WorkspacePackageInfo>,
+  exemptions: readonly ExemptTargetGroup[] | undefined,
+): ReadonlySet<string> {
+  const exempt = new Set<string>();
+  if (exemptions === undefined) return exempt;
+
+  for (const { name } of dependencies) {
+    const target = graph.get(name);
+    const exemption = exemptions.find((candidate) => candidate.group === target?.group);
+    if (exemption === undefined) continue;
+    if (dependencies.every((dependency) => dependency.name !== name || exemption.fields.includes(dependency.field))) exempt.add(name);
+  }
+
+  return exempt;
+}
+
+export interface StaleAllowedEdge {
+  readonly entry: AllowedEdge;
+  // 'undeclared': the package no longer declares the dependency at all. 'unneeded': it does, but no check would have reported the edge.
+  readonly kind: 'undeclared' | 'unneeded';
+}
+
+export interface AllowListResult {
+  readonly violations: readonly WorkspaceViolation[];
+  readonly stale: readonly StaleAllowedEdge[];
+}
+
+/**
+ * Applies the `allow` list to the violations `selfName` produced: a violation on an edge from `selfName` to an allowed target is dropped, and every entry naming `selfName` as its source that suppressed nothing is returned as stale, either because the dependency is no longer declared or because the checks would have passed it anyway.
+ */
+export function applyAllowList(
+  selfName: string,
+  found: { readonly violations: readonly WorkspaceViolation[]; readonly dependencyNames: readonly string[] },
+  allow: readonly AllowedEdge[],
+): AllowListResult {
+  const own = allow.filter((entry) => entry.from === selfName);
+  const allowedTargets = new Set(own.map((entry) => entry.to));
+  const violatingTargets = new Set(found.violations.map((violation) => violation.dependencyName));
+
+  return {
+    violations: found.violations.filter((violation) => !allowedTargets.has(violation.dependencyName)),
+    stale: own.flatMap((entry): readonly StaleAllowedEdge[] => {
+      if (!found.dependencyNames.includes(entry.to)) return [{ entry, kind: 'undeclared' }];
+
+      return violatingTargets.has(entry.to) ? [] : [{ entry, kind: 'unneeded' }];
+    }),
+  };
+}
+
+/**
+ * Whether a package with the given owning `group` and declared `name` (undefined for a nameless package, which no name pattern can match) satisfies `selector`. A string selector is a name pattern; an object selector requires every field it has.
+ */
+export function matchesSelector(selector: PackageSelector, target: { readonly group: string; readonly name: string | undefined }): boolean {
+  const { group, namePattern } = typeof selector === 'string' ? { group: undefined, namePattern: selector } : selector;
+  if (group !== undefined && group !== target.group) return false;
+
+  return namePattern === undefined || (target.name !== undefined && new RegExp(namePattern, 'u').test(target.name));
 }
 
 /**

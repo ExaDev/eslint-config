@@ -1,6 +1,6 @@
 import type { JSONRuleDefinition, JSONRuleVisitor } from '@eslint/json';
 import type { ObjectNode } from '@humanwhocodes/momoa';
-import { loadWorkspaceGraph, manifestRelativeDir, type WorkspaceRuleDeps } from './workspace-graph';
+import { findLintedPackage, loadWorkspaceGraph, manifestRelativeDir, type WorkspaceRuleDeps } from './workspace-graph';
 import { readWorkspaceArchitectureOptions, resolveDependencyFields, workspaceArchitectureOptionsSchema, type WorkspaceArchitectureOptions } from './workspace-options';
 import { dependencyPathExists } from './workspace-checks';
 import { collectTopLevelDependencies, readDeclaredName } from './workspace-json-helpers';
@@ -47,10 +47,8 @@ export function createNoDependencyCycleRule(deps: WorkspaceRuleDeps = {}): NoDep
           // Self-identified by the manifest's own declared name when it has one, or by its own directory when it does not: pnpm allows a workspace package to declare no "name" at all, and buildWorkspaceGraph keys such a package by its relativeDir for exactly this reason (see workspace-graph.ts), so its own outgoing dependencies still get checked for a cycle rather than silently skipped.
           const relativeDir = manifestRelativeDir(fs, graph.root, context.filename);
           const declared = readDeclaredName(node);
-          const self = graph.packagesByName.get(declared?.name ?? relativeDir);
+          const self = findLintedPackage(graph, relativeDir, declared?.name);
           if (self === undefined) return;
-          // The manifest currently being linted must be the SAME file buildWorkspaceGraph resolved this graph entry from, not a stale or duplicated copy sharing its declared name elsewhere in the tree: checking a copy under the real package's own entry would double-report the same real cycle once per copy.
-          if (self.relativeDir !== relativeDir) return;
 
           const dependencies = collectTopLevelDependencies(node, resolveDependencyFields(options));
           for (const dependency of dependencies) {

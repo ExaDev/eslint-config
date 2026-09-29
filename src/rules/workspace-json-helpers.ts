@@ -21,6 +21,8 @@ export function readDeclaredName(rootObject: ObjectNode): { readonly name: strin
 
 export interface NamedDependency {
   readonly name: string;
+  // The dependency field (dependencies, devDependencies, ...) this entry was declared under.
+  readonly field: string;
   // The dependency's own name-to-range member, for context.report's own loc.
   readonly node: MemberNode;
 }
@@ -33,10 +35,11 @@ export function collectTopLevelDependencies(rootObject: ObjectNode, dependencyFi
   const results: NamedDependency[] = [];
 
   for (const member of rootObject.members) {
-    if (!fields.has(getMemberKeyName(member))) continue;
+    const field = getMemberKeyName(member);
+    if (!fields.has(field)) continue;
     if (member.value.type !== 'Object') continue;
     for (const dependency of member.value.members) {
-      results.push({ name: getMemberKeyName(dependency), node: dependency });
+      results.push({ name: getMemberKeyName(dependency), field, node: dependency });
     }
   }
 

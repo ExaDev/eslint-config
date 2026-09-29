@@ -28,7 +28,7 @@ function namedDependency(name: string): NamedDependency {
   const [member] = document.body.members;
   if (member === undefined) throw new Error('Unreachable: fixture has exactly one member.');
 
-  return { name, node: member };
+  return { name, field: 'dependencies', node: member };
 }
 
 function pkg(name: string, group: string, rank: number, slice: string | undefined): WorkspacePackageInfo {
@@ -73,8 +73,15 @@ function selfFilename(name: string): string {
 }
 
 describe('createNoUphillDependencyRule meta', () => {
-  it('declares the four message ids the rule can report', () => {
-    expect(Object.keys(rule.meta?.messages ?? {}).sort()).toEqual(['crossSlice', 'isolatedGroup', 'rankSkip', 'uphillRank']);
+  it('declares the message ids the rule can report', () => {
+    expect(Object.keys(rule.meta?.messages ?? {}).sort()).toEqual(['allowSourceGone', 'allowUndeclared', 'allowUnneeded', 'crossSlice', 'isolatedGroup', 'rankSkip', 'uphillRank']);
+  });
+
+  it('words each stale allow-list message exactly', () => {
+    const messages = rule.meta?.messages;
+    expect(messages?.allowUndeclared).toBe('Stale "allow" entry: "{{from}}" no longer declares a dependency on "{{to}}" ({{reason}}). Remove the entry.');
+    expect(messages?.allowUnneeded).toBe('Stale "allow" entry: the edge from "{{from}}" to "{{to}}" passes every check without an exception ({{reason}}). Remove the entry.');
+    expect(messages?.allowSourceGone).toBe('Stale "allow" entry: "{{from}}" is not a workspace package ({{reason}}). Remove the entry.');
   });
 
   it('carries the exact docs/languages content the rule is documented to have', () => {
@@ -235,6 +242,161 @@ ruleTester.run('no-uphill-dependency', rule, {
       code: JSON.stringify({ dependencies: { 'store-cli': 'workspace:*' } }),
       filename: `${FIXED_GRAPH.root}/${NAMELESS_RELATIVE_DIR}/package.json`,
       options: [{ groups: [{ name: 'core' }] }],
+      errors: [{ messageId: 'uphillRank' }],
+    },
+  ],
+});
+
+const REASON = 'documented exception';
+const ALLOW_GROUPS = [{ name: 'core' }, { name: 'features' }, { name: 'verticals' }, { name: 'product' }, { name: 'targets' }, { name: 'test' }];
+const DEV_FIELDS = ['dependencies', 'devDependencies'];
+const ROOT_MANIFEST = `${FIXED_GRAPH.root}/package.json`;
+
+ruleTester.run('no-uphill-dependency allow list and group exemptions', rule, {
+  valid: [
+    // An allowed edge that would otherwise be an uphillRank violation is permitted.
+    {
+      code: manifest('kv-contract', { 'kv-adapter-memory': 'workspace:*' }),
+      filename: selfFilename('kv-contract'),
+      options: [{ groups: ALLOW_GROUPS, allow: [{ from: 'kv-contract', to: 'kv-adapter-memory', reason: REASON }] }],
+    },
+    // The same exception covers a rankSkip, a crossSlice and an isolatedGroup violation: it is per edge, not per check.
+    {
+      code: manifest('store-cli', { 'kv-adapter-memory': 'workspace:*' }),
+      filename: selfFilename('store-cli'),
+      options: [{ groups: ALLOW_GROUPS, rankSkip: { maxDistance: 1, exemptRanks: [0] }, allow: [{ from: 'store-cli', to: 'kv-adapter-memory', reason: REASON }] }],
+    },
+    {
+      code: manifest('store-application-context', { 'billing-contract': 'workspace:*' }),
+      filename: selfFilename('store-application-context'),
+      options: [{ groups: ALLOW_GROUPS, allow: [{ from: 'store-application-context', to: 'billing-contract', reason: REASON }] }],
+    },
+    {
+      code: manifest('checkout-vertical', { 'store-api-router': 'workspace:*' }),
+      filename: selfFilename('checkout-vertical'),
+      options: [{ groups: ALLOW_GROUPS, isolatedGroups: [['features', 'verticals']], allow: [{ from: 'checkout-vertical', to: 'store-api-router', reason: REASON }] }],
+    },
+    // Only the named target is excused: a second, unlisted violation is still reported (see the invalid cases), and an entry for one source does not excuse the same target from another.
+    // An entry naming another package is not stale for THIS manifest: it is that package's own manifest that judges it.
+    {
+      code: manifest('kv-adapter-memory', { 'kv-contract': 'workspace:*' }),
+      filename: selfFilename('kv-adapter-memory'),
+      options: [{ groups: ALLOW_GROUPS, allow: [{ from: 'kv-contract', to: 'kv-adapter-memory', reason: REASON }] }],
+    },
+    // A group exemption: an edge into the exempt group, declared only under the exempt field, passes every check.
+    {
+      code: JSON.stringify({ name: 'kv-contract', devDependencies: { 'store-cli': 'workspace:*' } }, null, 2),
+      filename: selfFilename('kv-contract'),
+      options: [{ groups: ALLOW_GROUPS, dependencyFields: DEV_FIELDS, exemptTargetGroups: [{ group: 'targets', fields: ['devDependencies'] }] }],
+    },
+    // The workspace root manifest is never a package: an allow entry whose source exists produces nothing there.
+    {
+      code: JSON.stringify({ name: 'root' }),
+      filename: ROOT_MANIFEST,
+      options: [{ groups: ALLOW_GROUPS, allow: [{ from: 'kv-contract', to: 'kv-adapter-memory', reason: REASON }] }],
+    },
+    // With no allow list the root manifest is skipped like any non-member.
+    { code: JSON.stringify({ name: 'root' }), filename: ROOT_MANIFEST, options: [{ groups: ALLOW_GROUPS }] },
+  ],
+  invalid: [
+    // The exception excuses only the listed target; the other violation stays.
+    {
+      code: manifest('kv-contract', { 'kv-adapter-memory': 'workspace:*', 'store-cli': 'workspace:*' }),
+      filename: selfFilename('kv-contract'),
+      options: [{ groups: ALLOW_GROUPS, allow: [{ from: 'kv-contract', to: 'kv-adapter-memory', reason: REASON }] }],
+      errors: [{ messageId: 'uphillRank', data: { self: 'kv-contract', selfRank: '0', dependency: 'store-cli', dependencyRank: '3' } }],
+    },
+    // An exception for a different source does not excuse this package's edge.
+    {
+      code: manifest('kv-contract', { 'kv-adapter-memory': 'workspace:*' }),
+      filename: selfFilename('kv-contract'),
+      options: [{ groups: ALLOW_GROUPS, allow: [{ from: 'store-cli', to: 'kv-adapter-memory', reason: REASON }] }],
+      errors: [{ messageId: 'uphillRank' }],
+    },
+    // An entry whose dependency is no longer declared is reported on the manifest itself.
+    {
+      code: manifest('kv-contract'),
+      filename: selfFilename('kv-contract'),
+      options: [{ groups: ALLOW_GROUPS, allow: [{ from: 'kv-contract', to: 'kv-adapter-memory', reason: REASON }] }],
+      errors: [{ messageId: 'allowUndeclared', line: 1, data: { from: 'kv-contract', to: 'kv-adapter-memory', reason: REASON } }],
+    },
+    // An entry on an edge the checks would have passed anyway is reported on the dependency it names.
+    {
+      code: manifest('kv-adapter-memory', { 'kv-contract': 'workspace:*' }),
+      filename: selfFilename('kv-adapter-memory'),
+      options: [{ groups: ALLOW_GROUPS, allow: [{ from: 'kv-adapter-memory', to: 'kv-contract', reason: REASON }] }],
+      errors: [{ messageId: 'allowUnneeded', line: 4, data: { from: 'kv-adapter-memory', to: 'kv-contract', reason: REASON } }],
+    },
+    // An entry excusing an edge into an exempt group is redundant: the exemption already passed it.
+    {
+      code: JSON.stringify({ name: 'kv-contract', devDependencies: { 'store-cli': 'workspace:*' } }, null, 2),
+      filename: selfFilename('kv-contract'),
+      options: [
+        {
+          groups: ALLOW_GROUPS,
+          dependencyFields: DEV_FIELDS,
+          exemptTargetGroups: [{ group: 'targets', fields: ['devDependencies'] }],
+          allow: [{ from: 'kv-contract', to: 'store-cli', reason: REASON }],
+        },
+      ],
+      errors: [{ messageId: 'allowUnneeded' }],
+    },
+    // An entry on an unknown (third-party) target is unneeded too: no check applies to it.
+    {
+      code: manifest('kv-contract', { zod: '^3' }),
+      filename: selfFilename('kv-contract'),
+      options: [{ groups: ALLOW_GROUPS, allow: [{ from: 'kv-contract', to: 'zod', reason: REASON }] }],
+      errors: [{ messageId: 'allowUnneeded' }],
+    },
+    // Stale and live entries are told apart within one manifest, each judged on its own edge.
+    {
+      code: manifest('kv-contract', { 'kv-adapter-memory': 'workspace:*' }),
+      filename: selfFilename('kv-contract'),
+      options: [
+        {
+          groups: ALLOW_GROUPS,
+          allow: [
+            { from: 'kv-contract', to: 'gone', reason: REASON },
+            { from: 'kv-contract', to: 'kv-adapter-memory', reason: REASON },
+          ],
+        },
+      ],
+      errors: [{ messageId: 'allowUndeclared', data: { from: 'kv-contract', to: 'gone', reason: REASON } }],
+    },
+    // An entry whose source package no longer exists is reported on the workspace root manifest.
+    {
+      code: JSON.stringify({ name: 'root' }),
+      filename: ROOT_MANIFEST,
+      options: [
+        {
+          groups: ALLOW_GROUPS,
+          allow: [
+            { from: 'removed-package', to: 'kv-contract', reason: REASON },
+            { from: 'kv-contract', to: 'kv-adapter-memory', reason: REASON },
+          ],
+        },
+      ],
+      errors: [{ messageId: 'allowSourceGone', line: 1, data: { from: 'removed-package', to: 'kv-contract', reason: REASON } }],
+    },
+    // A group exemption covers only the listed fields: the same target under "dependencies" is still checked.
+    {
+      code: JSON.stringify({ name: 'kv-contract', dependencies: { 'store-cli': 'workspace:*' } }, null, 2),
+      filename: selfFilename('kv-contract'),
+      options: [{ groups: ALLOW_GROUPS, dependencyFields: DEV_FIELDS, exemptTargetGroups: [{ group: 'targets', fields: ['devDependencies'] }] }],
+      errors: [{ messageId: 'uphillRank' }],
+    },
+    // A name declared under both an exempt and a non-exempt field is not exempt: the runtime edge cannot hide behind the dev one. Reported once, not once per field.
+    {
+      code: JSON.stringify({ name: 'kv-contract', dependencies: { 'store-cli': 'workspace:*' }, devDependencies: { 'store-cli': 'workspace:*' } }, null, 2),
+      filename: selfFilename('kv-contract'),
+      options: [{ groups: ALLOW_GROUPS, dependencyFields: DEV_FIELDS, exemptTargetGroups: [{ group: 'targets', fields: ['devDependencies'] }] }],
+      errors: [{ messageId: 'uphillRank' }],
+    },
+    // An exemption for another group does not excuse this target.
+    {
+      code: JSON.stringify({ name: 'kv-contract', devDependencies: { 'store-cli': 'workspace:*' } }, null, 2),
+      filename: selfFilename('kv-contract'),
+      options: [{ groups: ALLOW_GROUPS, dependencyFields: DEV_FIELDS, exemptTargetGroups: [{ group: 'test', fields: ['devDependencies'] }] }],
       errors: [{ messageId: 'uphillRank' }],
     },
   ],
