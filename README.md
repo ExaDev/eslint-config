@@ -168,6 +168,7 @@ export default tseslint.config(
 | [package.json key ordering](#optional-packagejson-key-ordering) | On, unless the project already has a syncpack config | `exadevConfig({ packageJsonKeyOrder })` |
 | [Workspace architecture rules](#workspace-architecture) | Off unless given (no sensible default for `groups`) | `exadevConfig({ workspaceArchitecture })` / `workspaceArchitectureConfig(options)` |
 | [Turbo rules](#turbo) | Off unless given (only a repository can say it uses turbo) | `exadevConfig({ turbo })` / `turboConfig(options)` |
+| [Turbo environment variable checking](#environment-variables-read-in-source) | Auto-detected: on if `eslint-plugin-turbo` is installed | `exadevConfig({ turboEnv })` |
 
 Every tri-state option above (`true`/`false`/`undefined`) is passed through the named `exadevConfig(options, ...userConfigs)` factory export:
 
@@ -322,6 +323,9 @@ Bundled into `exadevConfig()`'s default output the same way React/Next.js auto-d
 | `turbo-script-has-task` | | **Every prefixed script is configured as a turbo task,** since turbo runs a script only when a task names it. See [Turbo](#turbo). |
 | `turbo-task-has-script` | | **Every task in the root `turbo.json` is implemented and reachable.** A task no package implements is skipped silently by turbo; a `//#` task or an aggregate nothing depends on or invokes never runs. See [Turbo](#turbo). |
 | `turbo-task-outputs` | | **Cached tasks declare `outputs`, persistent tasks disable caching.** A task with no `outputs` key caches its log only. See [Turbo](#turbo). |
+| `turbo-task-config-inputs` | | **A cached task's key includes the config files of the tools its script runs** (`eslint`, `tsc`, `vitest` by default). See [Cached tasks include their tool configs](#cached-tasks-include-their-tool-configs). |
+| `turbo-task-graph` | | **Tasks list the `dependsOn` edges the `taskGraph` option requires,** including in `package#task` entries and package `turbo.json` overrides. A no-op without the option. See [Required dependsOn edges](#required-dependson-edges). |
+| `turbo-json-hygiene` | | **`turbo.json` declares a known `$schema`,** and optionally `CI` in `globalPassThroughEnv` and an aggregate pre-push task. See [turbo.json hygiene](#turbojson-hygiene). |
 | `no-fix-in-cached-task-script` | | **A script that runs as a cached turbo task passes no fixing flag** (`--fix`, `--write` by default). See [Turbo](#check-and-fix-are-separate-tasks). |
 | `turbo-boundaries-config` | | **The root `turbo.json` opts in to `turbo boundaries`** with a `boundaries` key. See [Turbo boundaries](#turbo-boundaries). |
 | `turbo-package-tags` | | **Every workspace package has a `turbo.json` that extends the root and carries tags,** including its group name when groups are configured. See [Turbo boundaries](#turbo-boundaries). |
@@ -574,6 +578,9 @@ Both need `@eslint/json` resolvable, the same optional peer the other JSON rules
 | `exemptTasks` | Task names the checks skip, applied to script names as well as task keys, so it also exempts a script from `turbo-script-convention`, `turbo-script-has-task` and `no-fix-in-cached-task-script`. A name exempts the task in every form: `lint` covers `lint`, `//#lint` and `web#lint`. |
 | `requireEmptyOutputs` | Also require `outputs` on graph-only and uncached tasks. |
 | `fixFlags` | The flags `no-fix-in-cached-task-script` looks for, compared as whole words. Defaults to `--fix` and `--write`; a short form such as `-w` is not included by default, since it also means `--watch` or `--workspace-root` in other tools, so add it here where it means write. |
+| `toolConfigs` | Tool command word to the config file globs it reads, for [`turbo-task-config-inputs`](#cached-tasks-include-their-tool-configs). Defaults to `eslint` with `eslint.config.*`, `tsc` with `tsconfig*.json` and `vitest` with `vitest.config.*`. A tool you give replaces its default; an empty list stops checking that tool. |
+| `taskGraph` | `{ task, dependsOn }[]`. The [`dependsOn` edges](#required-dependson-edges) each named task must have. Nothing is required by default. |
+| `hygiene` | `{ schemaHosts?, requireCiPassThrough?, aggregateTask? }`. See [turbo.json hygiene](#turbojson-hygiene). |
 | `boundaries` | `{ aggregateScript?, groups?, allowIgnore? }`. Giving it at all enables the [`turbo boundaries`](#turbo-boundaries) rules. |
 
 ### Scripts delegate to underscore tasks
@@ -593,6 +600,51 @@ It also reports dead configuration: a `//#name` task or an aggregate (a task wit
 A task with no `outputs` key, or with `"outputs": null` (which turbo's schema allows), caches its log only, the same as `outputs: []` ([turbo configuration reference](https://turborepo.dev/docs/reference/configuration#outputs), [latest archived copy](https://web.archive.org/web/https://turborepo.dev/docs/reference/configuration)). A build task that forgot the key looks configured but restores nothing on a cache hit, and nothing separates it from a lint task that legitimately produces no files. `turbo-task-outputs` requires every cached task to declare `outputs`, using `[]` where there are none, so the absence is always a stated choice, and reports on the task key. A task that sets `cache: false`, or that only wires other tasks together (nothing but `dependsOn` and `description`), is exempt unless `requireEmptyOutputs` is set. A persistent task never completes, so it must set `cache: false`; that is reported instead of the outputs problem.
 
 In a package's `turbo.json` a task is judged as merged over the root task of the same name, so a partial override that inherits `outputs` passes, and a problem the root already has is reported at the root only.
+
+### Cached tasks include their tool configs
+
+A cached task is stored under a key hashed from its `inputs`, which default to the files of its own package plus the root `package.json`, the lockfile and the sources of internal packages ([`inputs` reference](https://turborepo.dev/docs/reference/configuration#inputs), [latest archived copy](https://web.archive.org/web/https://turborepo.dev/docs/reference/configuration)). A shared config at the repository root (`eslint.config.ts`, `tsconfig.base.json`, `vitest.config.ts`) is not among them unless `globalDependencies` or an `$TURBO_ROOT$/` input lists it, so changing the root ESLint config can restore the previous lint result. A task with explicit `inputs` and no `$TURBO_DEFAULT$` replaces the default, so its own package's config files must be listed too.
+
+`turbo-task-config-inputs` checks this for every task in the root `turbo.json`. It finds the packages whose script implements the task (the same way `turbo-task-has-script` does), reads the script's command for the tools in `toolConfigs`, and for each tool looks for the files its globs match directly inside the package and, for a package other than the root package, at the repository root. Each such file must be in the cache key: through `globalDependencies`, through the package's own files (unset `inputs`, or `$TURBO_DEFAULT$`), or through an `inputs` glob (relative to the package, or to the root behind `$TURBO_ROOT$/`), and not removed by a `!` glob. A package's own `turbo.json` is laid over the task first, so an override that replaces `inputs` is caught, and reported on the task's key in the root file with the packages named. Uncached tasks are skipped, and so is a script that names none of the tools (`pnpm run lint`, `tsdown`): the rule reads the command line as written and does not guess. A root file counts whenever its name matches the globs, whether or not the tool actually loads it, so narrow the globs (`tsconfig.base.json` rather than `tsconfig*.json`) where a root file is not an input of the package tasks.
+
+Two failure modes need a filesystem walk or an execution and stay guidance: a task whose input globs match no file in its package hashes as unchanging and replays its first green result, and a task that reads an environment variable to select a backend must list it in `env`, since a hash over files cannot see it (the [environment variable check](#environment-variables-read-in-source) covers the variables read in source). A single-package repository needs no `packages:` glob: its root package is checked against its own files.
+
+### Required dependsOn edges
+
+Repositories disagree on how tasks depend on each other. Some make `_build` depend on `_typecheck` so a type error stops the build, some make `_typecheck` depend on `^_build` so it checks against built dependencies, and a workspace whose packages resolve each other's source directly needs `_typecheck` to depend on `^_typecheck`, since that edge brings a dependency's sources into the consumer's cache key. Which is right is a policy, so nothing is required unless the `taskGraph` option states it:
+
+```ts
+turboConfig({
+  taskGraph: [
+    { task: '_typecheck', dependsOn: ['^_typecheck'] },
+    { task: '_build', dependsOn: ['_typecheck', '^_build'] },
+  ],
+});
+```
+
+`turbo-task-graph` reports each edge a named task lacks, on the task's key, comparing entries as written. A requirement for `_build` also applies to each `package#_build` entry of the root `turbo.json`, because turbo does not merge such an entry with the generic task: checked against turbo 2.10.8 with `turbo run --dry=json`, a `web#_build` entry that lists only `inputs` and `outputs` resolves with no `dependsOn` and no `env` at all, dropping what the generic `_build` declared. That is the case the option exists to catch, and it holds for `dependsOn` in any entry, so a package entry has to repeat every edge. A requirement never applies to the root package's own `//#_build` task unless written with that key. In a package's `turbo.json`, which does merge with the root ([package configurations](https://turborepo.dev/docs/reference/package-configurations), [latest archived copy](https://web.archive.org/web/https://turborepo.dev/docs/reference/package-configurations)), a key the package sets replaces the root's array unless it lists `$TURBO_EXTENDS$` to keep the root entries; the rule judges the merged task and reports an override that drops an edge the inherited task had. An edge the inherited task already lacks is reported at the root only. `exemptTasks` skips a task here too.
+
+### turbo.json hygiene
+
+`turbo-json-hygiene` is a set of presence checks on `turbo.json`. Every `turbo.json` needs a `$schema` of the form `https://<host>/schema.json`, so editors validate the file; the hosts default to the three turbo has published it under (`turborepo.com`, `turborepo.dev` and `turbo.build`), and `hygiene.schemaHosts` narrows them, so one host makes it canonical and the others are reported. Two checks apply to the root `turbo.json` only and are off unless asked for:
+
+- `hygiene.requireCiPassThrough: true` requires `CI` in `globalPassThroughEnv`, so tasks that read it see it without it entering their cache key.
+- `hygiene.aggregateTask: { name, includes }` requires a task called `name` (for example `_prepush`) whose `dependsOn` lists every task in `includes`. Its name varies between repositories, hence the option. A graph-only task and one kept invocable with a `":"` root script and `cache: false` both pass, since the check reads the task entry and not the scripts.
+
+```ts
+turboConfig({
+  hygiene: {
+    requireCiPassThrough: true,
+    aggregateTask: { name: '_prepush', includes: ['_lint', '_typecheck', '_test'] },
+  },
+});
+```
+
+### Environment variables read in source
+
+Turbo's strict env mode strips variables a task has not declared, so a `process.env.X` read in source that no `turbo.json` lists in `env` or `globalEnv` fails at runtime or is missing from the cache key. Vercel's [`eslint-plugin-turbo`](https://github.com/vercel/turborepo/tree/main/packages/eslint-plugin-turbo) ([latest archived copy](https://web.archive.org/web/https://github.com/vercel/turborepo/tree/main/packages/eslint-plugin-turbo)) reports exactly that with `turbo/no-undeclared-env-vars`, and this package folds it in the way it does React and Next.js: `eslint-plugin-turbo` is an optional peer dependency, `exadevConfig()` uses it when it is resolvable, `exadevConfig({ turboEnv: true })` forces it on and throws when the plugin is missing, and `turboEnv: false` never loads it. It is a separate option from `turbo`, which configures this package's own rules and is off unless given.
+
+Checked before adopting it, against the published 2.11.5 package: it ships `configs['flat/recommended']` and a flat-config usage section in its README, it declares peers `eslint >6.6.0` and `turbo >2.0.0`, it ran unchanged under ESLint 10 here, and it is released alongside turbo itself (the most recent release at the time of writing was the day before). It finds the repository through ESLint's working directory: the root `turbo.json` and the `turbo.json` of every workspace package that extends it, so a variable declared in a package configuration counts for that package. Its config carries no `files`, so it is scoped here to JavaScript and TypeScript sources, and it is one block that is only added when the plugin resolves.
 
 ### Check and fix are separate tasks
 
