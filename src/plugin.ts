@@ -6,6 +6,7 @@ import { buildReactConfig } from './react';
 import { toPublicPlugin } from './to-public-plugin';
 import barrelDirectSiblingsOnly from './rules/barrel-direct-siblings-only';
 import barrelPolicy from './rules/barrel-policy';
+import devDependencyOnly from './rules/dev-dependency-only';
 import noArrayIsarrayMutation from './rules/no-array-isarray-mutation';
 import noControlFlow from './rules/no-control-flow';
 import noDependencyCycle from './rules/no-dependency-cycle';
@@ -21,6 +22,7 @@ import noPointlessReassignment from './rules/no-pointless-reassignment';
 import noSetInstanceofMutation from './rules/no-set-instanceof-mutation';
 import noSideEffectsInIndex from './rules/no-side-effects-in-index';
 import noUphillDependency from './rules/no-uphill-dependency';
+import packageHasFiles from './rules/package-has-files';
 import packageJsonKeyOrder from './rules/package-json-key-order';
 import packageNameMirrorsPath from './rules/package-name-mirrors-path';
 import preferNumericSortCompare from './rules/prefer-numeric-sort-compare';
@@ -28,6 +30,7 @@ import preferDocComment from './rules/prefer-doc-comment';
 import preferOptionsObjectParam from './rules/prefer-options-object-param';
 import preferReadonlyArrayParam from './rules/prefer-readonly-array-param';
 import preferReadonlyObjectParam from './rules/prefer-readonly-object-param';
+import requiredScripts from './rules/required-scripts';
 import testFileKind from './rules/test-file-kind';
 
 // @typescript-eslint/utils's own FlatConfig.Plugin type is used here rather than eslint's own ESLint.Plugin (which an earlier version of this file used) or a hand-written interface — see the "don't hand-type external libraries" convention this plugin's own rules were built under. eslint's Rule.RuleModule declares a concrete, non-generic `create(context: RuleContext): RuleListener` that only structurally matches rules built directly against the plain `eslint` package's own types; a rule built with ESLintUtils.RuleCreator (needed for typed TSESTree node access and, for type-aware rules, type-checker access) is not assignable to it, even though both shapes are the exact same runtime `{ meta, create }` contract ESLint actually calls. FlatConfig.Plugin's `rules` field is typed as `Record<string, LooseRuleDefinition>` specifically to hold both authoring styles in one plugin, which this package now does. meta.namespace is what a consumer's `plugins: { exadev }` registration turns into the rule-reference prefix ('exadev/no-non-barrel-reexport'); it is not inferred from the package name automatically, so it is stated explicitly here to match. meta.version is imported from package.json rather than hardcoded, since semantic-release rewrites that file's own version on every release and a duplicated literal here would silently drift out of sync with it.
@@ -46,6 +49,7 @@ const plugin: TSESLint.FlatConfig.Plugin = {
   rules: {
     'barrel-direct-siblings-only': barrelDirectSiblingsOnly,
     'barrel-policy': barrelPolicy,
+    'dev-dependency-only': devDependencyOnly,
     'no-array-isarray-mutation': noArrayIsarrayMutation,
     'no-control-flow': noControlFlow,
     'no-dependency-cycle': noDependencyCycle,
@@ -61,6 +65,7 @@ const plugin: TSESLint.FlatConfig.Plugin = {
     'no-set-instanceof-mutation': noSetInstanceofMutation,
     'no-side-effects-in-index': noSideEffectsInIndex,
     'no-uphill-dependency': noUphillDependency,
+    'package-has-files': packageHasFiles,
     'package-json-key-order': packageJsonKeyOrder,
     'package-name-mirrors-path': packageNameMirrorsPath,
     'prefer-doc-comment': preferDocComment,
@@ -68,6 +73,7 @@ const plugin: TSESLint.FlatConfig.Plugin = {
     'prefer-options-object-param': preferOptionsObjectParam,
     'prefer-readonly-array-param': preferReadonlyArrayParam,
     'prefer-readonly-object-param': preferReadonlyObjectParam,
+    'required-scripts': requiredScripts,
     'test-file-kind': testFileKind,
   },
   configs: {
