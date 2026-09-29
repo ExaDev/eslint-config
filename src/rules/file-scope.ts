@@ -17,12 +17,14 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 /**
- * Validates a file-glob option value: an array of non-empty strings with at least one include (a list of excludes alone would match nothing) and balanced braces in every pattern. Returns the same array; throws naming `optionName` otherwise.
+ * Validates a file-glob option value, enforcing everything `fileGlobsSchema` does plus one include: an array of non-empty strings with no duplicates, at least one of which does not start with `!` (a list of excludes alone would match nothing), and balanced braces in every pattern. Returns the same array; throws naming `optionName` and the specific failure otherwise.
  */
 export function readFileGlobs(value: unknown, optionName: string): readonly string[] {
-  if (!Array.isArray(value) || !value.every(isNonEmptyString) || !value.some((item) => !isExcludePattern(item))) {
-    throw new Error(`@exadev/eslint-config: "${optionName}" must be an array of non-empty glob strings with at least one that does not start with "!".`);
-  }
+  const prefix = `@exadev/eslint-config: "${optionName}" must`;
+  if (!Array.isArray(value)) throw new Error(`${prefix} be an array of glob strings.`);
+  if (!value.every(isNonEmptyString)) throw new Error(`${prefix} contain only non-empty strings.`);
+  if (new Set(value).size !== value.length) throw new Error(`${prefix} not contain duplicate globs.`);
+  if (!value.some((item) => !isExcludePattern(item))) throw new Error(`${prefix} contain at least one glob that does not start with "!".`);
   for (const pattern of value) void expandBraces(pattern);
 
   return value;

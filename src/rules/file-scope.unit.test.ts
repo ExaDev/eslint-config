@@ -20,15 +20,14 @@ describe('readFileGlobs', () => {
   });
 
   it.each([
-    ['not an array', 'x'],
-    ['an empty array', []],
-    ['a non-string entry', ['a', 1]],
-    ['an empty-string entry', ['a', '']],
-    ['excludes only', ['!a', '!b']],
-  ])('rejects %s, naming the option', (_label, value) => {
-    expect(() => readFileGlobs(value, 'myOption')).toThrow(
-      '@exadev/eslint-config: "myOption" must be an array of non-empty glob strings with at least one that does not start with "!".',
-    );
+    ['not an array', 'x', 'be an array of glob strings.'],
+    ['a non-string entry', ['a', 1], 'contain only non-empty strings.'],
+    ['an empty-string entry', ['a', ''], 'contain only non-empty strings.'],
+    ['a duplicate glob', ['a', 'b', 'a'], 'not contain duplicate globs.'],
+    ['an empty array', [], 'contain at least one glob that does not start with "!".'],
+    ['excludes only', ['!a', '!b'], 'contain at least one glob that does not start with "!".'],
+  ])('rejects %s with a message naming the option and the failure', (_label, value, failure) => {
+    expect(() => readFileGlobs(value, 'myOption')).toThrow(`@exadev/eslint-config: "myOption" must ${failure}`);
   });
 
   it('rejects a pattern with unbalanced braces', () => {
