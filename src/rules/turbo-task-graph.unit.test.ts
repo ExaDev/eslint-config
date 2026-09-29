@@ -6,7 +6,7 @@ import { turboOptionsSchema } from './turbo-options';
 import turboTaskGraph, { createTurboTaskGraphRule } from './turbo-task-graph';
 
 const fs = createMemoryFs({
-  '/repo/turbo.json': JSON.stringify({ tasks: { _build: { dependsOn: ['_typecheck', '^_build'] }, 'web#_build': { dependsOn: ['_typecheck', '^_build', 'web-only'] } } }),
+  '/repo/turbo.json': JSON.stringify({ tasks: { _build: { dependsOn: ['_typecheck', '^_build'] }, 'web#_build': { dependsOn: ['_typecheck', '^_build', 'web-only'] }, 'undefined#_build': { dependsOn: ['nothing'] } } }),
   '/repo/packages/web/package.json': JSON.stringify({ name: 'web' }),
   '/repo/packages/web/turbo.json': '{"extends": ["//"]}',
   '/repo/packages/anon/package.json': '{}',
