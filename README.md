@@ -546,7 +546,7 @@ export default exadevConfig({
 
 ## Turbo
 
-Nine rules keep a repository that uses [turbo](https://turborepo.dev) honest about what turbo actually runs. Turbo skips a task silently when no package has a script of that name, restores only a task's log when `outputs` is missing, and caches a task under a hash taken before the task runs; none of that shows up as an error. They share one options object, `TurboOptions`, and all are off unless the `turbo` option is given, since only a repository can say it uses turbo. Enable them through `exadevConfig({ turbo })` or the standalone `turboConfig(options)`, which returns the blocks to spread into `defineConfig(...)`:
+These rules keep a repository that uses [turbo](https://turborepo.dev) honest about what turbo actually runs. Turbo skips a task silently when no package has a script of that name, restores only a task's log when `outputs` is missing, and caches a task under a hash taken before the task runs; none of that shows up as an error. They share one options object, `TurboOptions`, and all are off unless the `turbo` option is given, since only a repository can say it uses turbo. Enable them through `exadevConfig({ turbo })` or the standalone `turboConfig(options)`, which returns the blocks to spread into `defineConfig(...)`:
 
 ```ts
 // eslint.config.ts
@@ -572,7 +572,7 @@ Both need `@eslint/json` resolvable, the same optional peer the other JSON rules
 | `exemptTasks` | Task names the task checks skip. A name exempts the task in every form: `lint` covers `lint`, `//#lint` and `web#lint`. |
 | `requireEmptyOutputs` | Also require `outputs` on graph-only and uncached tasks. |
 | `fixFlags` | The flags `no-fix-in-cached-task-script` looks for. Defaults to `--fix` and `--write`. |
-| `boundaries` | `{ aggregateScript?, groups?, allowIgnore? }`. Giving it at all enables the four [`turbo boundaries`](#turbo-boundaries) rules. |
+| `boundaries` | `{ aggregateScript?, groups?, allowIgnore? }`. Giving it at all enables the [`turbo boundaries`](#turbo-boundaries) rules. |
 
 ### Scripts delegate to underscore tasks
 
@@ -582,7 +582,7 @@ Repositories that use turbo tend to keep the real commands in underscore-prefixe
 
 ### Tasks and scripts match
 
-`turbo-task-has-script` lints the root `turbo.json`. A task that no package implements is reported on its key, with three shapes exempt because turbo treats them differently. A junction task, one with `dependsOn` and no script anywhere, only groups other tasks. A `//#name` task is implemented by the root package's script `name`, whatever the script holds (a `":"` no-op or an unprefixed name such as `test:coverage` both count). A `package#name` task is implemented by the package of that name. Any other task is implemented by a workspace member's script, or by the root package's when the repository has no members, since turbo runs the root package for a task only then.
+`turbo-task-has-script` lints the root `turbo.json`. A task that no package implements is reported on its key, with these shapes exempt because turbo treats them differently. A junction task, one with `dependsOn` and no script anywhere, only groups other tasks. A `//#name` task is implemented by the root package's script `name`, whatever the script holds (a `":"` no-op or an unprefixed name such as `test:coverage` both count). A `package#name` task is implemented by the package of that name. Any other task is implemented by a workspace member's script, or by the root package's when the repository has no members, since turbo runs the root package for a task only then.
 
 It also reports dead configuration: a `//#name` task or an aggregate (a task with `dependsOn`) that no other task lists in `dependsOn` or `with`, and that no root script invokes through turbo (`turbo run x`, `turbo x`, behind `pnpm` or by path), never runs. A root task that is only reachable from a CI workflow is not seen, because ESLint cannot read workflow files; give it a root script or list it in `exemptTasks`. A package's `turbo.json`, which extends the root, is not checked here.
 
@@ -613,7 +613,7 @@ with `"_lint:fix": { "cache": false }` in `turbo.json`.
 
 ### Turbo boundaries
 
-[`turbo boundaries`](https://turborepo.dev/docs/reference/boundaries) (experimental) checks source imports against package directories, declared dependencies and per-package tag rules. It only applies tag rules once the root `turbo.json` has a `boundaries` key and packages carry `tags`. These four rules check that a repository has opted in; they do not check that the command passes. Trialled on a workspace with a large number of packages, `turbo boundaries` failed on every package whose `eslint.config.ts` or `stryker.config.ts` imported a shared file from the workspace root, reporting each as an import leaving the package. The command is therefore unusable on a workspace that shares configuration through root imports unless it uses `@boundaries-ignore` comments or another way of sharing configuration, and a passing rule set here does not imply a passing `turbo boundaries`. Never run `turbo boundaries --ignore=all`: on a copy it rewrote an import into a comment followed by an orphaned string literal, and the rerun passed only because the import had gone.
+[`turbo boundaries`](https://turborepo.dev/docs/reference/boundaries) (experimental) checks source imports against package directories, declared dependencies and per-package tag rules. It only applies tag rules once the root `turbo.json` has a `boundaries` key and packages carry `tags`. These rules check that a repository has opted in; they do not check that the command passes. Trialled on a workspace with a large number of packages, `turbo boundaries` failed on every package whose `eslint.config.ts` or `stryker.config.ts` imported a shared file from the workspace root, reporting each as an import leaving the package. The command is therefore unusable on a workspace that shares configuration through root imports unless it uses `@boundaries-ignore` comments or another way of sharing configuration, and a passing rule set here does not imply a passing `turbo boundaries`. Never run `turbo boundaries --ignore=all`: on a copy it rewrote an import into a comment followed by an orphaned string literal, and the rerun passed only because the import had gone.
 
 Tags cover allow and deny relations but not rank, rank skipping or cycles, so `no-uphill-dependency` and `no-dependency-cycle` remain useful alongside them.
 
