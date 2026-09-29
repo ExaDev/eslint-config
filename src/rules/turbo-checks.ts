@@ -84,8 +84,21 @@ function isImplemented(key: string, packages: Readonly<{ root: TurboPackage; mem
   return runners.some((runner) => runner.scripts.has(key));
 }
 
+// Whether something makes turbo run the task. `turbo run name` runs `//#name` as well as any `name` task, and inside a `//#` task a bare `dependsOn` or `with` entry `name` resolves to `//#name` (both checked against turbo 2.10.8 with `--dry=json`), so a `//#` task is also reached through its bare name from a root script or from another `//#` task.
+function isReachable(key: string, context: Readonly<{ tasks: ReadonlyMap<string, TurboTask>; invoked: ReadonlySet<string> }>): boolean {
+  const { tasks, invoked } = context;
+  const bareName = key.startsWith(ROOT_TASK_PREFIX) ? key.slice(ROOT_TASK_PREFIX.length) : undefined;
+  if (invoked.has(key) || (bareName !== undefined && invoked.has(bareName))) return true;
+
+  return [...tasks].some(
+    ([otherKey, other]) =>
+      otherKey !== key &&
+      [...other.dependsOn, ...other.with].map(referencedKey).some((entry) => entry === key || (bareName !== undefined && otherKey.startsWith(ROOT_TASK_PREFIX) && entry === bareName)),
+  );
+}
+
 /**
- * The problems in a root `turbo.json`'s `tasks` measured against the repository's scripts. A task that no package implements does nothing, silently, and is reported unless it only wires other tasks together (has `dependsOn`). A `//#` task, or an aggregate (a task with `dependsOn`), that no other task depends on or runs alongside and that no root script invokes through turbo never runs and is reported as unreachable.
+ * The problems in a root `turbo.json`'s `tasks` measured against the repository's scripts. A task that no package implements does nothing, silently, and is reported unless it only wires other tasks together (has `dependsOn`). A `//#` task, or an aggregate (a task with `dependsOn`), that no other task depends on or runs alongside and that no root script invokes through turbo never runs (a `//#name` task is also reached by the bare name `name` in a root script or in another `//#` task's `dependsOn` or `with`) and is reported as unreachable.
  */
 export function checkTaskScripts(input: Readonly<{ tasks: ReadonlyMap<string, TurboTask>; root: TurboPackage; members: readonly TurboPackage[]; exempt: ReadonlySet<string> }>): readonly TaskProblem[] {
   const { tasks, root, members, exempt } = input;
@@ -97,8 +110,7 @@ export function checkTaskScripts(input: Readonly<{ tasks: ReadonlyMap<string, Tu
     const hasDependencies = task.dependsOn.length > 0;
     if (!hasDependencies && !isImplemented(key, { root, members })) problems.push({ kind: 'unimplementedTask', task: key });
     if (!key.startsWith(ROOT_TASK_PREFIX) && !hasDependencies) continue;
-    const referenced = [...tasks].some(([otherKey, other]) => otherKey !== key && [...other.dependsOn, ...other.with].some((entry) => referencedKey(entry) === key));
-    if (!referenced && !invoked.has(key)) problems.push({ kind: 'unreachableTask', task: key });
+    if (!isReachable(key, { tasks, invoked })) problems.push({ kind: 'unreachableTask', task: key });
   }
 
   return problems;
