@@ -28,6 +28,19 @@ export interface ExadevConfigOptions {
 }
 
 /**
+ * The turbo options with `boundaries.groups` taken from `workspaceArchitecture.groups`, so a repository using both declares its layout once: the tags `turbo-package-tags` requires then cannot drift from the groups the workspace rules check. Options are returned unchanged when either feature is absent or `boundaries` is not enabled. Giving `boundaries.groups` as well is a second declaration of the same layout and throws.
+ */
+function withWorkspaceGroups(turbo: TurboOptions, workspaceArchitecture: WorkspaceArchitectureOptions | undefined): TurboOptions {
+  if (workspaceArchitecture === undefined || turbo.boundaries === undefined) return turbo;
+  if (turbo.boundaries.groups !== undefined) {
+    throw new Error('@exadev/eslint-config: "turbo.boundaries.groups" duplicates "workspaceArchitecture.groups". Omit it: exadevConfig() derives the tag groups from the workspace architecture groups so the layout is declared once.');
+  }
+  const groups = workspaceArchitecture.groups.map(({ name, path }) => ({ name, ...(path !== undefined && { path }) }));
+
+  return { ...turbo, boundaries: { ...turbo.boundaries, groups } };
+}
+
+/**
  * jsdocAndTsdoc, jsonCanonicalConfig, and stylisticCommentsConfig are all bundled unconditionally, the same way recommendedTypeChecked itself is. Unlike react/nextjs below, none of the three is a consumer framework choice with its own optional peer dependency to resolve: eslint-plugin-jsdoc, eslint-plugin-tsdoc, eslint-plugin-json-canonical, and the stylistic comment/JSX plugin stylistic-comments.ts wires in are all plain dependencies of this package (see package.json), so every consumer already has them the moment they depend on this package at all.
  *
  * The tri-state per feature threads straight into each builder's own `enabled` option: true forces on (throwing if the underlying peer isn't resolvable), false forces off (skipping resolution entirely), undefined auto-detects (silently empty if unresolvable, or if an equivalent tool, syncpack for packageJsonKeyOrder, or a project's own .gitignore for gitignore, already does the job). One resolution pass per feature; no separate pre-check gate that would resolve twice.
@@ -43,7 +56,7 @@ export function exadevConfig(options: ExadevConfigOptions = {}, ...userConfigs: 
     ...buildNextjsConfig({ enabled: options.nextjs }),
     ...buildPackageJsonKeyOrderConfig({ enabled: options.packageJsonKeyOrder }),
     ...(options.workspaceArchitecture !== undefined ? buildWorkspaceArchitectureConfig(options.workspaceArchitecture) : []),
-    ...(options.turbo !== undefined ? buildTurboConfig(options.turbo) : []),
+    ...(options.turbo !== undefined ? buildTurboConfig(withWorkspaceGroups(options.turbo, options.workspaceArchitecture)) : []),
     ...userConfigs,
   ];
 

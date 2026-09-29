@@ -618,15 +618,19 @@ with `"_lint:fix": { "cache": false }` in `turbo.json`.
 Tags cover allow and deny relations but not rank, rank skipping or cycles, so `no-uphill-dependency` and `no-dependency-cycle` remain useful alongside them.
 
 - `turbo-boundaries-config` requires the root `turbo.json` to have a `boundaries` key; `"boundaries": {}` is enough to opt in.
-- `turbo-package-tags` requires every workspace package to have its own `turbo.json` with `"extends": ["//"]` and a non-empty top-level `tags` list (the shape the [package configuration reference](https://turborepo.dev/docs/reference/package-configurations) documents). With `boundaries.groups` (`{ name, path? }`, `path` defaulting to `name`, relative to the repository root), the tags must also include the name of the group the package's directory falls under, the longest matching path, so the layout is declared once and the tags cannot drift from it. A workspace package under no group throws rather than being skipped. Diagnostics land on the package's `package.json`, the one file every package has.
+- `turbo-package-tags` requires every workspace package to have its own `turbo.json` with `"extends": ["//"]` and a non-empty top-level `tags` list (the shape the [package configuration reference](https://turborepo.dev/docs/reference/package-configurations) documents). With `boundaries.groups` (`{ name, path? }`, `path` defaulting to `name`, relative to the repository root), the tags must also include the name of the group the package's directory falls under, the longest matching path, so the layout is declared once and the tags cannot drift from it: `exadevConfig({ workspaceArchitecture, turbo })` takes `boundaries.groups` from `workspaceArchitecture.groups` (and throws if `boundaries.groups` is given as well), while the standalone `turboConfig()` needs `boundaries.groups` and `workspaceArchitectureConfig()` needs `groups` passed from one shared array, since neither can see the other. A workspace package under no group throws rather than being skipped. Diagnostics land on the package's `package.json`, the one file every package has.
 - `turbo-boundaries-script` requires the root package's `boundaries` script to be exactly `turbo boundaries`, and, with `boundaries.aggregateScript`, that script (the one run before pushing) to invoke it, directly or as `pnpm boundaries` or `npm run boundaries`.
 - `no-boundaries-ignore` bans the `@boundaries-ignore` comment, the same stance `noInlineConfig` takes on `eslint-disable`. A comment counts the way turbo reads it: its text, trimmed, starts with the directive. `turbo boundaries --ignore=all` inserts one above every import it reports, so the check could otherwise be silenced wholesale without anyone deciding to. Where a few reasoned exceptions are wanted, `boundaries.allowIgnore` lists `{ files, reason }` entries; `files` are globs relative to ESLint's working directory and `reason` is required.
 
 ```ts
+const groups = [{ name: 'core' }, { name: 'features' }, { name: 'targets' }];
+
+// Standalone: one shared array. exadevConfig({ workspaceArchitecture: { groups }, turbo }) derives it.
+workspaceArchitectureConfig({ groups });
 turboConfig({
   boundaries: {
     aggregateScript: 'check',
-    groups: [{ name: 'core' }, { name: 'features' }, { name: 'targets' }],
+    groups,
     allowIgnore: [{ files: ['scripts/**'], reason: 'build scripts import the workspace root config' }],
   },
 });
