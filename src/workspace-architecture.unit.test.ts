@@ -11,7 +11,7 @@ const MINIMAL = { groups: [{ name: 'core', rank: 0 }] };
 describe('workspaceArchitectureConfig', () => {
   // requireFn is buildWorkspaceArchitectureConfig's own test seam, deliberately absent from workspaceArchitectureConfig's public parameter type (see that function's own comment), so the two requireFn-driven cases below call the internal builder directly rather than the public export.
   it('throws naming the real install command when @eslint/json is not resolvable', () => {
-    expect(() => buildWorkspaceArchitectureConfig({ ...MINIMAL, requireFn: throwingRequireFn })).toThrow(/pnpm add -D @eslint\/json/);
+    expect(() => buildWorkspaceArchitectureConfig({ ...MINIMAL, requireFn: throwingRequireFn })).toThrow(/^@exadev\/eslint-config: workspace architecture rules needs '@eslint\/json'.*pnpm add -D @eslint\/json$/);
   });
 
   it('wires no-uphill-dependency and no-dependency-cycle onto **/package.json, but not package-name-mirrors-path when "naming" is omitted', () => {

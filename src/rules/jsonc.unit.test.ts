@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { parseJsonc, stripJsonc } from './jsonc';
+import { endOfString, parseJsonc, stripJsonc } from './jsonc';
+
+describe('endOfString', () => {
+  it('returns the index just past the closing quote', () => {
+    const text = 'x"ab"y';
+    expect(endOfString(text, 1)).toBe(text.indexOf('y'));
+  });
+
+  it('throws when the start is not an opening quote', () => {
+    expect(() => endOfString('abc', 0)).toThrow(/Unreachable/);
+  });
+});
 
 describe('stripJsonc', () => {
   it('leaves plain JSON untouched', () => {
@@ -39,6 +50,24 @@ describe('stripJsonc', () => {
 
   it('copes with an unterminated string by copying it to the end', () => {
     expect(stripJsonc('{"a": "open')).toBe('{"a": "open');
+  });
+
+  it('starts a block comment only at a slash followed by an asterisk', () => {
+    expect(stripJsonc('{"a": 2*3}')).toBe('{"a": 2*3}');
+  });
+
+  it('does not close a block comment on the asterisk-slash overlapping its own opener', () => {
+    expect(stripJsonc('/*/ x */1')).toBe('1');
+  });
+
+  it('keeps whitespace inside brackets when there was no comma', () => {
+    expect(stripJsonc('[ ]')).toBe('[ ]');
+    expect(stripJsonc('{ }')).toBe('{ }');
+  });
+
+  it('keeps a string that ends in an escaped backslash before its closing quote, and one cut off by a dangling backslash', () => {
+    expect(stripJsonc('["a\\"]')).toBe('["a\\"]');
+    expect(stripJsonc('["a\\')).toBe('["a\\');
   });
 
   it('drops a trailing comma before } and before ]', () => {

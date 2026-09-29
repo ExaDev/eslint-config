@@ -72,7 +72,7 @@ describe('buildPackageJsonKeyOrderConfig', () => {
   });
 
   it('enabled: true and @eslint/json is missing — throws an actionable error naming the real install command', () => {
-    expect(() => buildPackageJsonKeyOrderConfig({ cwd, enabled: true, requireFn: throwingRequireFn })).toThrow(/pnpm add -D @eslint\/json/);
+    expect(() => buildPackageJsonKeyOrderConfig({ cwd, enabled: true, requireFn: throwingRequireFn })).toThrow(/^@exadev\/eslint-config: package\.json key ordering needs '@eslint\/json'.*pnpm add -D @eslint\/json$/);
   });
 
   it('auto-detect: a real config block when no syncpack config exists and @eslint/json genuinely resolves', () => {
