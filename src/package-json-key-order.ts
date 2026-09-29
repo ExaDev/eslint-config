@@ -1,9 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ConfigArrayValue } from './config-types';
-import { resolveJsonPlugin } from './json-plugin';
-import { tryRequire, type RequireFn } from './optional-plugin';
-import plugin from './plugin';
+import { buildJsonLanguageBlock, requireJsonPlugin, tryResolveJsonPlugin } from './json-language-config';
+import type { RequireFn } from './optional-plugin';
 import type { PackageJsonKeyOrderOptions } from './rules/package-json-key-order';
 
 export interface PackageJsonKeyOrderConfigOptions extends PackageJsonKeyOrderOptions {
@@ -50,17 +49,8 @@ export function buildPackageJsonKeyOrderConfig(options: PackageJsonKeyOrderConfi
   if (options.enabled === undefined && hasSyncpackConfig(cwd)) return [];
 
   // @eslint/json is ESM-only, so this resolves synchronously only where Node's own require() can load an ESM module synchronously (stable since Node 22.12) — on an older supported Node (this package's own engines floor is >=20), resolution fails closed here exactly like a genuinely-absent package would, silently under auto-detect or with a clear thrown error under `enabled: true`, matching every other optional peer in this file's own family (see react.ts/nextjs.ts).
-  const jsonPlugin = resolveJsonPlugin(tryRequire('@eslint/json', options.requireFn));
-  if (jsonPlugin === undefined) {
-    if (options.enabled === true) {
-      // The install command is inlined here rather than hoisted to a module-level constant: a top-level const is evaluated exactly once, at module load, so a test calling this function under a later, distinct mutation-testing run would only ever observe whatever value was frozen in at that first, unmutated load — inlining it means this exact literal is re-evaluated fresh on every call.
-      throw new Error(
-        `@exadev/eslint-config: package.json key ordering was explicitly requested but '@eslint/json' could not be resolved. Install it with: pnpm add -D @eslint/json`,
-      );
-    }
-
-    return [];
-  }
+  const jsonPlugin = options.enabled === true ? requireJsonPlugin('package.json key ordering', options.requireFn) : tryResolveJsonPlugin(options.requireFn);
+  if (jsonPlugin === undefined) return [];
 
   const ruleOptions: PackageJsonKeyOrderOptions = {
     ...(options.sortFirst !== undefined && { sortFirst: options.sortFirst }),
@@ -68,13 +58,11 @@ export function buildPackageJsonKeyOrderConfig(options: PackageJsonKeyOrderConfi
   };
 
   return [
-    {
-      files: ['**/package.json'],
+    buildJsonLanguageBlock({
+      jsonPlugin,
       language: 'json/json',
-      plugins: { exadev: plugin, json: jsonPlugin },
-      rules: {
-        'exadev/package-json-key-order': ['error', ruleOptions],
-      },
-    },
+      files: ['**/package.json'],
+      rules: { 'exadev/package-json-key-order': ['error', ruleOptions] },
+    }),
   ];
 }
