@@ -7,6 +7,16 @@ describe('endOfString', () => {
     expect(endOfString(text, 1)).toBe(text.indexOf('y'));
   });
 
+  it('runs an unterminated string, including a dangling backslash, to the end of the text', () => {
+    const text = '"a\\';
+    expect(endOfString(text, 0)).toBe(text.length);
+  });
+
+  it('treats a backslash followed by any character, whitespace included, as one escape pair', () => {
+    const text = '"a\\ b"';
+    expect(endOfString(text, 0)).toBe(text.length);
+  });
+
   it('throws when the start is not an opening quote', () => {
     expect(() => endOfString('abc', 0)).toThrow(/Unreachable/);
   });
@@ -58,6 +68,10 @@ describe('stripJsonc', () => {
 
   it('does not close a block comment on the asterisk-slash overlapping its own opener', () => {
     expect(stripJsonc('/*/ x */1')).toBe('1');
+  });
+
+  it('keeps leading whitespace before a closing bracket that has no comma at all', () => {
+    expect(stripJsonc('  ]')).toBe('  ]');
   });
 
   it('keeps whitespace inside brackets when there was no comma', () => {
