@@ -1,9 +1,9 @@
 import type { JSONRuleDefinition, JSONRuleVisitor } from '@eslint/json';
-import type { MemberNode, ObjectNode } from '@humanwhocodes/momoa';
+import type { ObjectNode } from '@humanwhocodes/momoa';
 import { findLintedPackage, loadWorkspaceGraph, manifestRelativeDir, type WorkspaceRuleDeps } from './workspace-graph';
 import { readWorkspaceArchitectureOptions, workspaceArchitectureOptionsSchema, type WorkspaceArchitectureOptions } from './workspace-options';
 import { checkScripts, type ScriptProblemKind } from './workspace-requirements';
-import { getMemberKeyName } from './json-member-key';
+import { readScripts, requireScriptEntry } from './manifest-scripts';
 import { readDeclaredName } from './workspace-json-helpers';
 import { realWorkspaceFs } from './workspace-fs';
 
@@ -13,40 +13,6 @@ export type RequiredScriptsRuleDefinition = JSONRuleDefinition<{
   RuleOptions: [WorkspaceArchitectureOptions];
   MessageIds: RequiredScriptsMessageIds;
 }>;
-
-export interface ScriptEntry {
-  readonly command: string | undefined;
-  readonly member: MemberNode;
-}
-
-interface ManifestScripts {
-  // Where a missing-script diagnostic goes: the "scripts" entry itself, or the whole manifest when it has none.
-  readonly loc: MemberNode['loc'];
-  readonly entries: ReadonlyMap<string, ScriptEntry>;
-}
-
-// The package's own top-level "scripts" object members, keyed by script name.
-function readScripts(rootObject: ObjectNode): ManifestScripts {
-  const scriptsMember = rootObject.members.find((member) => getMemberKeyName(member) === 'scripts');
-  if (scriptsMember?.value.type !== 'Object') return { loc: rootObject.loc, entries: new Map() };
-
-  const entries = new Map<string, ScriptEntry>();
-  for (const member of scriptsMember.value.members) {
-    entries.set(getMemberKeyName(member), { command: member.value.type === 'String' ? member.value.value : undefined, member });
-  }
-
-  return { loc: scriptsMember.loc, entries };
-}
-
-/**
- * The entry a content problem refers to. checkScripts only produces a problem for a script present in the map it was given, which is built from these same entries, so a miss means that invariant broke. Exported so the throw, unreachable through the visitor, is tested directly.
- */
-export function requireScriptEntry(entries: ReadonlyMap<string, ScriptEntry>, name: string): ScriptEntry {
-  const entry = entries.get(name);
-  if (entry === undefined) throw new Error(`Unreachable: no script entry named "${name}" among this manifest's own scripts.`);
-
-  return entry;
-}
 
 /**
  * Requires the scripts the shared `requiredScripts` option lists to exist in every workspace package its selector matches, optionally constraining a script's content: the exact command (`equals`), or flags it must (`includes`) or must not (`excludes`) contain, compared token by token so `--max-warnings 0` and `--max-warnings=0` agree and `--passWithNoTests` never matches a longer flag. A missing script is reported once per package, on its `scripts` entry (or the manifest when it has none); a content problem is reported on the script itself. It checks the command line as written and never what the script does when run. A no-op when `requiredScripts` is omitted.
