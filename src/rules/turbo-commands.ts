@@ -44,14 +44,17 @@ export function invokedTurboWords(command: string): readonly string[] {
 }
 
 // Package manager flags that take no value, so the word after one is still the script (or `run`). A flag that takes a value (`--filter boundaries`) must not be skipped: the command line does not say which flags those are, and skipping them would read the flag's value as the script.
-const VALUELESS_MANAGER_FLAGS: ReadonlySet<string> = new Set(['-s', '--silent', '-q', '--quiet', '--if-present', '-w', '--workspace-root']);
+// The list is built per call, not held in a module constant: a module-level mutation is a static mutant that a test runner cannot switch on and off per test.
+function isValuelessManagerFlag(token: string): boolean {
+  return ['-s', '--silent', '-q', '--quiet', '--if-present', '-w', '--workspace-root'].includes(token);
+}
 
 const PACKAGE_MANAGERS: readonly string[] = ['pnpm', 'npm', 'yarn', 'bun'];
 
 function skipValuelessFlags(tokens: readonly string[]): readonly string[] {
   const [first, ...rest] = tokens;
 
-  return first !== undefined && VALUELESS_MANAGER_FLAGS.has(first) ? skipValuelessFlags(rest) : tokens;
+  return first !== undefined && isValuelessManagerFlag(first) ? skipValuelessFlags(rest) : tokens;
 }
 
 // Whether `tokens`, the words after a package manager, name the `boundaries` script: directly or after `run`, with valueless manager flags allowed before either.
