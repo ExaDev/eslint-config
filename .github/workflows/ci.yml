@@ -92,8 +92,8 @@ jobs:
 
   mutation:
     name: Mutation
-    needs: determine-runner
-    runs-on: ${{ fromJson(needs.determine-runner.outputs.selected-runner) }}
+    # Deliberately not the resolved runner: a cold run mutates thousands of mutants against over a thousand tests, which on the fleet's CPU-limited pods ran the full 60 minutes without finishing, while a 2-vCPU hosted runner needs well over half an hour for the same work. Blacksmith's 4-vCPU pool is billed outside GitHub's spending limit, so it does not depend on the fleet heartbeat. Stryker sizes its worker pool from the CPU count, which is accurate on a VM and not inside a throttled pod.
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
