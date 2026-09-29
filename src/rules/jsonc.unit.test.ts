@@ -102,6 +102,7 @@ describe('stripJsonc', () => {
     expect(stripJsonc('{,}')).toBe('{,}');
     expect(stripJsonc('[1,,]')).toBe('[1,,]');
     expect(stripJsonc('[,1]')).toBe('[,1]');
+    expect(stripJsonc(',]')).toBe(',]');
     expect(stripJsonc('{"a":[,]}')).toBe('{"a":[,]}');
   });
 
