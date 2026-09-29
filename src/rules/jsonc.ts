@@ -5,8 +5,8 @@ import { requireChar } from './workspace-path';
  * Index just past the string literal opening at `start` (which must be a `"`), honouring backslash escapes. Exported so its unreachable throw (a `start` that is not a `"`) is tested directly. An unterminated string runs to the end of the text, leaving the resulting syntax error to `JSON.parse`.
  */
 export function endOfString(text: string, start: number): number {
-  // A string literal from its opening quote: escape pairs and ordinary characters, then the closing quote if there is one. Sticky, so it only ever matches at `lastIndex`. Built per call rather than held in a module constant: a module-level value is evaluated once at import, which Stryker treats as a static mutant it cannot attribute to individual tests.
-  const stringLiteral = /"(?:[^"\\]|\\[\s\S]?)*"?/uy;
+  // A string literal from its opening quote: a backslash (which only ever protects a following quote or backslash; any other escaped character is ordinary text to this scan) and ordinary characters, then the closing quote if there is one. Sticky, so it only ever matches at `lastIndex`. Built per call rather than held in a module constant: a module-level value is evaluated once at import, which Stryker treats as a static mutant it cannot attribute to individual tests.
+  const stringLiteral = /"(?:\\["\\]?|[^"\\])*"?/uy;
   stringLiteral.lastIndex = start;
   const match = stringLiteral.exec(text);
   // The pattern is anchored (sticky) at `start`, which the caller guarantees is a `"`, and every part after the opening quote is optional, so it always matches.
