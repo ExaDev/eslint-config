@@ -46,7 +46,7 @@ export function createTurboTaskGraphRule(deps: TurboRuleDeps = {}): TurboTaskGra
 
       return {
         Object(node: ObjectNode, parent) {
-          if (parent?.type !== 'Document' || taskGraph.length === 0) return;
+          if (parent?.type !== 'Document') return;
 
           const config = readTurboJson(parseJsonc(context.sourceCode.text, context.filename), context.filename);
           const dir = dirname(resolve(context.filename));
@@ -65,12 +65,14 @@ export function createTurboTaskGraphRule(deps: TurboRuleDeps = {}): TurboTaskGra
           if (root === undefined) return;
           const packageName = readPackageName(fs, dir);
           for (const { key, member, task } of entries) {
-            const governing = (packageName === undefined ? [key] : [`${packageName}#${key}`, key]).find((candidate) => root.turbo.tasks.has(candidate)) ?? key;
+            const qualifiedKey = packageName === undefined ? undefined : `${packageName}#${key}`;
+            const governing = qualifiedKey !== undefined && root.turbo.tasks.has(qualifiedKey) ? qualifiedKey : key;
             const inherited = root.turbo.tasks.get(governing);
-            const required = requiredEdges(governing, taskGraph);
-            const inheritedMissing = inherited === undefined ? [] : missingEdges(inherited, required);
+            const merged = mergeTask(inherited, task);
+            // An edge the inherited task already lacks is that entry's problem, reported at the root.
+            const dropped = missingEdges(merged, requiredEdges(governing, taskGraph)).filter((edge) => inherited === undefined || inherited.dependsOn.includes(edge));
             const messageId = inherited === undefined ? 'missingEdge' : 'droppedEdge';
-            for (const edge of missingEdges(mergeTask(inherited, task), required).filter((missing) => !inheritedMissing.includes(missing))) {
+            for (const edge of dropped) {
               context.report({ loc: member.name.loc, messageId, data: { task: key, edge } });
             }
           }

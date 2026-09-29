@@ -212,6 +212,12 @@ describe('checkConfigInputs', () => {
     expect(check(files, { tasks: { _lint: { inputs: [] }, '//#_lint': {} } }, '_lint')).toEqual([]);
   });
 
+  it('does not read a nameless package as one called undefined', () => {
+    const files = { '/repo/packages/anon/package.json': JSON.stringify({ scripts: { _lint: 'eslint .' } }), '/repo/eslint.config.ts': '' };
+    const turbo = { tasks: { _lint: {}, 'undefined#_lint': { cache: false } } };
+    expect(check(files, turbo, '_lint')).toEqual([{ kind: 'missingRootConfig', tool: 'eslint', file: 'eslint.config.ts', packages: ['packages/anon'] }]);
+  });
+
   it('names a nameless package by its directory', () => {
     const files = { '/repo/packages/anon/package.json': JSON.stringify({ scripts: { _lint: 'eslint .' } }), '/repo/eslint.config.ts': '' };
     expect(check(files, { tasks: { _lint: {} } }, '_lint')).toEqual([{ kind: 'missingRootConfig', tool: 'eslint', file: 'eslint.config.ts', packages: ['packages/anon'] }]);

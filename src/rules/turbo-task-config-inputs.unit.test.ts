@@ -13,6 +13,7 @@ const fs = createMemoryFs({
   '/repo/tsdown.config.ts': '',
   '/repo/packages/web/package.json': JSON.stringify({ name: 'web', scripts: { _lint: 'eslint .', _typecheck: 'tsc', _build: 'tsdown' } }),
   '/repo/packages/web/tsconfig.json': '',
+  '/repo/packages/api/package.json': JSON.stringify({ name: 'api', scripts: { _typecheck: 'tsc' } }),
   '/single/package.json': JSON.stringify({ name: 'single', scripts: { _lint: 'eslint .' } }),
   '/single/eslint.config.ts': '',
 });
@@ -63,7 +64,8 @@ ruleTester.run('turbo-task-config-inputs', rule, {
     { code: turbo({ _lint: {} }), filename: ROOT, options: [{ toolConfigs: { eslint: [] } }] },
     // A single-package repository needs only its own files, which the default inputs cover.
     { code: turbo({ _lint: {} }), filename: '/single/turbo.json' },
-    // A package configuration is not checked itself.
+    // A package configuration is not checked itself, even where it would be a problem in the root one.
+    { code: turbo({ _lint: { inputs: ['src/**'] } }, { extends: ['//'] }), filename: '/single/turbo.json' },
     { code: turbo({ _lint: { inputs: [] } }, { extends: ['//'] }), filename: '/repo/packages/web/turbo.json' },
     // No tasks, and a nested object that is not the document.
     { code: '{}', filename: ROOT },
@@ -86,7 +88,7 @@ ruleTester.run('turbo-task-config-inputs', rule, {
       filename: ROOT,
       errors: [
         { messageId: 'missingPackageConfig', data: { task: '_typecheck', tool: 'tsc', file: 'tsconfig.json', packages: 'web' }, line: FIRST_TASK_LINE },
-        { messageId: 'missingRootConfig', data: { task: '_typecheck', tool: 'tsc', file: 'tsconfig.base.json', packages: 'web' }, line: FIRST_TASK_LINE },
+        { messageId: 'missingRootConfig', data: { task: '_typecheck', tool: 'tsc', file: 'tsconfig.base.json', packages: 'api, web' }, line: FIRST_TASK_LINE },
       ],
     },
     // The single-package repository is checked when its inputs replace the default.

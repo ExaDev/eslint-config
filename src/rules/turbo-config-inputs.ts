@@ -62,14 +62,15 @@ function matchesGlob(file: string, input: InputGlob): boolean {
  */
 export function cacheKeyIncludes(input: Readonly<{ file: string; task: TurboTask; globalDependencies: readonly string[]; dirs: Readonly<{ root: string; pkg: string }> }>): boolean {
   const { file, task, globalDependencies, dirs } = input;
-  const entries = task.inputs ?? [];
-  const includes = entries.filter((entry) => !entry.startsWith('!')).map((entry) => toInputGlob(entry, dirs));
-  const excludes = entries.filter((entry) => entry.startsWith('!')).map((entry) => toInputGlob(entry.slice('!'.length), dirs));
-  const usesDefault = task.inputs === undefined || task.inputs.includes(TURBO_DEFAULT);
+  const entries = task.inputs ?? [TURBO_DEFAULT];
+  // A `!` glob is read like any other and then excludes: a file only a `!` glob matches is excluded anyway, so listing it does not include it.
+  const globs = entries.map((entry) => ({ negated: entry.startsWith('!'), glob: toInputGlob(entry.startsWith('!') ? entry.slice('!'.length) : entry, dirs) }));
+  const listed = globs.some(({ glob }) => matchesGlob(file, glob));
+  const excluded = globs.some(({ negated, glob }) => negated && matchesGlob(file, glob));
   const inPackage = !relative(dirs.pkg, file).startsWith('..');
-  const included = (usesDefault && inPackage) || includes.some((glob) => matchesGlob(file, glob));
+  const included = (entries.includes(TURBO_DEFAULT) && inPackage) || listed;
 
-  return createFileScope(globalDependencies)(file, dirs.root) || (included && !excludes.some((glob) => matchesGlob(file, glob)));
+  return createFileScope(globalDependencies)(file, dirs.root) || (included && !excluded);
 }
 
 export type ConfigInputProblemKind = 'missingPackageConfig' | 'missingRootConfig';
@@ -92,8 +93,9 @@ function missingConfigs(
 ): readonly MissingConfig[] {
   const { fs, config, task, pkg, command, dirs, toolConfigs } = input;
 
-  return toolsRunBy(command, [...toolConfigs.keys()]).flatMap((tool) => {
-    const globs = toolConfigs.get(tool) ?? [];
+  const tools = toolsRunBy(command, [...toolConfigs.keys()]);
+
+  return [...toolConfigs].filter(([tool]) => tools.includes(tool)).flatMap(([tool, globs]) => {
     const candidates: readonly (MissingConfig & Readonly<{ path: string }>)[] = [
       ...configFilesIn(fs, dirs.pkg, globs).map((file) => ({ kind: 'missingPackageConfig' as const, tool, file, path: join(dirs.pkg, file) })),
       ...(pkg.dir === '' ? [] : configFilesIn(fs, dirs.root, globs).map((file) => ({ kind: 'missingRootConfig' as const, tool, file, path: join(dirs.root, file) }))),
@@ -121,12 +123,14 @@ export function checkConfigInputs(
   const { fs, rootDir, config, key, entry, packages, toolConfigs } = input;
   const script = baseTaskName(key);
   const grouped = new Map<string, ConfigInputProblem>();
+  // Keyed by directory; the root package has no entry, since its own turbo.json is the root configuration itself.
+  const ownConfigs = new Map(packages.members.map((member) => [member.dir, readTurboJsonAt(fs, join(rootDir, member.dir))]));
 
   for (const { pkg, command } of implementingScripts(key, packages)) {
     const qualifier = pkg.dir === '' ? ROOT_PACKAGE_QUALIFIER : pkg.name;
     // A package with a `package#task` entry of its own is checked under that key, not under the generic one.
     if (qualifier !== undefined && key === script && config.tasks.has(`${qualifier}#${script}`)) continue;
-    const local = pkg.dir === '' ? undefined : readTurboJsonAt(fs, join(rootDir, pkg.dir))?.tasks.get(script);
+    const local = ownConfigs.get(pkg.dir)?.tasks.get(script);
     const task = local === undefined ? entry : mergeTask(entry, local);
     if (task.cache === false) continue;
     const dirs = { root: rootDir, pkg: resolve(rootDir, pkg.dir) };

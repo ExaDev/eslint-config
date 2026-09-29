@@ -119,6 +119,8 @@ describe('readTurboOptions', () => {
     ['toolConfigs globs type', { toolConfigs: { eslint: 'eslint.config.*' } }, 'toolConfigs.eslint', 'must be an array of glob strings.'],
     ['toolConfigs duplicate', { toolConfigs: { eslint: ['a', 'a'] } }, 'toolConfigs.eslint', 'must not contain duplicate globs.'],
     ['toolConfigs path', { toolConfigs: { eslint: ['config/eslint.*'] } }, 'toolConfigs.eslint', 'must hold file name globs without "/"'],
+    ['toolConfigs mixed path', { toolConfigs: { eslint: ['eslint.config.*', 'config/eslint.*'] } }, 'toolConfigs.eslint', 'must hold file name globs without "/"'],
+    ['schemaHosts mixed', { hygiene: { schemaHosts: ['turborepo.com', 'https://x.io'] } }, 'hygiene.schemaHosts', 'must hold bare host names'],
     ['taskGraph type', { taskGraph: {} }, 'taskGraph', 'must be an array.'],
     ['taskGraph task', { taskGraph: [{ task: '', dependsOn: ['a'] }] }, 'taskGraph task', 'must be a non-empty string.'],
     ['taskGraph dependsOn type', { taskGraph: [{ task: 'a', dependsOn: 'b' }] }, 'taskGraph dependsOn', 'must be an array of non-empty strings.'],
