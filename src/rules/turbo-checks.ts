@@ -93,7 +93,7 @@ function isReachable(key: string, context: Readonly<{ tasks: ReadonlyMap<string,
   return [...tasks].some(
     ([otherKey, other]) =>
       otherKey !== key &&
-      [...other.dependsOn, ...other.with].map(referencedKey).some((entry) => entry === key || (bareName !== undefined && otherKey.startsWith(ROOT_TASK_PREFIX) && entry === bareName)),
+      [...other.dependsOn, ...other.with].map(referencedKey).some((entry) => entry === key || (otherKey.startsWith(ROOT_TASK_PREFIX) && entry === bareName)),
   );
 }
 
