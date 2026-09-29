@@ -1,6 +1,6 @@
 import { realpathSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { listEntryNames, listSubdirectories, realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
+import { listEntryNames, listFileNames, listSubdirectories, realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
 
 function fakeFs(tree: Record<string, readonly string[]>): WorkspaceFs {
   return {
@@ -50,5 +50,15 @@ describe('listEntryNames', () => {
 
   it('returns files and directories alike', () => {
     expect(listEntryNames(fakeFs({ '/root': ['a', 'b', 'package.json'] }), '/root')).toEqual(['a', 'b', 'package.json']);
+  });
+});
+
+describe('listFileNames', () => {
+  it('returns an empty array for a directory that does not exist', () => {
+    expect(listFileNames(fakeFs({}), '/root/missing')).toEqual([]);
+  });
+
+  it('returns only file entries, filtering out directories', () => {
+    expect(listFileNames(fakeFs({ '/root': ['a', 'b', 'package.json', 'eslint.config.ts'] }), '/root')).toEqual(['package.json', 'eslint.config.ts']);
   });
 });

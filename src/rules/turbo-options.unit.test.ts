@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_DELEGATE, DEFAULT_FIX_FLAGS, DEFAULT_TASK_PREFIX, loadTurboOptions, readTurboOptions, resolveTurboOptions, turboOptionsSchema } from './turbo-options';
+import { DEFAULT_DELEGATE, DEFAULT_FIX_FLAGS, DEFAULT_SCHEMA_HOSTS, DEFAULT_TASK_PREFIX, DEFAULT_TOOL_CONFIGS, loadTurboOptions, readTurboOptions, resolveTurboOptions, turboOptionsSchema } from './turbo-options';
 
 const PREFIX = '@exadev/eslint-config: ';
 
@@ -9,12 +9,23 @@ describe('defaults', () => {
     expect(DEFAULT_DELEGATE).toBe('turbo run');
     expect(DEFAULT_FIX_FLAGS).toEqual(['--fix', '--write']);
   });
+
+  it('pair the tools with the config files they read and name the hosts turbo publishes its schema under', () => {
+    expect(DEFAULT_TOOL_CONFIGS).toEqual({ eslint: ['eslint.config.*'], tsc: ['tsconfig*.json'], vitest: ['vitest.config.*'] });
+    expect(DEFAULT_SCHEMA_HOSTS).toEqual(['turborepo.com', 'turborepo.dev', 'turbo.build']);
+  });
 });
 
 describe('turboOptionsSchema', () => {
   it('accepts exactly the keys the reader accepts', () => {
-    expect(Object.keys(turboOptionsSchema.properties)).toEqual(['root', 'packages', 'prefix', 'delegate', 'exemptTasks', 'requireEmptyOutputs', 'fixFlags', 'boundaries']);
+    expect(Object.keys(turboOptionsSchema.properties)).toEqual(['root', 'packages', 'prefix', 'delegate', 'exemptTasks', 'requireEmptyOutputs', 'fixFlags', 'toolConfigs', 'taskGraph', 'hygiene', 'boundaries']);
     expect(Object.keys(turboOptionsSchema.properties.boundaries.properties)).toEqual(['aggregateScript', 'groups', 'allowIgnore']);
+    expect(Object.keys(turboOptionsSchema.properties.hygiene.properties)).toEqual(['schemaHosts', 'requireCiPassThrough', 'aggregateTask']);
+    expect(Object.keys(turboOptionsSchema.properties.hygiene.properties.aggregateTask.properties)).toEqual(['name', 'includes']);
+    expect(Object.keys(turboOptionsSchema.properties.taskGraph.items.properties)).toEqual(['task', 'dependsOn']);
+    expect(turboOptionsSchema.properties.hygiene.additionalProperties).toBe(false);
+    expect(turboOptionsSchema.properties.hygiene.properties.aggregateTask.additionalProperties).toBe(false);
+    expect(turboOptionsSchema.properties.taskGraph.items.additionalProperties).toBe(false);
     expect(turboOptionsSchema.additionalProperties).toBe(false);
     expect(turboOptionsSchema.properties.boundaries.additionalProperties).toBe(false);
   });
@@ -35,6 +46,9 @@ describe('readTurboOptions', () => {
       exemptTasks: ['//#depcheck'],
       requireEmptyOutputs: true,
       fixFlags: ['--fix'],
+      toolConfigs: { eslint: ['eslint.config.*', '.eslintrc.*'], stylelint: [], tsc: ['tsconfig.base.json'] },
+      taskGraph: [{ task: '_build', dependsOn: ['_typecheck', '^_build'] }, { task: 'web#_build', dependsOn: ['gen'] }],
+      hygiene: { schemaHosts: ['turborepo.dev'], requireCiPassThrough: true, aggregateTask: { name: '_prepush', includes: ['_lint', '_test'] } },
       boundaries: {
         aggregateScript: 'check',
         groups: [{ name: 'core' }, { name: 'app', path: 'apps' }],
@@ -54,8 +68,11 @@ describe('readTurboOptions', () => {
 
   it('lists the accepted keys in the message', () => {
     expect(() => readTurboOptions('x')).toThrow(
-      `${PREFIX}"turbo options" must be an object with only the keys "root", "packages", "prefix", "delegate", "exemptTasks", "requireEmptyOutputs", "fixFlags", "boundaries".`,
+      `${PREFIX}"turbo options" must be an object with only the keys "root", "packages", "prefix", "delegate", "exemptTasks", "requireEmptyOutputs", "fixFlags", "toolConfigs", "taskGraph", "hygiene", "boundaries".`,
     );
+    expect(() => readTurboOptions({ taskGraph: [{ task: 'a', extra: 1 }] })).toThrow(`${PREFIX}"taskGraph entry" must be an object with only the keys "task", "dependsOn".`);
+    expect(() => readTurboOptions({ hygiene: { nope: 1 } })).toThrow(`${PREFIX}"hygiene" must be an object with only the keys "schemaHosts", "requireCiPassThrough", "aggregateTask".`);
+    expect(() => readTurboOptions({ hygiene: { aggregateTask: { name: 'a', extra: 1 } } })).toThrow(`${PREFIX}"hygiene.aggregateTask" must be an object with only the keys "name", "includes".`);
     expect(() => readTurboOptions({ boundaries: { groups: [{ nope: 1 }] } })).toThrow(`${PREFIX}"boundaries.groups entry" must be an object with only the keys "name", "path".`);
   });
 
@@ -97,6 +114,24 @@ describe('readTurboOptions', () => {
     ['duplicate group', { boundaries: { groups: [{ name: 'a' }, { name: 'a' }] } }, 'boundaries.groups', 'declares more than one group named "a"'],
     ['allowIgnore type', { boundaries: { allowIgnore: {} } }, 'boundaries.allowIgnore', 'must be an array.'],
     ['allowIgnore reason', { boundaries: { allowIgnore: [{ files: ['a'], reason: '' }] } }, 'boundaries.allowIgnore reason', 'must be a non-empty string.'],
+    ['toolConfigs type', { toolConfigs: [] }, 'toolConfigs', 'must be an object mapping a tool command word to its config file globs.'],
+    ['toolConfigs null', { toolConfigs: null }, 'toolConfigs', 'must be an object mapping a tool command word to its config file globs.'],
+    ['toolConfigs globs type', { toolConfigs: { eslint: 'eslint.config.*' } }, 'toolConfigs.eslint', 'must be an array of glob strings.'],
+    ['toolConfigs duplicate', { toolConfigs: { eslint: ['a', 'a'] } }, 'toolConfigs.eslint', 'must not contain duplicate globs.'],
+    ['toolConfigs path', { toolConfigs: { eslint: ['config/eslint.*'] } }, 'toolConfigs.eslint', 'must hold file name globs without "/"'],
+    ['taskGraph type', { taskGraph: {} }, 'taskGraph', 'must be an array.'],
+    ['taskGraph task', { taskGraph: [{ task: '', dependsOn: ['a'] }] }, 'taskGraph task', 'must be a non-empty string.'],
+    ['taskGraph dependsOn type', { taskGraph: [{ task: 'a', dependsOn: 'b' }] }, 'taskGraph dependsOn', 'must be an array of non-empty strings.'],
+    ['taskGraph dependsOn empty', { taskGraph: [{ task: 'a', dependsOn: [] }] }, 'taskGraph dependsOn', 'must name at least one entry.'],
+    ['taskGraph dependsOn duplicate', { taskGraph: [{ task: 'a', dependsOn: ['b', 'b'] }] }, 'taskGraph dependsOn', 'must not name an entry twice.'],
+    ['taskGraph duplicate task', { taskGraph: [{ task: 'a', dependsOn: ['b'] }, { task: 'a', dependsOn: ['c'] }] }, 'taskGraph', 'declares more than one entry for task "a"'],
+    ['schemaHosts empty', { hygiene: { schemaHosts: [] } }, 'hygiene.schemaHosts', 'must name at least one entry.'],
+    ['schemaHosts scheme', { hygiene: { schemaHosts: ['https://turborepo.com'] } }, 'hygiene.schemaHosts', 'must hold bare host names'],
+    ['schemaHosts path', { hygiene: { schemaHosts: ['turborepo.com/schema.json'] } }, 'hygiene.schemaHosts', 'must hold bare host names'],
+    ['schemaHosts space', { hygiene: { schemaHosts: ['turborepo .com'] } }, 'hygiene.schemaHosts', 'must hold bare host names'],
+    ['requireCiPassThrough', { hygiene: { requireCiPassThrough: 1 } }, 'hygiene.requireCiPassThrough', 'must be a boolean.'],
+    ['aggregateTask name', { hygiene: { aggregateTask: { name: '', includes: ['a'] } } }, 'hygiene.aggregateTask name', 'must be a non-empty string.'],
+    ['aggregateTask includes', { hygiene: { aggregateTask: { name: 'a', includes: [] } } }, 'hygiene.aggregateTask includes', 'must name at least one entry.'],
     ['allowIgnore files', { boundaries: { allowIgnore: [{ files: [], reason: 'r' }] } }, 'boundaries.allowIgnore files', 'must contain at least one glob that does not start with "!".'],
   ])('rejects a bad %s', (_label, value, name, detail) => {
     expect(() => readTurboOptions(value)).toThrow(`${PREFIX}"${name}" ${detail}`);
@@ -113,13 +148,37 @@ describe('resolveTurboOptions', () => {
       exemptTasks: new Set(),
       requireEmptyOutputs: false,
       fixFlags: ['--fix', '--write'],
+      toolConfigs: new Map([
+        ['eslint', ['eslint.config.*']],
+        ['tsc', ['tsconfig*.json']],
+        ['vitest', ['vitest.config.*']],
+      ]),
+      taskGraph: [],
+      schemaHosts: ['turborepo.com', 'turborepo.dev', 'turbo.build'],
+      requireCiPassThrough: false,
+      aggregateTask: undefined,
       boundaries: undefined,
     });
   });
 
   it('keeps every given option', () => {
     const boundaries = { aggregateScript: 'check' };
-    expect(resolveTurboOptions({ root: '/r', packages: ['a'], prefix: '__', delegate: 'turbo', exemptTasks: ['x', 'y'], requireEmptyOutputs: true, fixFlags: ['--apply'], boundaries })).toEqual({
+    const taskGraph = [{ task: '_build', dependsOn: ['_typecheck'] }];
+    const aggregateTask = { name: '_prepush', includes: ['_lint'] };
+    const given = {
+      root: '/r',
+      packages: ['a'],
+      prefix: '__',
+      delegate: 'turbo',
+      exemptTasks: ['x', 'y'],
+      requireEmptyOutputs: true,
+      fixFlags: ['--apply'],
+      toolConfigs: { eslint: ['.eslintrc.*'] },
+      taskGraph,
+      hygiene: { schemaHosts: ['turborepo.dev'], requireCiPassThrough: true, aggregateTask },
+      boundaries,
+    } as const;
+    expect(resolveTurboOptions(given)).toEqual({
       root: '/r',
       packages: ['a'],
       prefix: '__',
@@ -127,8 +186,26 @@ describe('resolveTurboOptions', () => {
       exemptTasks: new Set(['x', 'y']),
       requireEmptyOutputs: true,
       fixFlags: ['--apply'],
+      toolConfigs: new Map([
+        ['eslint', ['.eslintrc.*']],
+        ['tsc', ['tsconfig*.json']],
+        ['vitest', ['vitest.config.*']],
+      ]),
+      taskGraph,
+      schemaHosts: ['turborepo.dev'],
+      requireCiPassThrough: true,
+      aggregateTask,
       boundaries,
     });
+  });
+
+  it('lays given tool configs over the defaults and drops a tool given an empty list', () => {
+    const { toolConfigs } = resolveTurboOptions({ toolConfigs: { vitest: [], jest: ['jest.config.*'] } });
+    expect([...toolConfigs]).toEqual([
+      ['eslint', ['eslint.config.*']],
+      ['tsc', ['tsconfig*.json']],
+      ['jest', ['jest.config.*']],
+    ]);
   });
 });
 

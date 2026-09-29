@@ -33,6 +33,33 @@ export interface TurboBoundariesOptions {
   readonly allowIgnore?: readonly AllowedBoundariesIgnore[];
 }
 
+/**
+ * A dependency edge policy: the task named `task` must list every entry of `dependsOn` in its own `dependsOn`, written exactly as it appears there (`_typecheck`, `^_build`, `//#_gen`).
+ */
+export interface TaskGraphRequirement {
+  readonly task: string;
+  readonly dependsOn: readonly string[];
+}
+
+/**
+ * The aggregate task a repository runs before pushing: `name` must be a task of the root `turbo.json` and its `dependsOn` must list every entry of `includes`.
+ */
+export interface AggregateTaskOptions {
+  readonly name: string;
+  readonly includes: readonly string[];
+}
+
+/**
+ * Presence checks on `turbo.json` itself. Every field is optional; the `$schema` check runs with the default hosts even when the option is not given.
+ */
+export interface TurboHygieneOptions {
+  // Hosts a `$schema` URL (`https://<host>/schema.json`) may use. Defaults to the three hosts turbo has published it under; one host makes it the canonical one and reports the others.
+  readonly schemaHosts?: readonly string[];
+  // Require `globalPassThroughEnv` in the root `turbo.json` to include `CI`.
+  readonly requireCiPassThrough?: boolean;
+  readonly aggregateTask?: AggregateTaskOptions;
+}
+
 export interface TurboOptions {
   // The repository root directory. Defaults to the nearest ancestor holding a `turbo.json` that does not extend another.
   readonly root?: string;
@@ -48,12 +75,20 @@ export interface TurboOptions {
   readonly requireEmptyOutputs?: boolean;
   // Flags that make a cached task rewrite its own inputs. Defaults to `--fix` and `--write`.
   readonly fixFlags?: readonly string[];
+  // Tool command word to the config file globs it reads, matched against files directly inside the package or repository root. Entries replace the defaults of the same tool; an empty list stops checking that tool.
+  readonly toolConfigs?: Readonly<Record<string, readonly string[]>>;
+  // Dependency edges that tasks must have. Nothing is required by default, since which graph is right is a per-repository policy.
+  readonly taskGraph?: readonly TaskGraphRequirement[];
+  readonly hygiene?: TurboHygieneOptions;
   readonly boundaries?: TurboBoundariesOptions;
 }
 
 export const DEFAULT_TASK_PREFIX = '_';
 export const DEFAULT_DELEGATE: TurboDelegate = 'turbo run';
 export const DEFAULT_FIX_FLAGS: readonly string[] = ['--fix', '--write'];
+export const DEFAULT_TOOL_CONFIGS: Readonly<Record<string, readonly string[]>> = { eslint: ['eslint.config.*'], tsc: ['tsconfig*.json'], vitest: ['vitest.config.*'] };
+// turbo.json's `$schema` has been published under all three hosts.
+export const DEFAULT_SCHEMA_HOSTS: readonly string[] = ['turborepo.com', 'turborepo.dev', 'turbo.build'];
 
 const nonEmptyString = { type: 'string', minLength: 1 } as const;
 const stringList = { type: 'array', items: nonEmptyString } as const;
@@ -68,6 +103,30 @@ export const turboOptionsSchema = {
     exemptTasks: stringList,
     requireEmptyOutputs: { type: 'boolean' },
     fixFlags: { type: 'array', items: nonEmptyString, minItems: 1 },
+    toolConfigs: { type: 'object', additionalProperties: { type: 'array', items: nonEmptyString, uniqueItems: true } },
+    taskGraph: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { task: nonEmptyString, dependsOn: { type: 'array', items: nonEmptyString, minItems: 1, uniqueItems: true } },
+        required: ['task', 'dependsOn'],
+        additionalProperties: false,
+      },
+    },
+    hygiene: {
+      type: 'object',
+      properties: {
+        schemaHosts: { type: 'array', items: nonEmptyString, minItems: 1, uniqueItems: true },
+        requireCiPassThrough: { type: 'boolean' },
+        aggregateTask: {
+          type: 'object',
+          properties: { name: nonEmptyString, includes: { type: 'array', items: nonEmptyString, minItems: 1, uniqueItems: true } },
+          required: ['name', 'includes'],
+          additionalProperties: false,
+        },
+      },
+      additionalProperties: false,
+    },
     boundaries: {
       type: 'object',
       properties: {
@@ -87,7 +146,10 @@ export const turboOptionsSchema = {
   additionalProperties: false,
 } as const;
 
-const TOP_LEVEL_KEYS = ['root', 'packages', 'prefix', 'delegate', 'exemptTasks', 'requireEmptyOutputs', 'fixFlags', 'boundaries'] as const;
+const TOP_LEVEL_KEYS = ['root', 'packages', 'prefix', 'delegate', 'exemptTasks', 'requireEmptyOutputs', 'fixFlags', 'toolConfigs', 'taskGraph', 'hygiene', 'boundaries'] as const;
+const TASK_GRAPH_KEYS = ['task', 'dependsOn'] as const;
+const HYGIENE_KEYS = ['schemaHosts', 'requireCiPassThrough', 'aggregateTask'] as const;
+const AGGREGATE_TASK_KEYS = ['name', 'includes'] as const;
 const BOUNDARIES_KEYS = ['aggregateScript', 'groups', 'allowIgnore'] as const;
 const GROUP_KEYS = ['name', 'path'] as const;
 const ALLOW_IGNORE_KEYS = ['files', 'reason'] as const;
@@ -155,6 +217,66 @@ function readBoundaries(value: unknown): TurboBoundariesOptions {
   };
 }
 
+function readToolConfigs(value: unknown): Readonly<Record<string, readonly string[]>> {
+  if (!isRecord(value)) fail('toolConfigs', 'must be an object mapping a tool command word to its config file globs.');
+
+  return Object.fromEntries(
+    Object.entries(value).map(([tool, globs]) => {
+      const optionName = `toolConfigs.${tool}`;
+      if (Array.isArray(globs) && globs.length === 0) return [tool, []];
+      const list = readFileGlobs(globs, optionName);
+      if (list.some((glob) => glob.includes('/'))) fail(optionName, 'must hold file name globs without "/": they are matched against files directly inside a package or the repository root.');
+
+      return [tool, list];
+    }),
+  );
+}
+
+function readNonEmptyList(value: unknown, optionName: string): readonly string[] {
+  const list = readStringList(value, optionName);
+  if (list.length === 0) fail(optionName, 'must name at least one entry.');
+  if (new Set(list).size !== list.length) fail(optionName, 'must not name an entry twice.');
+
+  return list;
+}
+
+function readTaskGraph(value: unknown): readonly TaskGraphRequirement[] {
+  const tasks = new Set<string>();
+
+  return readArray(value, 'taskGraph').map((item) => {
+    const entry = readEntry(item, 'taskGraph entry', TASK_GRAPH_KEYS);
+    const task = readNonEmptyString(entry['task'], 'taskGraph task');
+    if (tasks.has(task)) fail('taskGraph', `declares more than one entry for task "${task}"; list all its required edges in one entry.`);
+    tasks.add(task);
+
+    return { task, dependsOn: readNonEmptyList(entry['dependsOn'], 'taskGraph dependsOn') };
+  });
+}
+
+function readSchemaHosts(value: unknown): readonly string[] {
+  const hosts = readNonEmptyList(value, 'hygiene.schemaHosts');
+  if (hosts.some((host) => /[/:\s]/u.test(host))) fail('hygiene.schemaHosts', 'must hold bare host names such as "turborepo.com", without a scheme or path.');
+
+  return hosts;
+}
+
+function readAggregateTask(value: unknown): AggregateTaskOptions {
+  const entry = readEntry(value, 'hygiene.aggregateTask', AGGREGATE_TASK_KEYS);
+
+  return { name: readNonEmptyString(entry['name'], 'hygiene.aggregateTask name'), includes: readNonEmptyList(entry['includes'], 'hygiene.aggregateTask includes') };
+}
+
+function readHygiene(value: unknown): TurboHygieneOptions {
+  const entry = readEntry(value, 'hygiene', HYGIENE_KEYS);
+  const { schemaHosts, requireCiPassThrough, aggregateTask } = entry;
+
+  return {
+    ...(schemaHosts !== undefined && { schemaHosts: readSchemaHosts(schemaHosts) }),
+    ...(requireCiPassThrough !== undefined && { requireCiPassThrough: readBoolean(requireCiPassThrough, 'hygiene.requireCiPassThrough') }),
+    ...(aggregateTask !== undefined && { aggregateTask: readAggregateTask(aggregateTask) }),
+  };
+}
+
 function readDelegate(value: unknown): TurboDelegate {
   if (value !== 'turbo run' && value !== 'turbo') fail('delegate', 'must be "turbo run" or "turbo".');
 
@@ -173,7 +295,7 @@ function readBoolean(value: unknown, optionName: string): boolean {
 export function readTurboOptions(options: unknown): TurboOptions {
   if (options === undefined) return {};
   const entry = readEntry(options, 'turbo options', TOP_LEVEL_KEYS);
-  const { root, packages, prefix, delegate, exemptTasks, requireEmptyOutputs, fixFlags, boundaries } = entry;
+  const { root, packages, prefix, delegate, exemptTasks, requireEmptyOutputs, fixFlags, toolConfigs, taskGraph, hygiene, boundaries } = entry;
   const fixFlagList = fixFlags === undefined ? undefined : readStringList(fixFlags, 'fixFlags');
   if (fixFlagList?.length === 0) fail('fixFlags', 'must name at least one flag.');
 
@@ -185,6 +307,9 @@ export function readTurboOptions(options: unknown): TurboOptions {
     ...(exemptTasks !== undefined && { exemptTasks: readStringList(exemptTasks, 'exemptTasks') }),
     ...(requireEmptyOutputs !== undefined && { requireEmptyOutputs: readBoolean(requireEmptyOutputs, 'requireEmptyOutputs') }),
     ...(fixFlagList !== undefined && { fixFlags: fixFlagList }),
+    ...(toolConfigs !== undefined && { toolConfigs: readToolConfigs(toolConfigs) }),
+    ...(taskGraph !== undefined && { taskGraph: readTaskGraph(taskGraph) }),
+    ...(hygiene !== undefined && { hygiene: readHygiene(hygiene) }),
     ...(boundaries !== undefined && { boundaries: readBoundaries(boundaries) }),
   };
 }
@@ -198,6 +323,12 @@ export interface ResolvedTurboOptions {
   readonly exemptTasks: ReadonlySet<string>;
   readonly requireEmptyOutputs: boolean;
   readonly fixFlags: readonly string[];
+  // The defaults with the given entries laid over them, and the tools given an empty list removed.
+  readonly toolConfigs: ReadonlyMap<string, readonly string[]>;
+  readonly taskGraph: readonly TaskGraphRequirement[];
+  readonly schemaHosts: readonly string[];
+  readonly requireCiPassThrough: boolean;
+  readonly aggregateTask: AggregateTaskOptions | undefined;
   readonly boundaries: TurboBoundariesOptions | undefined;
 }
 
@@ -210,6 +341,11 @@ export function resolveTurboOptions(options: TurboOptions): ResolvedTurboOptions
     exemptTasks: new Set(options.exemptTasks),
     requireEmptyOutputs: options.requireEmptyOutputs ?? false,
     fixFlags: options.fixFlags ?? DEFAULT_FIX_FLAGS,
+    toolConfigs: new Map(Object.entries({ ...DEFAULT_TOOL_CONFIGS, ...options.toolConfigs }).filter(([, globs]) => globs.length > 0)),
+    taskGraph: options.taskGraph ?? [],
+    schemaHosts: options.hygiene?.schemaHosts ?? DEFAULT_SCHEMA_HOSTS,
+    requireCiPassThrough: options.hygiene?.requireCiPassThrough ?? false,
+    aggregateTask: options.hygiene?.aggregateTask,
     boundaries: options.boundaries,
   };
 }
