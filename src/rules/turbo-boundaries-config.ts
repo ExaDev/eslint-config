@@ -33,7 +33,7 @@ export const turboBoundariesConfigRule: TurboBoundariesConfigRuleDefinition = {
       Object(node: ObjectNode, parent) {
         if (parent?.type !== 'Document') return;
 
-        const config = readTurboJson(parseJsonc(context.sourceCode.text, context.filename));
+        const config = readTurboJson(parseJsonc(context.sourceCode.text, context.filename), context.filename);
         if (config.extends === undefined && !config.hasBoundaries) context.report({ loc: node.loc, messageId: 'missingBoundaries' });
       },
     } satisfies JSONRuleVisitor;

@@ -37,41 +37,58 @@ function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
 
-function stringArray(value: unknown): readonly string[] {
-  return Array.isArray(value) ? value.filter(isString) : [];
+function malformed(source: string, at: string, expected: string): never {
+  throw new Error(`@exadev/eslint-config: ${source}: ${at} must be ${expected}.`);
 }
 
-function optionalBoolean(value: unknown): boolean | undefined {
-  return typeof value === 'boolean' ? value : undefined;
+function stringArray(value: unknown, source: string, at: string): readonly string[] {
+  if (!Array.isArray(value) || !value.every(isString)) malformed(source, at, 'an array of strings');
+
+  return value;
 }
 
-function readTask(value: unknown): TurboTask {
-  const entry = isRecord(value) ? value : {};
+function optionalBoolean(value: unknown, source: string, at: string): boolean | undefined {
+  if (value !== undefined && typeof value !== 'boolean') malformed(source, at, 'a boolean');
+
+  return value;
+}
+
+// Turbo's schema types `outputs` as an array or null; null declares nothing, the same as leaving the key out.
+function declaresOutputs(value: unknown, source: string, at: string): boolean {
+  if (value !== undefined && value !== null && !Array.isArray(value)) malformed(source, at, 'an array or null');
+
+  return Array.isArray(value);
+}
+
+function readTask(value: unknown, source: string, key: string): TurboTask {
+  const at = `task "${key}"`;
+  if (!isRecord(value)) malformed(source, at, 'an object');
 
   return {
-    dependsOn: stringArray(entry['dependsOn']),
-    with: stringArray(entry['with']),
-    cache: optionalBoolean(entry['cache']),
-    persistent: optionalBoolean(entry['persistent']),
-    hasOutputs: 'outputs' in entry,
-    keys: Object.keys(entry),
+    dependsOn: 'dependsOn' in value ? stringArray(value['dependsOn'], source, `"dependsOn" of ${at}`) : [],
+    with: 'with' in value ? stringArray(value['with'], source, `"with" of ${at}`) : [],
+    cache: optionalBoolean(value['cache'], source, `"cache" of ${at}`),
+    persistent: optionalBoolean(value['persistent'], source, `"persistent" of ${at}`),
+    hasOutputs: declaresOutputs(value['outputs'], source, `"outputs" of ${at}`),
+    keys: Object.keys(value),
   };
 }
 
 /**
- * Reads the parts of a parsed `turbo.json` the turbo rules need. Anything the file gets wrong (a `tasks` that is not an object, a `dependsOn` that is not a list of strings) reads as absent: turbo's own schema is what reports a malformed configuration, not these rules.
+ * Reads the parts of a parsed `turbo.json` the turbo rules need. `source` names the file in the error thrown when a value the rules read has the wrong type (a `tasks` that is not an object, a `dependsOn` that is not a list of strings): reading it as absent would make the task look unimplemented or graph-only with no hint of the real cause, so the malformed value is reported where it is. `boundaries` is the exception: whether it is an object is exactly what `turbo-boundaries-config` judges, so any other value reads as absent.
  */
-export function readTurboJson(value: unknown): TurboJson {
-  const config = isRecord(value) ? value : {};
+export function readTurboJson(value: unknown, source: string): TurboJson {
+  if (!isRecord(value)) malformed(source, 'the configuration', 'an object');
   const tasks = new Map<string, TurboTask>();
-  if (isRecord(config['tasks'])) {
-    for (const [key, entry] of Object.entries(config['tasks'])) tasks.set(key, readTask(entry));
+  if ('tasks' in value) {
+    if (!isRecord(value['tasks'])) malformed(source, '"tasks"', 'an object');
+    for (const [key, entry] of Object.entries(value['tasks'])) tasks.set(key, readTask(entry, source, key));
   }
 
   return {
-    extends: 'extends' in config ? stringArray(config['extends']) : undefined,
-    hasBoundaries: isRecord(config['boundaries']),
-    tags: stringArray(config['tags']),
+    extends: 'extends' in value ? stringArray(value['extends'], source, '"extends"') : undefined,
+    hasBoundaries: isRecord(value['boundaries']),
+    tags: 'tags' in value ? stringArray(value['tags'], source, '"tags"') : [],
     tasks,
   };
 }
@@ -83,7 +100,7 @@ export function readTurboJsonAt(fs: WorkspaceFs, dir: string): TurboJson | undef
   const path = join(dir, TURBO_JSON);
   if (!fs.existsSync(path)) return undefined;
 
-  return readTurboJson(parseJsonc(fs.readFileSync(path), path));
+  return readTurboJson(parseJsonc(fs.readFileSync(path), path), path);
 }
 
 /** A repository's root turbo configuration and the directory it sits in. */

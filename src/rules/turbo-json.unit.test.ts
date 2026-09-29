@@ -32,8 +32,10 @@ describe('constants', () => {
 });
 
 describe('readTurboJson', () => {
+  const read = (value: unknown) => readTurboJson(value, '/repo/turbo.json');
+
   it('reads a task with every field the rules use', () => {
-    const { tasks } = readTurboJson({ tasks: { build: { dependsOn: ['^build', 'gen'], with: ['watch'], cache: false, persistent: true, outputs: [], inputs: ['src/**'] } } });
+    const { tasks } = read({ tasks: { build: { dependsOn: ['^build', 'gen'], with: ['watch'], cache: false, persistent: true, outputs: [], inputs: ['src/**'] } } });
     expect(tasks.get('build')).toEqual({
       dependsOn: ['^build', 'gen'],
       with: ['watch'],
@@ -45,53 +47,53 @@ describe('readTurboJson', () => {
   });
 
   it('reads an empty task as defaults', () => {
-    expect(readTurboJson({ tasks: { build: {} } }).tasks.get('build')).toEqual({ dependsOn: [], with: [], cache: undefined, persistent: undefined, hasOutputs: false, keys: [] });
+    expect(read({ tasks: { build: {} } }).tasks.get('build')).toEqual({ dependsOn: [], with: [], cache: undefined, persistent: undefined, hasOutputs: false, keys: [] });
   });
 
-  it('treats a task that is not an object as an empty one', () => {
-    expect(readTurboJson({ tasks: { build: null } }).tasks.get('build')).toEqual(task());
+  it('does not count outputs: null as declaring outputs', () => {
+    expect(read({ tasks: { a: { outputs: null } } }).tasks.get('a')).toEqual(task({ keys: ['outputs'] }));
   });
 
-  it('keeps only string entries of a list and only boolean flags', () => {
-    const entry = readTurboJson({ tasks: { build: { dependsOn: ['a', 1, null], with: 'x', cache: 'no', persistent: 1 } } }).tasks.get('build');
-    expect(entry?.dependsOn).toEqual(['a']);
-    expect(entry?.with).toEqual([]);
-    expect(entry?.cache).toBeUndefined();
-    expect(entry?.persistent).toBeUndefined();
+  it('reads no tasks when tasks is missing', () => {
+    expect(read({}).tasks.size).toBe(0);
   });
 
-  it('counts an outputs key of any value as declared', () => {
-    expect(readTurboJson({ tasks: { a: { outputs: null } } }).tasks.get('a')?.hasOutputs).toBe(true);
-  });
-
-  it('reads no tasks when tasks is missing or not an object', () => {
-    expect(readTurboJson({}).tasks.size).toBe(0);
-    expect(readTurboJson({ tasks: [] }).tasks.size).toBe(0);
-  });
-
-  it('reads extends as undefined when absent and as the string entries when present', () => {
-    expect(readTurboJson({}).extends).toBeUndefined();
-    expect(readTurboJson({ extends: ['//', 'web'] }).extends).toEqual(['//', 'web']);
-    expect(readTurboJson({ extends: '//' }).extends).toEqual([]);
+  it('reads extends as undefined when absent and as its entries when present', () => {
+    expect(read({}).extends).toBeUndefined();
+    expect(read({ extends: ['//', 'web'] }).extends).toEqual(['//', 'web']);
+    expect(read({ extends: [] }).extends).toEqual([]);
   });
 
   it('reads boundaries as present only when it is an object', () => {
-    expect(readTurboJson({ boundaries: {} }).hasBoundaries).toBe(true);
-    expect(readTurboJson({ boundaries: null }).hasBoundaries).toBe(false);
-    expect(readTurboJson({}).hasBoundaries).toBe(false);
+    expect(read({ boundaries: {} }).hasBoundaries).toBe(true);
+    expect(read({ boundaries: null }).hasBoundaries).toBe(false);
+    expect(read({ boundaries: [] }).hasBoundaries).toBe(false);
+    expect(read({}).hasBoundaries).toBe(false);
   });
 
-  it('reads tags as the string entries, empty when absent', () => {
-    expect(readTurboJson({ tags: ['core', 1] }).tags).toEqual(['core']);
-    expect(readTurboJson({}).tags).toEqual([]);
+  it('reads tags as its entries, empty when absent', () => {
+    expect(read({ tags: ['core'] }).tags).toEqual(['core']);
+    expect(read({}).tags).toEqual([]);
   });
 
-  it.each([[null], [[]], ['text'], [1]])('reads a top-level %j that is not an object as an empty configuration', (value) => {
-    const read = readTurboJson(value);
-    expect(read.extends).toBeUndefined();
-    expect(read.hasBoundaries).toBe(false);
-    expect(read.tags).toEqual([]);
-    expect(read.tasks.size).toBe(0);
+  it.each([
+    [null, 'the configuration must be an object'],
+    [[], 'the configuration must be an object'],
+    ['text', 'the configuration must be an object'],
+    [{ tasks: [] }, '"tasks" must be an object'],
+    [{ tasks: null }, '"tasks" must be an object'],
+    [{ tasks: { build: null } }, 'task "build" must be an object'],
+    [{ tasks: { build: [] } }, 'task "build" must be an object'],
+    [{ tasks: { build: { dependsOn: 'lint' } } }, '"dependsOn" of task "build" must be an array of strings'],
+    [{ tasks: { build: { dependsOn: ['a', 1] } } }, '"dependsOn" of task "build" must be an array of strings'],
+    [{ tasks: { build: { with: 'x' } } }, '"with" of task "build" must be an array of strings'],
+    [{ tasks: { build: { cache: 'no' } } }, '"cache" of task "build" must be a boolean'],
+    [{ tasks: { build: { persistent: 1 } } }, '"persistent" of task "build" must be a boolean'],
+    [{ tasks: { build: { outputs: 'dist' } } }, '"outputs" of task "build" must be an array or null'],
+    [{ extends: '//' }, '"extends" must be an array of strings'],
+    [{ tags: ['core', 1] }, '"tags" must be an array of strings'],
+  ])('throws naming the file for %j', (value, message) => {
+    expect(() => read(value)).toThrow(`@exadev/eslint-config: /repo/turbo.json: ${message}.`);
   });
 });
 

@@ -43,7 +43,7 @@ export function createTurboTaskOutputsRule(deps: TurboRuleDeps = {}): TurboTaskO
         Object(node: ObjectNode, parent) {
           if (parent?.type !== 'Document') return;
 
-          const config = readTurboJson(parseJsonc(context.sourceCode.text, context.filename));
+          const config = readTurboJson(parseJsonc(context.sourceCode.text, context.filename), context.filename);
           const rootTasks = config.extends === undefined ? undefined : findTurboRoot(fs, dirname(resolve(context.filename)), options.root)?.turbo.tasks;
           for (const { key, member, task } of readTaskEntries(node, config.tasks)) {
             if (isExemptTask(key, options.exemptTasks)) continue;
