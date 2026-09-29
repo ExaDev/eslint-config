@@ -1,15 +1,14 @@
 import { assertIsError, jsonParseContext } from './workspace-errors';
 import { requireChar } from './workspace-path';
 
-// A string literal from its opening quote: escape pairs and ordinary characters, then the closing quote if there is one. Sticky, so it only ever matches at `lastIndex`.
-const STRING_LITERAL = /"(?:[^"\\]|\\[\s\S]?)*"?/uy;
-
 /**
  * Index just past the string literal opening at `start` (which must be a `"`), honouring backslash escapes. Exported so its unreachable throw (a `start` that is not a `"`) is tested directly. An unterminated string runs to the end of the text, leaving the resulting syntax error to `JSON.parse`.
  */
 export function endOfString(text: string, start: number): number {
-  STRING_LITERAL.lastIndex = start;
-  const match = STRING_LITERAL.exec(text);
+  // A string literal from its opening quote: escape pairs and ordinary characters, then the closing quote if there is one. Sticky, so it only ever matches at `lastIndex`. Built per call rather than held in a module constant: a module-level value is evaluated once at import, which Stryker treats as a static mutant it cannot attribute to individual tests.
+  const stringLiteral = /"(?:[^"\\]|\\[\s\S]?)*"?/uy;
+  stringLiteral.lastIndex = start;
+  const match = stringLiteral.exec(text);
   // The pattern is anchored (sticky) at `start`, which the caller guarantees is a `"`, and every part after the opening quote is optional, so it always matches.
   if (match === null) {
     throw new Error('Unreachable: a string literal always matches from its opening quote.');
