@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOUNDARIES_COMMAND, checkBoundariesScripts, checkConvention, checkTaskScripts, fixFlagsIn, implementingScripts, isExemptTask, outputProblem, tagProblem } from './turbo-checks';
+import { BOUNDARIES_COMMAND, checkBoundariesScripts, checkConvention, checkTaskScripts, fixFlagsIn, implementingScripts, isExemptTask, isKnownSchema, missingEdges, outputProblem, requiredEdges, tagProblem } from './turbo-checks';
 import type { TurboJson, TurboTask } from './turbo-json';
 import type { TurboPackage } from './turbo-workspace';
 
@@ -402,4 +402,58 @@ describe('checkBoundariesScripts', () => {
   it('reports the script and the aggregate problems together', () => {
     expect(check({}, 'check').map((problem) => problem.kind)).toEqual(['missingBoundariesScript', 'missingAggregateScript']);
   });
+});
+
+describe('requiredEdges', () => {
+  const graph = [
+    { task: '_build', dependsOn: ['_typecheck', '^_build'] },
+    { task: 'web#_build', dependsOn: ['_typecheck', 'gen'] },
+    { task: '//#_build', dependsOn: ['root-only'] },
+  ];
+
+  it('is the requirement written for exactly the key', () => {
+    expect(requiredEdges('_build', graph)).toEqual(['_typecheck', '^_build']);
+    expect(requiredEdges('//#_build', graph)).toEqual(['root-only']);
+  });
+
+  it('covers a package entry with the unqualified requirement and its own, each edge once', () => {
+    expect(requiredEdges('web#_build', graph)).toEqual(['_typecheck', '^_build', 'gen']);
+    expect(requiredEdges('api#_build', graph)).toEqual(['_typecheck', '^_build']);
+  });
+
+  it('leaves the root package task to a requirement written with its qualifier', () => {
+    expect(requiredEdges('//#_build', [{ task: '_build', dependsOn: ['a'] }])).toEqual([]);
+  });
+
+  it('requires nothing of a task the graph does not name', () => {
+    expect(requiredEdges('_lint', graph)).toEqual([]);
+    expect(requiredEdges('web#_lint', graph)).toEqual([]);
+    expect(requiredEdges('_build', [])).toEqual([]);
+    expect(requiredEdges('x#_build', [{ task: 'y#_build', dependsOn: ['a'] }])).toEqual([]);
+  });
+});
+
+describe('missingEdges', () => {
+  it('lists the required entries the task does not have, as written and in the order required', () => {
+    expect(missingEdges(task({ dependsOn: ['b'] }), ['a', 'b', 'c'])).toEqual(['a', 'c']);
+    expect(missingEdges(task({ dependsOn: ['^a'] }), ['a'])).toEqual(['a']);
+    expect(missingEdges(task({ dependsOn: ['a', 'b'] }), ['b', 'a'])).toEqual([]);
+    expect(missingEdges(task(), [])).toEqual([]);
+  });
+});
+
+describe('isKnownSchema', () => {
+  const hosts = ['turborepo.com', 'turbo.build'];
+
+  it('accepts https://<host>/schema.json for a listed host', () => {
+    expect(isKnownSchema('https://turborepo.com/schema.json', hosts)).toBe(true);
+    expect(isKnownSchema('https://turbo.build/schema.json', hosts)).toBe(true);
+  });
+
+  it.each([['https://turborepo.dev/schema.json'], ['http://turborepo.com/schema.json'], ['https://turborepo.com/schema.json '], ['https://turborepo.com/schema.jsonx'], ['x https://turborepo.com/schema.json'], [undefined]])(
+    'rejects %j',
+    (schema) => {
+      expect(isKnownSchema(schema, hosts)).toBe(false);
+    },
+  );
 });

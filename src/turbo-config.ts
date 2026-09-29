@@ -45,6 +45,9 @@ export function buildTurboConfig(options: TurboConfigOptions = {}): ConfigArrayV
       rules: {
         'exadev/turbo-task-has-script': ['error', validated],
         'exadev/turbo-task-outputs': ['error', validated],
+        'exadev/turbo-task-config-inputs': ['error', validated],
+        'exadev/turbo-task-graph': ['error', validated],
+        'exadev/turbo-json-hygiene': ['error', validated],
         ...(boundaries && { 'exadev/turbo-boundaries-config': ['error', validated] }),
       },
     }),

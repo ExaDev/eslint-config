@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createMemoryFs } from './memory-fs';
-import { listTurboPackages, workspaceMemberDirs } from './turbo-workspace';
+import { listTurboPackages, readPackageName, workspaceMemberDirs } from './turbo-workspace';
 
 const PNPM_REPO = createMemoryFs({
   '/repo/package.json': '{"name": "root", "scripts": {"build": "turbo run _build", "count": 1}}',
@@ -91,5 +91,21 @@ describe('listTurboPackages', () => {
   it('throws naming a manifest that is not valid JSON', () => {
     const fs = createMemoryFs({ '/r/package.json': '{"scripts": ' });
     expect(() => listTurboPackages(fs, '/r', undefined)).toThrow('"/r/package.json"');
+  });
+});
+
+describe('readPackageName', () => {
+  it('is the declared name of the package.json in the directory', () => {
+    expect(readPackageName(PNPM_REPO, '/repo/packages/a')).toBe('@s/a');
+  });
+
+  it('is undefined for a manifest without a name, a directory without a manifest and a non-string name', () => {
+    expect(readPackageName(PNPM_REPO, '/repo/packages/b')).toBeUndefined();
+    expect(readPackageName(PNPM_REPO, '/repo/packages/empty')).toBeUndefined();
+    expect(readPackageName(createMemoryFs({ '/r/package.json': '{"name": 1}' }), '/r')).toBeUndefined();
+  });
+
+  it('throws naming the manifest when it is not valid JSON', () => {
+    expect(() => readPackageName(createMemoryFs({ '/r/package.json': '{' }), '/r')).toThrow('/r/package.json');
   });
 });

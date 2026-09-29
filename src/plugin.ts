@@ -36,9 +36,12 @@ import requiredScripts from './rules/required-scripts';
 import testFileKind from './rules/test-file-kind';
 import turboBoundariesConfig from './rules/turbo-boundaries-config';
 import turboBoundariesScript from './rules/turbo-boundaries-script';
+import turboJsonHygiene from './rules/turbo-json-hygiene';
 import turboPackageTags from './rules/turbo-package-tags';
 import turboScriptConvention from './rules/turbo-script-convention';
 import turboScriptHasTask from './rules/turbo-script-has-task';
+import turboTaskConfigInputs from './rules/turbo-task-config-inputs';
+import turboTaskGraph from './rules/turbo-task-graph';
 import turboTaskHasScript from './rules/turbo-task-has-script';
 import turboTaskOutputs from './rules/turbo-task-outputs';
 
@@ -88,9 +91,12 @@ const plugin: TSESLint.FlatConfig.Plugin = {
     'test-file-kind': testFileKind,
     'turbo-boundaries-config': turboBoundariesConfig,
     'turbo-boundaries-script': turboBoundariesScript,
+    'turbo-json-hygiene': turboJsonHygiene,
     'turbo-package-tags': turboPackageTags,
     'turbo-script-convention': turboScriptConvention,
     'turbo-script-has-task': turboScriptHasTask,
+    'turbo-task-config-inputs': turboTaskConfigInputs,
+    'turbo-task-graph': turboTaskGraph,
     'turbo-task-has-script': turboTaskHasScript,
     'turbo-task-outputs': turboTaskOutputs,
   },
