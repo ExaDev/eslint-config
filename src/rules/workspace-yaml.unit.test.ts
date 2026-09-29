@@ -240,6 +240,19 @@ describe('readWorkspacePackages', () => {
     expect(() => readWorkspacePackages("packages: ['core/*/*', 'targets/*']\n")).toThrow(/"packages" rule option/);
   });
 
+  it('reads an empty flow sequence as no packages, however it is spaced or commented', () => {
+    expect(readWorkspacePackages('packages: []\n')).toEqual([]);
+    expect(readWorkspacePackages('packages: [ ]\n')).toEqual([]);
+    expect(readWorkspacePackages('packages: [] # none on purpose\n')).toEqual([]);
+  });
+
+  it('still throws for a flow sequence with content, an unterminated one, or one followed by more text', () => {
+    expect(() => readWorkspacePackages('packages: [a]\n')).toThrow(/flow style/);
+    expect(() => readWorkspacePackages('packages: [\n')).toThrow(/flow style/);
+    expect(() => readWorkspacePackages('packages: [] x\n')).toThrow(/flow style/);
+    expect(() => readWorkspacePackages('packages: x[]\n')).toThrow(/flow style/);
+  });
+
   it('prefixes the flow-style error with this package\'s own name, like every other workspace-architecture module', () => {
     expect(() => readWorkspacePackages("packages: ['core/*/*', 'targets/*']\n")).toThrow(/^@exadev\/eslint-config: /);
   });
