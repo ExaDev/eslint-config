@@ -10,6 +10,9 @@
       "inputs": ["$TURBO_DEFAULT$", "eslint.config.ts"],
       "outputs": [".eslintcache"]
     },
+    "_lint:fix": {
+      "cache": false
+    },
     "_test": {
       "inputs": ["$TURBO_DEFAULT$", "vitest.config.ts", "vitest.setup.ts"],
       "outputs": []
