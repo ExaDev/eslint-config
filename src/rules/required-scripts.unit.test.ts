@@ -1,8 +1,7 @@
 import json from '@eslint/json';
-import { parse } from '@humanwhocodes/momoa';
 import { RuleTester } from 'eslint';
 import { describe, expect, it } from 'vitest';
-import { createRequiredScriptsRule, requireScriptEntry, type ScriptEntry } from './required-scripts';
+import { createRequiredScriptsRule } from './required-scripts';
 import type { WorkspaceFs } from './workspace-fs';
 import type { WorkspaceGraph, WorkspacePackageInfo } from './workspace-graph';
 
@@ -56,21 +55,6 @@ describe('createRequiredScriptsRule meta', () => {
       missingFlag: 'Script "{{script}}" in "{{name}}" must contain "{{expected}}", but is "{{actual}}".',
       forbiddenFlag: 'Script "{{script}}" in "{{name}}" must not contain "{{expected}}", but is "{{actual}}".',
     });
-  });
-});
-
-describe('requireScriptEntry', () => {
-  it('returns the entry for a known script', () => {
-    const document = parse('{"a": "x"}', { mode: 'json' });
-    if (document.body.type !== 'Object') throw new Error('Unreachable: the fixture is a top-level JSON object.');
-    const [member] = document.body.members;
-    if (member === undefined) throw new Error('Unreachable: the fixture has exactly one member.');
-    const entry: ScriptEntry = { command: 'x', member };
-    expect(requireScriptEntry(new Map([['a', entry]]), 'a')).toBe(entry);
-  });
-
-  it('throws for a script with no entry, a shape no real call site (which only names scripts it just read) produces', () => {
-    expect(() => requireScriptEntry(new Map(), 'missing')).toThrow(/Unreachable/u);
   });
 });
 
