@@ -117,6 +117,12 @@ describe('createFileScope', () => {
     expect(createFileScope(['**/*.json'])('/elsewhere/a.json', CWD)).toBe(false);
   });
 
+  it('treats a file outside the working directory as out of scope even for a pattern that names or wildcards the parent segment', () => {
+    expect(createFileScope(['../x.json'])('/a/x.json', '/a/b')).toBe(false);
+    expect(createFileScope(['.*/x.json'])('/a/x.json', '/a/b')).toBe(false);
+    expect(createFileScope(['.*/x.json'])('/a/b/.c/x.json', '/a/b')).toBe(true);
+  });
+
   it('matches on the path relative to cwd, not the absolute path', () => {
     expect(createFileScope(['turbo.json'])('/other/root/turbo.json', '/other/root')).toBe(true);
   });

@@ -78,6 +78,7 @@ export function createFileScope(globs: readonly string[]): FileScope {
 
   return (filename, cwd) => {
     const path = splitPathSegments(relative(cwd, filename).split(sep).join('/'));
+    if (path[0] === '..') return false;
 
     return includes.some((pattern) => matchSegments(path, pattern)) && !excludes.some((pattern) => matchSegments(path, pattern));
   };
