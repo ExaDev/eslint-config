@@ -10,17 +10,18 @@ import {
   resolveScriptTask,
   ROOT_PACKAGE_QUALIFIER,
   ROOT_TASK_PREFIX,
+  TURBO_EXTENDS,
   TURBO_JSON,
   type TurboJson,
   type TurboTask,
 } from './turbo-json';
 
 function task(fields: Partial<TurboTask> = {}): TurboTask {
-  return { dependsOn: [], with: [], cache: undefined, persistent: undefined, hasOutputs: false, keys: [], ...fields };
+  return { dependsOn: [], with: [], cache: undefined, persistent: undefined, hasOutputs: false, inputs: undefined, keys: [], ...fields };
 }
 
 function config(fields: Partial<TurboJson> = {}): TurboJson {
-  return { extends: undefined, hasBoundaries: false, tags: [], tasks: new Map(), ...fields };
+  return { extends: undefined, schema: undefined, globalDependencies: [], globalPassThroughEnv: undefined, hasBoundaries: false, tags: [], tasks: new Map(), ...fields };
 }
 
 describe('constants', () => {
@@ -28,6 +29,7 @@ describe('constants', () => {
     expect(TURBO_JSON).toBe('turbo.json');
     expect(ROOT_TASK_PREFIX).toBe('//#');
     expect(ROOT_PACKAGE_QUALIFIER).toBe('//');
+    expect(TURBO_EXTENDS).toBe('$TURBO_EXTENDS$');
   });
 });
 
@@ -42,12 +44,13 @@ describe('readTurboJson', () => {
       cache: false,
       persistent: true,
       hasOutputs: true,
+      inputs: ['src/**'],
       keys: ['dependsOn', 'with', 'cache', 'persistent', 'outputs', 'inputs'],
     });
   });
 
   it('reads an empty task as defaults', () => {
-    expect(read({ tasks: { build: {} } }).tasks.get('build')).toEqual({ dependsOn: [], with: [], cache: undefined, persistent: undefined, hasOutputs: false, keys: [] });
+    expect(read({ tasks: { build: {} } }).tasks.get('build')).toEqual({ dependsOn: [], with: [], cache: undefined, persistent: undefined, hasOutputs: false, inputs: undefined, keys: [] });
   });
 
   it('does not count outputs: null as declaring outputs', () => {
@@ -71,6 +74,22 @@ describe('readTurboJson', () => {
     expect(read({}).hasBoundaries).toBe(false);
   });
 
+  it('reads $schema, globalDependencies and globalPassThroughEnv, each absent when the file omits it', () => {
+    const full = read({ $schema: 'https://turborepo.com/schema.json', globalDependencies: ['tsconfig.base.json'], globalPassThroughEnv: ['CI'] });
+    expect(full.schema).toBe('https://turborepo.com/schema.json');
+    expect(full.globalDependencies).toEqual(['tsconfig.base.json']);
+    expect(full.globalPassThroughEnv).toEqual(['CI']);
+    const empty = read({});
+    expect(empty.schema).toBeUndefined();
+    expect(empty.globalDependencies).toEqual([]);
+    expect(empty.globalPassThroughEnv).toBeUndefined();
+  });
+
+  it('reads a null globalPassThroughEnv, which turbo allows, as unset', () => {
+    expect(read({ globalPassThroughEnv: null }).globalPassThroughEnv).toBeUndefined();
+    expect(read({ globalPassThroughEnv: [] }).globalPassThroughEnv).toEqual([]);
+  });
+
   it('reads tags as its entries, empty when absent', () => {
     expect(read({ tags: ['core'] }).tags).toEqual(['core']);
     expect(read({}).tags).toEqual([]);
@@ -90,6 +109,10 @@ describe('readTurboJson', () => {
     [{ tasks: { build: { cache: 'no' } } }, '"cache" of task "build" must be a boolean'],
     [{ tasks: { build: { persistent: 1 } } }, '"persistent" of task "build" must be a boolean'],
     [{ tasks: { build: { outputs: 'dist' } } }, '"outputs" of task "build" must be an array or null'],
+    [{ tasks: { build: { inputs: 'src' } } }, '"inputs" of task "build" must be an array of strings'],
+    [{ $schema: 1 }, '"$schema" must be a string'],
+    [{ globalDependencies: 'x' }, '"globalDependencies" must be an array of strings'],
+    [{ globalPassThroughEnv: 'CI' }, '"globalPassThroughEnv" must be an array of strings'],
     [{ extends: '//' }, '"extends" must be an array of strings'],
     [{ tags: ['core', 1] }, '"tags" must be an array of strings'],
   ])('throws naming the file for %j', (value, message) => {
@@ -222,6 +245,7 @@ describe('mergeTask', () => {
       cache: false,
       persistent: false,
       hasOutputs: true,
+      inputs: undefined,
       keys: ['dependsOn', 'with', 'cache', 'persistent', 'outputs'],
     });
   });
@@ -230,6 +254,19 @@ describe('mergeTask', () => {
     const base = task({ dependsOn: ['a'], with: ['b'], keys: ['dependsOn', 'with'] });
     expect(mergeTask(base, task({ dependsOn: ['c'], with: ['d'], keys: ['dependsOn', 'with'] }))).toMatchObject({ dependsOn: ['c'], with: ['d'] });
     expect(mergeTask(base, task({ dependsOn: ['c'], with: ['d'], keys: [] }))).toMatchObject({ dependsOn: ['a'], with: ['b'] });
+  });
+
+  it('keeps the root entries where the override lists $TURBO_EXTENDS$ and adds the others after them', () => {
+    const base = task({ dependsOn: ['^build', 'gen'], with: ['w'], inputs: ['a'], keys: ['dependsOn', 'with', 'inputs'] });
+    const override = task({ dependsOn: [TURBO_EXTENDS, 'lint'], with: ['x', TURBO_EXTENDS], inputs: [TURBO_EXTENDS, 'b'], keys: ['dependsOn', 'with', 'inputs'] });
+    expect(mergeTask(base, override)).toMatchObject({ dependsOn: ['^build', 'gen', 'lint'], with: ['w', 'x'], inputs: ['a', 'b'] });
+  });
+
+  it('extends an unset root inputs list from nothing, and replaces one without $TURBO_EXTENDS$', () => {
+    expect(mergeTask(task(), task({ inputs: [TURBO_EXTENDS, 'b'], keys: ['inputs'] })).inputs).toEqual(['b']);
+    expect(mergeTask(task({ inputs: ['a'] }), task({ inputs: ['b'], keys: ['inputs'] })).inputs).toEqual(['b']);
+    expect(mergeTask(task({ inputs: ['a'] }), task()).inputs).toEqual(['a']);
+    expect(mergeTask(task(), task()).inputs).toBeUndefined();
   });
 
   it('declares outputs when either side does, and lets persistent come from either side', () => {

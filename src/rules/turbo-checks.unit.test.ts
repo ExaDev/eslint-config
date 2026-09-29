@@ -4,11 +4,11 @@ import type { TurboJson, TurboTask } from './turbo-json';
 import type { TurboPackage } from './turbo-workspace';
 
 function task(fields: Partial<TurboTask> = {}): TurboTask {
-  return { dependsOn: [], with: [], cache: undefined, persistent: undefined, hasOutputs: false, keys: [], ...fields };
+  return { dependsOn: [], with: [], cache: undefined, persistent: undefined, hasOutputs: false, inputs: undefined, keys: [], ...fields };
 }
 
 function turbo(fields: Partial<TurboJson> = {}): TurboJson {
-  return { extends: undefined, hasBoundaries: false, tags: [], tasks: new Map(), ...fields };
+  return { extends: undefined, schema: undefined, globalDependencies: [], globalPassThroughEnv: undefined, hasBoundaries: false, tags: [], tasks: new Map(), ...fields };
 }
 
 function pkg(name: string | undefined, scripts: Readonly<Record<string, string>>, dir = ''): TurboPackage {

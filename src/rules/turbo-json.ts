@@ -10,6 +10,9 @@ export const TURBO_JSON = 'turbo.json';
 /** Prefix of a task key that runs a script of the root package (`//#lint:root`), which turbo otherwise excludes from a task named without it. */
 export const ROOT_TASK_PREFIX = '//#';
 
+/** In a package's `turbo.json`, an array entry that keeps the root task's entries and adds the others after them, instead of replacing the array. */
+export const TURBO_EXTENDS = '$TURBO_EXTENDS$';
+
 /**
  * The parts of one `tasks` entry the turbo rules read. `keys` lists every key the entry defines, so a task that only wires other tasks together can be told from one that configures work.
  */
@@ -20,6 +23,8 @@ export interface TurboTask {
   readonly cache: boolean | undefined;
   readonly persistent: boolean | undefined;
   readonly hasOutputs: boolean;
+  // Undefined when the entry does not set it, which turbo reads as the package's own files (`$TURBO_DEFAULT$`).
+  readonly inputs: readonly string[] | undefined;
   readonly keys: readonly string[];
 }
 
@@ -28,6 +33,11 @@ export interface TurboTask {
  */
 export interface TurboJson {
   readonly extends: readonly string[] | undefined;
+  // Undefined when the file has no `$schema`.
+  readonly schema: string | undefined;
+  readonly globalDependencies: readonly string[];
+  // Undefined when the file sets no `globalPassThroughEnv` (or sets it to null, which turbo's schema allows).
+  readonly globalPassThroughEnv: readonly string[] | undefined;
   readonly hasBoundaries: boolean;
   readonly tags: readonly string[];
   readonly tasks: ReadonlyMap<string, TurboTask>;
@@ -70,6 +80,7 @@ function readTask(value: unknown, source: string, key: string): TurboTask {
     cache: optionalBoolean(value['cache'], source, `"cache" of ${at}`),
     persistent: optionalBoolean(value['persistent'], source, `"persistent" of ${at}`),
     hasOutputs: declaresOutputs(value['outputs'], source, `"outputs" of ${at}`),
+    inputs: 'inputs' in value ? stringArray(value['inputs'], source, `"inputs" of ${at}`) : undefined,
     keys: Object.keys(value),
   };
 }
@@ -85,8 +96,15 @@ export function readTurboJson(value: unknown, source: string): TurboJson {
     for (const [key, entry] of Object.entries(value['tasks'])) tasks.set(key, readTask(entry, source, key));
   }
 
+  const passThrough = value['globalPassThroughEnv'];
+  const schema = value['$schema'];
+  if (schema !== undefined && typeof schema !== 'string') malformed(source, '"$schema"', 'a string');
+
   return {
     extends: 'extends' in value ? stringArray(value['extends'], source, '"extends"') : undefined,
+    schema,
+    globalDependencies: 'globalDependencies' in value ? stringArray(value['globalDependencies'], source, '"globalDependencies"') : [],
+    globalPassThroughEnv: passThrough === undefined || passThrough === null ? undefined : stringArray(passThrough, source, '"globalPassThroughEnv"'),
     hasBoundaries: isRecord(value['boundaries']),
     tags: 'tags' in value ? stringArray(value['tags'], source, '"tags"') : [],
     tasks,
@@ -150,18 +168,26 @@ export function isGraphOnly(task: TurboTask): boolean {
   return task.dependsOn.length > 0 && task.keys.every((key) => key === 'dependsOn' || key === 'description');
 }
 
+// An array the package entry sets replaces the root's, unless it lists `$TURBO_EXTENDS$`, which stands for the root's entries (verified with `turbo run --dry=json` against turbo 2.10.8).
+function mergeList(base: readonly string[], override: readonly string[]): readonly string[] {
+  if (!override.includes(TURBO_EXTENDS)) return override;
+
+  return [...base, ...override.filter((entry) => entry !== TURBO_EXTENDS)];
+}
+
 /**
- * A package task laid over the root task it extends: a key the package entry sets replaces the root's, and any other key is inherited, which is how turbo merges the two. With no root task the package task stands alone.
+ * A package task laid over the root task it extends: a key the package entry sets replaces the root's (an array key that lists `$TURBO_EXTENDS$` keeps the root's entries and adds the others), and any other key is inherited, which is how turbo merges the two. With no root task the package task stands alone.
  */
 export function mergeTask(base: TurboTask | undefined, override: TurboTask): TurboTask {
   if (base === undefined) return override;
 
   return {
-    dependsOn: override.keys.includes('dependsOn') ? override.dependsOn : base.dependsOn,
-    with: override.keys.includes('with') ? override.with : base.with,
+    dependsOn: override.keys.includes('dependsOn') ? mergeList(base.dependsOn, override.dependsOn) : base.dependsOn,
+    with: override.keys.includes('with') ? mergeList(base.with, override.with) : base.with,
     cache: override.cache ?? base.cache,
     persistent: override.persistent ?? base.persistent,
     hasOutputs: override.hasOutputs || base.hasOutputs,
+    inputs: override.inputs === undefined ? base.inputs : mergeList(base.inputs ?? [], override.inputs),
     keys: [...new Set([...base.keys, ...override.keys])],
   };
 }
