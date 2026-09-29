@@ -156,6 +156,11 @@ describe('findTurboRoot', () => {
     expect(findTurboRoot(lone, '/a/b/c', undefined)?.dir).toBe('/a/b');
   });
 
+  it('considers the filesystem root itself', () => {
+    const atRoot = createMemoryFs({ '/turbo.json': '{}', '/a/package.json': '{}' });
+    expect(findTurboRoot(atRoot, '/a', undefined)?.dir).toBe('/');
+  });
+
   it('is undefined when no directory above holds a root configuration', () => {
     expect(findTurboRoot(fs, '/other', undefined)).toBeUndefined();
     expect(findTurboRoot(fs, '/nested', undefined)).toBeUndefined();
@@ -258,6 +263,11 @@ describe('resolveScriptTask', () => {
   it('falls back to the unqualified task', () => {
     expect(resolveScriptTask({ script: 'lint', root, qualifier: 'api', own: undefined })?.hasOutputs).toBe(true);
     expect(resolveScriptTask({ script: 'lint', root, qualifier: undefined, own: undefined })?.hasOutputs).toBe(true);
+  });
+
+  it('does not read a nameless package as a package called undefined', () => {
+    const tricky = config({ tasks: new Map([['undefined#lint', task({ cache: false, keys: ['cache'] })]]) });
+    expect(resolveScriptTask({ script: 'lint', root: tricky, qualifier: undefined, own: undefined })).toBeUndefined();
   });
 
   it('is undefined when nothing configures the script', () => {

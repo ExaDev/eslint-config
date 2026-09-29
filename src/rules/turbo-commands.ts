@@ -15,7 +15,7 @@ export function delegatesTo(command: string, input: Readonly<{ delegate: TurboDe
   const expected = tokenizeCommand(`${input.delegate} ${input.task}`);
   const tokens = tokenizeCommand(command);
 
-  return expected.every((token, index) => tokens[index] === token) && !tokens.slice(expected.length).some(isShellControl);
+  return expected.every((token, index) => tokens[index] === token) && !tokens.some(isShellControl);
 }
 
 // The final path segment of a token, so `pnpm exec ./node_modules/.bin/turbo` and `turbo` both name the turbo binary.
@@ -27,7 +27,7 @@ function isTurboBinary(token: string): boolean {
  * Every word after `turbo` (and after `run`, when it follows) in each turbo invocation of `command`, leaving out words that start with a dash. Commands chained with `&&`, `||`, `;` or `|` are read one at a time, so an invocation ends at the next operator whether or not a space surrounds it. It over-approximates the tasks the command runs, since the value of a flag written as a separate word (`--filter web`) is included; callers intersect it with the task names they know. `pnpm turbo run lint` and `turbo lint` both yield `lint`.
  */
 export function invokedTurboWords(command: string): readonly string[] {
-  return command.split(/[;&|]+/u).flatMap((segment) => {
+  return command.split(/[;&|]/u).flatMap((segment) => {
     const tokens = tokenizeCommand(segment);
     const turboIndex = tokens.findIndex(isTurboBinary);
     if (turboIndex === -1) return [];

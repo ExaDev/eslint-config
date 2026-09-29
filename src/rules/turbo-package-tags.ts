@@ -1,4 +1,4 @@
-import { relative } from 'node:path';
+import { relative, sep } from 'node:path';
 import type { JSONRuleDefinition, JSONRuleVisitor } from '@eslint/json';
 import type { ObjectNode } from '@humanwhocodes/momoa';
 import { tagProblem, type TagProblemKind } from './turbo-checks';
@@ -48,7 +48,7 @@ export function createTurboPackageTagsRule(deps: TurboRuleDeps = {}): TurboPacka
 
           const linted = readLintedTurboPackage({ fs, filename: context.filename, manifest: node, rootOption: options.root });
           if (linted === undefined || linted.isRoot) return;
-          const relativeDir = relative(linted.root.dir, linted.dir).split('\\').join('/');
+          const relativeDir = relative(linted.root.dir, linted.dir).split(sep).join('/');
           if (!workspaceMemberDirs(fs, linted.root.dir, options.packages).includes(relativeDir)) return;
 
           const groups = options.boundaries?.groups;
