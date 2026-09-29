@@ -45,7 +45,7 @@ export function createTurboTaskHasScriptRule(deps: TurboRuleDeps = {}): TurboTas
         Object(node: ObjectNode, parent) {
           if (parent?.type !== 'Document') return;
 
-          const config = readTurboJson(parseJsonc(context.sourceCode.text, context.filename));
+          const config = readTurboJson(parseJsonc(context.sourceCode.text, context.filename), context.filename);
           if (config.extends !== undefined) return;
 
           const { root, members } = listTurboPackages(fs, dirname(resolve(context.filename)), options.packages);

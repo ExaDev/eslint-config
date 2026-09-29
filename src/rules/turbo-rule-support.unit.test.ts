@@ -64,7 +64,7 @@ describe('readTaskEntries', () => {
   const text = '{"tasks": {"a": {}, "b": {"cache": false}}}';
 
   it('pairs each task member with its parsed task, in document order', () => {
-    const entries = readTaskEntries(objectNode(text), readTurboJson(JSON.parse(text)).tasks);
+    const entries = readTaskEntries(objectNode(text), readTurboJson(JSON.parse(text), 'turbo.json').tasks);
     expect(entries.map((entry) => [entry.key, entry.task.cache, entry.member.name.type])).toEqual([
       ['a', undefined, 'String'],
       ['b', false, 'String'],

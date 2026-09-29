@@ -83,6 +83,8 @@ ruleTester.run('turbo-task-outputs', rule, {
       ],
     },
     { code: turbo({ '//#docs': { inputs: ['a'] } }), filename: ROOT, errors: [{ messageId: 'missingOutputs', data: { task: '//#docs' }, line: FIRST_TASK_LINE }] },
+    // The schema allows null, which declares nothing.
+    { code: turbo({ build: { outputs: null } }), filename: ROOT, errors: [{ messageId: 'missingOutputs', data: { task: 'build' }, line: FIRST_TASK_LINE }] },
     {
       code: turbo({ dev: { persistent: true } }),
       filename: ROOT,

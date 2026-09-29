@@ -559,6 +559,8 @@ export default defineConfig(
 );
 ```
 
+A `turbo.json` value of the wrong type (a `dependsOn` that is not a list of strings, a `tasks` that is not an object) throws an error naming the file and the value, since reading it as absent would misreport the task with no hint of the cause.
+
 Both need `@eslint/json` resolvable, the same optional peer the other JSON rules use. `turbo.json` is linted as JSONC because turbo accepts comments there. Every rule does nothing in a `package.json` that belongs to no turbo repository, that is, one with no `turbo.json` that does not `extends` another at or above it (the nearest one in a workspace root wins, so a package configuration that forgot `extends` is not mistaken for the root).
 
 ### Options
@@ -588,7 +590,7 @@ It also reports dead configuration: a `//#name` task or an aggregate (a task wit
 
 ### Cached tasks declare outputs
 
-A task with no `outputs` key caches its log only, the same as `outputs: []` ([turbo configuration reference](https://turborepo.dev/docs/reference/configuration#outputs), [latest archived copy](https://web.archive.org/web/https://turborepo.dev/docs/reference/configuration)). A build task that forgot the key looks configured but restores nothing on a cache hit, and nothing separates it from a lint task that legitimately produces no files. `turbo-task-outputs` requires every cached task to declare `outputs`, using `[]` where there are none, so the absence is always a stated choice, and reports on the task key. A task that sets `cache: false`, or that only wires other tasks together (nothing but `dependsOn` and `description`), is exempt unless `requireEmptyOutputs` is set. A persistent task never completes, so it must set `cache: false`; that is reported instead of the outputs problem.
+A task with no `outputs` key, or with `"outputs": null` (which turbo's schema allows), caches its log only, the same as `outputs: []` ([turbo configuration reference](https://turborepo.dev/docs/reference/configuration#outputs), [latest archived copy](https://web.archive.org/web/https://turborepo.dev/docs/reference/configuration)). A build task that forgot the key looks configured but restores nothing on a cache hit, and nothing separates it from a lint task that legitimately produces no files. `turbo-task-outputs` requires every cached task to declare `outputs`, using `[]` where there are none, so the absence is always a stated choice, and reports on the task key. A task that sets `cache: false`, or that only wires other tasks together (nothing but `dependsOn` and `description`), is exempt unless `requireEmptyOutputs` is set. A persistent task never completes, so it must set `cache: false`; that is reported instead of the outputs problem.
 
 In a package's `turbo.json` a task is judged as merged over the root task of the same name, so a partial override that inherits `outputs` passes, and a problem the root already has is reported at the root only.
 
