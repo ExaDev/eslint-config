@@ -171,6 +171,11 @@ describe('checkTaskScripts', () => {
     expect(check({ '//#fmt': {}, '//#check': { with: ['fmt'] } }, root, members)).toEqual([]);
   });
 
+  it('does not read an unrelated bare entry of a // task as a reference to another // task', () => {
+    const root = pkg('root', { fmt: 'prettier .', other: 'o', verify: 'turbo run other' });
+    expect(check({ '//#fmt': {}, '//#other': { dependsOn: ['lint'] } }, root, [pkg('a', { lint: 'l' }, 'packages/a')])).toEqual([{ kind: 'unreachableTask', task: '//#fmt' }]);
+  });
+
   it('does not read a bare dependsOn entry of a non-root task as a reference to a // task', () => {
     const root = pkg('root', { fmt: 'prettier .', verify: 'turbo run all' });
     const members = [pkg('a', {}, 'packages/a')];

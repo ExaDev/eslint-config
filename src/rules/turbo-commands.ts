@@ -49,9 +49,9 @@ const VALUELESS_MANAGER_FLAGS: ReadonlySet<string> = new Set(['-s', '--silent', 
 const PACKAGE_MANAGERS: readonly string[] = ['pnpm', 'npm', 'yarn', 'bun'];
 
 function skipValuelessFlags(tokens: readonly string[]): readonly string[] {
-  const next = tokens.findIndex((token) => !VALUELESS_MANAGER_FLAGS.has(token));
+  const [first, ...rest] = tokens;
 
-  return next === -1 ? [] : tokens.slice(next);
+  return first !== undefined && VALUELESS_MANAGER_FLAGS.has(first) ? skipValuelessFlags(rest) : tokens;
 }
 
 // Whether `tokens`, the words after a package manager, name the `boundaries` script: directly or after `run`, with valueless manager flags allowed before either.
