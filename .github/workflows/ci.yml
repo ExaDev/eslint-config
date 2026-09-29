@@ -15,9 +15,13 @@ permissions:
   contents: read
 
 jobs:
+  determine-runner:
+    uses: ./.github/workflows/determine-runner.yml
+
   commitlint:
     name: Commitlint
-    runs-on: ubuntu-latest
+    needs: determine-runner
+    runs-on: ${{ fromJson(needs.determine-runner.outputs.selected-runner) }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -27,7 +31,8 @@ jobs:
 
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    needs: determine-runner
+    runs-on: ${{ fromJson(needs.determine-runner.outputs.selected-runner) }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -47,7 +52,8 @@ jobs:
 
   typecheck:
     name: Typecheck
-    runs-on: ubuntu-latest
+    needs: determine-runner
+    runs-on: ${{ fromJson(needs.determine-runner.outputs.selected-runner) }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -64,7 +70,8 @@ jobs:
 
   mutation:
     name: Mutation
-    runs-on: ubuntu-latest
+    needs: determine-runner
+    runs-on: ${{ fromJson(needs.determine-runner.outputs.selected-runner) }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
@@ -93,10 +100,10 @@ jobs:
 
   required-checks:
     name: Required Checks
-    needs: [commitlint, lint, typecheck, mutation]
+    needs: [determine-runner, commitlint, lint, typecheck, mutation]
     # Always runs, even if a dependency failed, so it can report that failure itself rather than being skipped -- a required check that's silently absent blocks a PR indefinitely instead of failing it visibly.
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJson(needs.determine-runner.outputs.selected-runner) }}
     timeout-minutes: 5
     steps:
       - name: Fail if any required job failed or was cancelled
@@ -111,6 +118,7 @@ jobs:
     name: Release
     needs: [commitlint, lint, typecheck, mutation]
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    # Stays on a GitHub-hosted runner: npm trusted publishing (OIDC) is only supported from GitHub-hosted runners, so this job cannot move to the fleet or Blacksmith.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -158,6 +166,7 @@ jobs:
     name: Publish alias (${{ matrix.name }})
     needs: release
     if: needs.release.outputs.published == 'true'
+    # Stays on a GitHub-hosted runner: npm trusted publishing (OIDC) is only supported from GitHub-hosted runners, so this job cannot move to the fleet or Blacksmith.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
