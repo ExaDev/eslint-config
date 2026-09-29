@@ -100,7 +100,7 @@ export function unquote(value: string): string {
 }
 
 /**
- * Reads the glob list under pnpm-workspace.yaml's own top-level "packages:" key. Returns an empty array when the key is absent (an empty workspace file, or one that declares packages only through a "packages" rule option override), or when it is present but followed only by blank lines, comments, or nothing at all (a genuinely empty sequence). Throws when the key is present but written in flow style (or as a bare scalar on the same line), or when it is present but the first real line under it is neither blank/comment nor a recognisable "- 'glob'" sequence item (indented or not), since either is a real pnpm-workspace.yaml shape this minimal reader cannot parse, not merely an empty result.
+ * Reads the glob list under pnpm-workspace.yaml's own top-level "packages:" key. Returns an empty array when the key is absent (an empty workspace file, or one that declares packages only through a "packages" rule option override), or when it is present but followed only by blank lines, comments, or nothing at all (a genuinely empty sequence). Reads an empty flow sequence (`packages: []`) as no packages. Throws when the key is present but written in any other flow style (or as a bare scalar on the same line), or when it is present but the first real line under it is neither blank/comment nor a recognisable "- 'glob'" sequence item (indented or not), since either is a real pnpm-workspace.yaml shape this minimal reader cannot parse, not merely an empty result.
  */
 export function readWorkspacePackages(yamlText: string): readonly string[] {
   const lines = yamlText.split(/\r?\n/u);
@@ -111,6 +111,8 @@ export function readWorkspacePackages(yamlText: string): readonly string[] {
   const inlineMatch = requireMatch(PACKAGES_KEY_PATTERN, keyLine);
   const inline = requireCapture(inlineMatch, 1);
   const inlineWithoutComment = stripComment(inline);
+  // An empty flow sequence is the one flow-style value that needs no parsing to read, and the conventional spelling for a repository that is not a real workspace but keeps the file so turbo has a root.
+  if (/^\[\s*\]$/u.test(inlineWithoutComment)) return [];
   if (inlineWithoutComment.length > 0) {
     throw new Error(
       `@exadev/eslint-config: pnpm-workspace.yaml's "packages:" key is written in flow style ("${inlineWithoutComment}"), which this package's minimal reader does not support. Rewrite it as a block sequence (one "- 'glob'" per line), or pass the "packages" rule option explicitly.`,
