@@ -8,10 +8,12 @@ import barrelDirectSiblingsOnly from './rules/barrel-direct-siblings-only';
 import barrelPolicy from './rules/barrel-policy';
 import devDependencyOnly from './rules/dev-dependency-only';
 import noArrayIsarrayMutation from './rules/no-array-isarray-mutation';
+import noBoundariesIgnore from './rules/no-boundaries-ignore';
 import noControlFlow from './rules/no-control-flow';
 import noDependencyCycle from './rules/no-dependency-cycle';
 import noEnumNumberWidening from './rules/no-enum-number-widening';
 import noEnumReverseLookupWidening from './rules/no-enum-reverse-lookup-widening';
+import noFixInCachedTaskScript from './rules/no-fix-in-cached-task-script';
 import noIndexFiles from './rules/no-index-files';
 import noMapInstanceofMutation from './rules/no-map-instanceof-mutation';
 import noMutableUnionArrayParam from './rules/no-mutable-union-array-param';
@@ -32,6 +34,13 @@ import preferReadonlyArrayParam from './rules/prefer-readonly-array-param';
 import preferReadonlyObjectParam from './rules/prefer-readonly-object-param';
 import requiredScripts from './rules/required-scripts';
 import testFileKind from './rules/test-file-kind';
+import turboBoundariesConfig from './rules/turbo-boundaries-config';
+import turboBoundariesScript from './rules/turbo-boundaries-script';
+import turboPackageTags from './rules/turbo-package-tags';
+import turboScriptConvention from './rules/turbo-script-convention';
+import turboScriptHasTask from './rules/turbo-script-has-task';
+import turboTaskHasScript from './rules/turbo-task-has-script';
+import turboTaskOutputs from './rules/turbo-task-outputs';
 
 // @typescript-eslint/utils's own FlatConfig.Plugin type is used here rather than eslint's own ESLint.Plugin (which an earlier version of this file used) or a hand-written interface — see the "don't hand-type external libraries" convention this plugin's own rules were built under. eslint's Rule.RuleModule declares a concrete, non-generic `create(context: RuleContext): RuleListener` that only structurally matches rules built directly against the plain `eslint` package's own types; a rule built with ESLintUtils.RuleCreator (needed for typed TSESTree node access and, for type-aware rules, type-checker access) is not assignable to it, even though both shapes are the exact same runtime `{ meta, create }` contract ESLint actually calls. FlatConfig.Plugin's `rules` field is typed as `Record<string, LooseRuleDefinition>` specifically to hold both authoring styles in one plugin, which this package now does. meta.namespace is what a consumer's `plugins: { exadev }` registration turns into the rule-reference prefix ('exadev/no-non-barrel-reexport'); it is not inferred from the package name automatically, so it is stated explicitly here to match. meta.version is imported from package.json rather than hardcoded, since semantic-release rewrites that file's own version on every release and a duplicated literal here would silently drift out of sync with it.
 //
@@ -51,10 +60,12 @@ const plugin: TSESLint.FlatConfig.Plugin = {
     'barrel-policy': barrelPolicy,
     'dev-dependency-only': devDependencyOnly,
     'no-array-isarray-mutation': noArrayIsarrayMutation,
+    'no-boundaries-ignore': noBoundariesIgnore,
     'no-control-flow': noControlFlow,
     'no-dependency-cycle': noDependencyCycle,
     'no-enum-number-widening': noEnumNumberWidening,
     'no-enum-reverse-lookup-widening': noEnumReverseLookupWidening,
+    'no-fix-in-cached-task-script': noFixInCachedTaskScript,
     'no-index-files': noIndexFiles,
     'no-map-instanceof-mutation': noMapInstanceofMutation,
     'no-mutable-union-array-param': noMutableUnionArrayParam,
@@ -75,6 +86,13 @@ const plugin: TSESLint.FlatConfig.Plugin = {
     'prefer-readonly-object-param': preferReadonlyObjectParam,
     'required-scripts': requiredScripts,
     'test-file-kind': testFileKind,
+    'turbo-boundaries-config': turboBoundariesConfig,
+    'turbo-boundaries-script': turboBoundariesScript,
+    'turbo-package-tags': turboPackageTags,
+    'turbo-script-convention': turboScriptConvention,
+    'turbo-script-has-task': turboScriptHasTask,
+    'turbo-task-has-script': turboTaskHasScript,
+    'turbo-task-outputs': turboTaskOutputs,
   },
   configs: {
     // The recommended barrel policy is 'banned' (no index files at all), expressed through the barrel-policy umbrella rule, plus no-pointless-reassignment and noInlineConfig. This is the LIGHTER of this package's two bundles — no typescript-eslint type-checked ruleset — for a consumer who wants just this plugin's own rules without the full typed-linting baseline (the default export, src/index.ts, is the heavier bundle that adds that baseline on top of the same 'banned' policy). A project that legitimately needs a barrel (e.g. a published package whose src/index.ts is its package entry point) overrides to `{ mode: 'single' }` in its own config, or uses `configs.barrel` below. no-enum-number-widening, no-enum-reverse-lookup-widening, no-array-isarray-mutation, no-map-instanceof-mutation, no-set-instanceof-mutation, prefer-readonly-object-param, and prefer-numeric-sort-compare are all deliberately excluded here — each reads real type information (no-array-isarray-mutation needs it specifically to see through a type alias and to catch a bare, non-union readonly array parameter, both invisible from TSESTree syntax alone; no-map-instanceof-mutation and no-set-instanceof-mutation need it to see a parameter's real ReadonlyMap/ReadonlySet constituent through the same kind of alias/union; prefer-readonly-object-param needs the checker to resolve a parameter's own property types to confirm every one is flat; prefer-numeric-sort-compare needs the checker to confirm an array's element type is definitively 'number'), which this lighter bundle has no typescript-eslint parser wired up to provide; they are only ever registered in the type-checked bundle (src/recommended-type-checked.ts). no-mutable-union-array-param, prefer-options-object-param, prefer-readonly-array-param, and test-file-kind all need no type information (each matches on TSESTree node shapes or the filename alone, a no-op under a plain JS parser), so all four are included in both bundles like no-object-assign — prefer-options-object-param has no checker dependency of its own (see its own file header) and is deliberately NOT held out of this lighter bundle merely to sit alongside its type-dependent prefer-readonly-object-param/prefer-numeric-sort-compare siblings above, since doing so would withhold a real, zero-cost protection from exactly the consumer this lighter bundle exists for. max-params needs no type information either and is included in both bundles for the same reason — it is deliberately the LOOSER of the two backstops against an unwieldy parameter list: prefer-options-object-param already offers a real fix for the specific 2+-trailing-optional-parameters shape; max-params (at a threshold one above its own tool default, so it stays a backstop rather than a near-duplicate of the custom rule) catches the different, genuinely-excessive-REQUIRED-parameters case the custom rule is deliberately blind to.

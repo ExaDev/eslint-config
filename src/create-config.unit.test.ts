@@ -47,6 +47,19 @@ describe('exadevConfig', () => {
     );
   });
 
+  it('turbo, when given, wires in turboConfig\'s blocks, before any trailing user configs', () => {
+    const TURBO_BLOCK_COUNT = 2;
+    const extra: TSESLint.FlatConfig.Config = { rules: { 'no-console': 'warn' } };
+    const base = { react: false, nextjs: false, packageJsonKeyOrder: false, gitignore: false } as const;
+    const withoutTurbo = exadevConfig(base, extra);
+    const withTurbo = exadevConfig({ ...base, turbo: {} }, extra);
+    expect(withTurbo).toHaveLength(withoutTurbo.length + TURBO_BLOCK_COUNT);
+    expect(withTurbo.at(-1)).toBe(extra);
+    const hasTurboRule = (blocks: typeof withTurbo) => blocks.some((block) => block.rules !== undefined && 'exadev/turbo-task-outputs' in block.rules);
+    expect(hasTurboRule(withTurbo)).toBe(true);
+    expect(hasTurboRule(withoutTurbo)).toBe(false);
+  });
+
   it('appends trailing user configs, in order, after everything else', () => {
     const extraA: TSESLint.FlatConfig.Config = { rules: { 'no-console': 'warn' } };
     const extraB: TSESLint.FlatConfig.Config = { files: ['**/*.spec.ts'] };
