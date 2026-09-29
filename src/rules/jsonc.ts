@@ -36,12 +36,14 @@ function endOfBlockComment(text: string, start: number): number {
 }
 
 /**
- * Turns JSONC text into plain JSON text: `//` and block comments are removed and a comma directly before a closing `}` or `]` (with only whitespace or comments between) is dropped. String contents are copied verbatim, so a comment marker or comma inside a string is untouched. This is the grammar TypeScript (tsconfig) and Turborepo (turbo.json) accept, not full JSON5.
+ * Turns JSONC text into plain JSON text: `//` comments are removed, each block comment becomes one space (so the tokens either side of it stay separate, as they do to a JSONC parser), and a comma directly before a closing `}` or `]` (with only whitespace or comments between) is dropped when a value precedes it. A comma with no value before it (`[,]`, `{,}`, `[1,,]`) is kept so `JSON.parse` rejects it. String contents are copied verbatim, so a comment marker or comma inside a string is untouched. This is the grammar TypeScript (tsconfig) and Turborepo (turbo.json) accept, not full JSON5.
  */
 export function stripJsonc(text: string): string {
   let output = '';
-  // Index in `output` of a comma with nothing but whitespace emitted since, or -1; a following closing bracket makes it a trailing comma.
+  // Index in `output` of a comma that followed a value with nothing but whitespace emitted since, or -1; a following closing bracket makes it a trailing comma.
   let pendingComma = -1;
+  // Whether the last token emitted was a value (or the end of one) rather than an opening bracket, a comma or nothing; only a comma after a value can be a trailing comma.
+  let afterValue = false;
   let index = 0;
   while (index < text.length) {
     const char = requireChar(text, index);
@@ -50,19 +52,27 @@ export function stripJsonc(text: string): string {
       const end = endOfString(text, index);
       output += text.slice(index, end);
       pendingComma = -1;
+      afterValue = true;
       index = end;
     } else if (char === '/' && next === '/') {
       index = endOfLineComment(text, index);
     } else if (char === '/' && next === '*') {
+      output += ' ';
       index = endOfBlockComment(text, index);
     } else {
       if (char === ',') {
-        pendingComma = output.length;
+        pendingComma = afterValue ? output.length : -1;
+        afterValue = false;
+      } else if (char === '[' || char === '{') {
+        pendingComma = -1;
+        afterValue = false;
       } else if (char === '}' || char === ']') {
         if (pendingComma !== -1) output = output.slice(0, pendingComma) + output.slice(pendingComma + 1);
         pendingComma = -1;
+        afterValue = true;
       } else if (!/\s/u.test(char)) {
         pendingComma = -1;
+        afterValue = true;
       }
       output += char;
       index += 1;

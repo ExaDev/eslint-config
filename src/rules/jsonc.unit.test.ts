@@ -37,11 +37,11 @@ describe('stripJsonc', () => {
   });
 
   it('removes a block comment, including one spanning lines', () => {
-    expect(stripJsonc('{ /* a\nb */ "a": 1 }')).toBe('{  "a": 1 }');
+    expect(stripJsonc('{ /* a\nb */ "a": 1 }')).toBe('{   "a": 1 }');
   });
 
   it('removes an unterminated block comment to the end of the text', () => {
-    expect(stripJsonc('{"a": 1} /* open')).toBe('{"a": 1} ');
+    expect(stripJsonc('{"a": 1} /* open')).toBe('{"a": 1}  ');
   });
 
   it('treats a lone slash as ordinary text so the JSON parser can reject it', () => {
@@ -67,7 +67,7 @@ describe('stripJsonc', () => {
   });
 
   it('does not close a block comment on the asterisk-slash overlapping its own opener', () => {
-    expect(stripJsonc('/*/ x */1')).toBe('1');
+    expect(stripJsonc('/*/ x */1')).toBe(' 1');
   });
 
   it('keeps leading whitespace before a closing bracket that has no comma at all', () => {
@@ -89,7 +89,25 @@ describe('stripJsonc', () => {
   });
 
   it('drops a trailing comma separated from the bracket by whitespace or comments', () => {
-    expect(stripJsonc('[1, /* x */\n // y\n ]')).toBe('[1 \n \n ]');
+    expect(stripJsonc('[1, /* x */\n // y\n ]')).toBe('[1  \n \n ]');
+  });
+
+  it('replaces a block comment with a space so the tokens either side stay separate', () => {
+    expect(stripJsonc('1/**/2')).toBe('1 2');
+    expect(stripJsonc('{"a":1/**/2}')).toBe('{"a":1 2}');
+  });
+
+  it('keeps a comma that has no value before it so the JSON parser rejects it', () => {
+    expect(stripJsonc('[,]')).toBe('[,]');
+    expect(stripJsonc('{,}')).toBe('{,}');
+    expect(stripJsonc('[1,,]')).toBe('[1,,]');
+    expect(stripJsonc('[,1]')).toBe('[,1]');
+    expect(stripJsonc('{"a":[,]}')).toBe('{"a":[,]}');
+  });
+
+  it('drops a trailing comma after a nested container closes', () => {
+    expect(stripJsonc('[[],]')).toBe('[[]]');
+    expect(stripJsonc('{"a":{},}')).toBe('{"a":{}}');
   });
 
   it('keeps a comma that is followed by a value', () => {
@@ -115,6 +133,15 @@ describe('stripJsonc', () => {
 });
 
 describe('parseJsonc', () => {
+  it.each([
+    ['a block comment between two value tokens', '{"a":1/**/2}'],
+    ['a lone comma in an array', '[,]'],
+    ['a lone comma in an object', '{,}'],
+    ['a doubled trailing comma', '[1,,]'],
+  ])('throws naming the path for %s', (_label, text) => {
+    expect(() => parseJsonc(text, '/p/bad.json')).toThrow(/"\/p\/bad\.json"/);
+  });
+
   it('parses a tsconfig-shaped document with comments and trailing commas', () => {
     const text = '{\n  // strict\n  "compilerOptions": { "strict": true, /* c */ "target": "es2022", },\n}\n';
     expect(parseJsonc(text, '/p/tsconfig.json')).toStrictEqual({ compilerOptions: { strict: true, target: 'es2022' } });
