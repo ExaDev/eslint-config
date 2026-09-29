@@ -159,6 +159,29 @@ describe('checkTaskScripts', () => {
     expect(check({ '//#depcheck': {}, _lint: {} }, root, [pkg('a', { _lint: 'e' }, 'packages/a')])).toEqual([{ kind: 'unreachableTask', task: '//#depcheck' }]);
   });
 
+  it('accepts a // task that a root script runs by its bare name', () => {
+    const root = pkg('root', { 'lint:root': 'eslint .', check: 'turbo run lint:root' });
+    expect(check({ '//#lint:root': {} }, root, [pkg('a', {}, 'packages/a')])).toEqual([]);
+  });
+
+  it('accepts a // task that another // task lists by its bare name', () => {
+    const root = pkg('root', { fmt: 'prettier .', check: 'c', verify: 'turbo run check' });
+    const members = [pkg('a', {}, 'packages/a')];
+    expect(check({ '//#fmt': {}, '//#check': { dependsOn: ['fmt'] } }, root, members)).toEqual([]);
+    expect(check({ '//#fmt': {}, '//#check': { with: ['fmt'] } }, root, members)).toEqual([]);
+  });
+
+  it('does not read a bare dependsOn entry of a non-root task as a reference to a // task', () => {
+    const root = pkg('root', { fmt: 'prettier .', verify: 'turbo run all' });
+    const members = [pkg('a', {}, 'packages/a')];
+    expect(check({ '//#fmt': {}, all: { dependsOn: ['fmt'] } }, root, members)).toEqual([{ kind: 'unreachableTask', task: '//#fmt' }]);
+  });
+
+  it('does not read the bare name of a // task as a reference to a package-qualified or unrelated task', () => {
+    const root = pkg('root', { fmt: 'prettier .', verify: 'turbo run web#fmt' });
+    expect(check({ '//#fmt': {} }, root, [pkg('a', {}, 'packages/a')])).toEqual([{ kind: 'unreachableTask', task: '//#fmt' }]);
+  });
+
   it('accepts a // task another task depends on or runs alongside', () => {
     const root = pkg('root', { depcheck: 'd', cov: 'c', all: 'turbo run all' });
     const members = [pkg('a', { _lint: 'e' }, 'packages/a')];
