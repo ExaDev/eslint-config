@@ -133,6 +133,14 @@ describe('stripJsonc', () => {
 });
 
 describe('parseJsonc', () => {
+  it('ignores a leading byte order mark', () => {
+    expect(parseJsonc('\uFEFF{"a":1}', '/p/a.json')).toStrictEqual({ a: 1 });
+  });
+
+  it('rejects a byte order mark anywhere but the start', () => {
+    expect(() => parseJsonc('{"a":1}\uFEFF', '/p/a.json')).toThrow(/"\/p\/a\.json"/);
+  });
+
   it.each([
     ['a block comment between two value tokens', '{"a":1/**/2}'],
     ['a lone comma in an array', '[,]'],

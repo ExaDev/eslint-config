@@ -83,11 +83,11 @@ export function stripJsonc(text: string): string {
 }
 
 /**
- * Parses JSONC text (comments and trailing commas allowed) to an `unknown` value the caller must narrow. A syntax error is rethrown naming `sourcePath`, with the original error as its cause.
+ * Parses JSONC text (comments and trailing commas allowed, a leading UTF-8 byte order mark ignored as ESLint and TypeScript ignore it) to an `unknown` value the caller must narrow. A syntax error is rethrown naming `sourcePath`, with the original error as its cause.
  */
 export function parseJsonc(text: string, sourcePath: string): unknown {
   try {
-    const parsed: unknown = JSON.parse(stripJsonc(text));
+    const parsed: unknown = JSON.parse(stripJsonc(text.replace(/^\uFEFF/u, '')));
 
     return parsed;
   } catch (error) {
