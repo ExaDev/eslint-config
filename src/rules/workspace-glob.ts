@@ -66,8 +66,8 @@ export function segmentToRegExp(segment: string): RegExp {
   return new RegExp(`^${source}$`, 'u');
 }
 
-// Whether `segment` itself explicitly opens with a literal dot, the one case a wildcard segment is still allowed to match a dot-prefixed directory name: an explicit "." in the pattern is a deliberate request, not a wildcard's own incidental sweep picking up hidden content it was never meant to see.
-function segmentRequestsDotMatch(segment: string): boolean {
+/** Whether `segment` itself explicitly opens with a literal dot, the one case a wildcard segment is still allowed to match a dot-prefixed directory name: an explicit "." in the pattern is a deliberate request, not a wildcard's own incidental sweep picking up hidden content it was never meant to see. */
+export function segmentRequestsDotMatch(segment: string): boolean {
   return segment.startsWith('.');
 }
 
@@ -148,7 +148,7 @@ export function expandBraces(pattern: string): readonly string[] {
   const closeIndex = findMatchingBrace(pattern, openIndex);
   if (closeIndex === -1) {
     throw new Error(
-      `@exadev/eslint-config: workspace glob pattern "${pattern}" has an unmatched "{" (brace expansion). Rewrite it, or pass the "packages" rule option explicitly to bypass this pattern.`,
+      `@exadev/eslint-config: glob pattern "${pattern}" has an unmatched "{" (brace expansion). Rewrite it with balanced braces.`,
     );
   }
 
@@ -168,8 +168,8 @@ export function expandBraces(pattern: string): readonly string[] {
   return results;
 }
 
-// Resolves "." and ".." segments the same way path.posix.normalize would, purely at the segment level (pnpm's own documented dialect: "a pattern may be written with a './' prefix, may contain '.' and '..' segments... './packages/*' and 'packages//*' select the same projects"). A leading segment array already has no empty entries (splitPathSegments drops those, so a repeated or trailing slash is already handled before this ever runs); this only ever needs to drop a literal '.' segment and pop the preceding real segment for a '..' one. A leading '..' with nothing to pop is kept as-is, the same as normalize's own behaviour for a path that walks above where it started: there is no ancestor segment inside the pattern itself to remove, so walking a directory literally named ".." (which will simply never exist) is the correct, if inert, result.
-function normalizeGlobSegments(segments: readonly string[]): readonly string[] {
+/** Resolves "." and ".." segments the same way path.posix.normalize would, purely at the segment level (pnpm's own documented dialect: "a pattern may be written with a './' prefix, may contain '.' and '..' segments... './packages/*' and 'packages//*' select the same projects"). A leading segment array already has no empty entries (splitPathSegments drops those, so a repeated or trailing slash is already handled before this ever runs); this only ever needs to drop a literal '.' segment and pop the preceding real segment for a '..' one. A leading '..' with nothing to pop is kept as-is, the same as normalize's own behaviour for a path that walks above where it started: there is no ancestor segment inside the pattern itself to remove, so walking a directory literally named ".." (which will simply never exist) is the correct, if inert, result. */
+export function normalizeGlobSegments(segments: readonly string[]): readonly string[] {
   const normalized: string[] = [];
   for (const segment of segments) {
     if (segment === '.') continue;
