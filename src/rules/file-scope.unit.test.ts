@@ -43,6 +43,15 @@ describe('createFileScope', () => {
     expect(inScope(['turbo.json'], 'turbo.json.bak')).toBe(false);
   });
 
+  it('does not let a pattern match a path that continues past it', () => {
+    expect(inScope(['turbo.json'], 'turbo.json/extra')).toBe(false);
+    expect(inScope(['packages/*'], 'packages/a/b')).toBe(false);
+  });
+
+  it('never reads an exclude pattern as a literal include', () => {
+    expect(inScope(['other.json', '!a/**'], '!a/x.json')).toBe(false);
+  });
+
   it('lets ** match zero or more leading segments', () => {
     expect(inScope(['**/turbo.json'], 'turbo.json')).toBe(true);
     expect(inScope(['**/turbo.json'], 'a/turbo.json')).toBe(true);

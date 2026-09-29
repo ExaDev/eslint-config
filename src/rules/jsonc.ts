@@ -1,16 +1,21 @@
 import { assertIsError, jsonParseContext } from './workspace-errors';
 import { requireChar } from './workspace-path';
 
+// A string literal from its opening quote: escape pairs and ordinary characters, then the closing quote if there is one. Sticky, so it only ever matches at `lastIndex`.
+const STRING_LITERAL = /"(?:[^"\\]|\\[\s\S]?)*"?/uy;
+
 /**
- * Index just past the string literal opening at `start` (which must be a `"`), honouring backslash escapes. An unterminated string runs to the end of the text, leaving the resulting syntax error to `JSON.parse`.
+ * Index just past the string literal opening at `start` (which must be a `"`), honouring backslash escapes. Exported so its unreachable throw (a `start` that is not a `"`) is tested directly. An unterminated string runs to the end of the text, leaving the resulting syntax error to `JSON.parse`.
  */
-function endOfString(text: string, start: number): number {
-  let index = start + 1;
-  while (index < text.length && text[index] !== '"') {
-    index += text[index] === '\\' ? 2 : 1;
+export function endOfString(text: string, start: number): number {
+  STRING_LITERAL.lastIndex = start;
+  const match = STRING_LITERAL.exec(text);
+  // The pattern is anchored (sticky) at `start`, which the caller guarantees is a `"`, and every part after the opening quote is optional, so it always matches.
+  if (match === null) {
+    throw new Error('Unreachable: a string literal always matches from its opening quote.');
   }
 
-  return index + 1;
+  return start + match[0].length;
 }
 
 /**
