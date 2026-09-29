@@ -1,7 +1,6 @@
-const SURROUNDING_QUOTES = /^(["'])(.*)\1$/u;
-
+// The pattern is built per call, not held in a module constant: a module-level mutation is a static mutant that a test runner cannot switch on and off per test.
 function unquote(token: string): string {
-  return SURROUNDING_QUOTES.exec(token)?.[2] ?? token;
+  return /^(["'])(.*)\1$/u.exec(token)?.[2] ?? token;
 }
 
 /**
