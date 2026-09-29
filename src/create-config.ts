@@ -9,6 +9,8 @@ import { buildReactConfig } from './react';
 import recommendedTypeChecked from './recommended-type-checked';
 import stylisticCommentsConfig from './stylistic-comments';
 import { toPublicConfigArray } from './to-public-config-array';
+import { buildTurboConfig } from './turbo-config';
+import type { TurboOptions } from './rules/turbo-options';
 import { buildWorkspaceArchitectureConfig } from './workspace-architecture';
 import type { WorkspaceArchitectureOptions } from './rules/workspace-options';
 
@@ -21,6 +23,8 @@ export interface ExadevConfigOptions {
   readonly gitignore?: boolean;
   // Off unless given (unlike every tri-state option above): workspace architecture rules require real per-repo configuration (a "groups" list has no sensible default), so there is no auto-detected middle state. See workspaceArchitectureConfig in src/workspace-architecture.ts.
   readonly workspaceArchitecture?: WorkspaceArchitectureOptions;
+  // Off unless given, like workspaceArchitecture: turbo rules check a repository that uses turbo, which only its own configuration can say. An empty object enables the conventions with every default. See turboConfig in src/turbo-config.ts.
+  readonly turbo?: TurboOptions;
 }
 
 /**
@@ -39,6 +43,7 @@ export function exadevConfig(options: ExadevConfigOptions = {}, ...userConfigs: 
     ...buildNextjsConfig({ enabled: options.nextjs }),
     ...buildPackageJsonKeyOrderConfig({ enabled: options.packageJsonKeyOrder }),
     ...(options.workspaceArchitecture !== undefined ? buildWorkspaceArchitectureConfig(options.workspaceArchitecture) : []),
+    ...(options.turbo !== undefined ? buildTurboConfig(options.turbo) : []),
     ...userConfigs,
   ];
 
