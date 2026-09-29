@@ -19,6 +19,10 @@ describe('tokenizeCommand', () => {
     expect(tokenizeCommand(`a"b" "c 'd`)).toEqual([`a"b"`, '"c', `'d`]);
   });
 
+  it('keeps a quote pair that is followed by more text', () => {
+    expect(tokenizeCommand('"a"b')).toEqual(['"a"b']);
+  });
+
   it('keeps a mismatched quote pair', () => {
     expect(tokenizeCommand(`"a'`)).toEqual([`"a'`]);
   });

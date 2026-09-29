@@ -41,14 +41,22 @@ function asContent(requirement: string | ScriptContent): ScriptContent {
   return typeof requirement === 'string' ? { name: requirement } : requirement;
 }
 
+// The problems for one flag list: with `kind` 'missingFlag' a flag absent from the command is a problem, with 'forbiddenFlag' a flag present in it is.
+function flagProblems(input: Readonly<{ kind: 'missingFlag' | 'forbiddenFlag'; flags: readonly string[] | undefined; tokens: readonly string[]; script: string; actual: string }>): readonly ScriptProblem[] {
+  const { kind, flags, tokens, script, actual } = input;
+  if (flags === undefined) return [];
+
+  return flags.filter((flag) => containsTokenRun(tokens, tokenizeCommand(flag)) === (kind === 'forbiddenFlag')).map((flag) => ({ script, kind, expected: flag, actual }));
+}
+
 function contentProblems(content: ScriptContent, actual: string): readonly ScriptProblem[] {
   const tokens = tokenizeCommand(actual);
-  const base = { script: content.name, actual };
+  const { name: script, equals } = content;
 
   return [
-    ...(content.equals !== undefined && content.equals !== actual ? [{ ...base, kind: 'notEqual' as const, expected: content.equals }] : []),
-    ...(content.includes ?? []).filter((flag) => !containsTokenRun(tokens, tokenizeCommand(flag))).map((flag) => ({ ...base, kind: 'missingFlag' as const, expected: flag })),
-    ...(content.excludes ?? []).filter((flag) => containsTokenRun(tokens, tokenizeCommand(flag))).map((flag) => ({ ...base, kind: 'forbiddenFlag' as const, expected: flag })),
+    ...(equals !== undefined && equals !== actual ? [{ script, kind: 'notEqual' as const, expected: equals, actual }] : []),
+    ...flagProblems({ kind: 'missingFlag', flags: content.includes, tokens, script, actual }),
+    ...flagProblems({ kind: 'forbiddenFlag', flags: content.excludes, tokens, script, actual }),
   ];
 }
 
