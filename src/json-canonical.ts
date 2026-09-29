@@ -1,6 +1,7 @@
 import jsonCanonical from 'eslint-plugin-json-canonical';
 import type { Linter } from 'eslint';
 import type { ConfigArrayValue } from './config-types';
+import { JSONC_FILE_GLOBS } from './json-language-config';
 
 /**
  * `ESLint.Plugin['configs']`'s value type is a union spanning both flat and legacy-eslintrc config shapes — `'language' in value` is the field only the flat shape carries, so checking for it (rather than trusting the plugin's own advertised type) narrows to the real flat-config object eslint-plugin-json-canonical's own configs getters actually return.
@@ -27,11 +28,11 @@ const contentOnlyJsonc = requireConfig('contentOnlyJsonc');
 const jsonCanonicalConfig: ConfigArrayValue = [
   {
     files: ['**/*.json'],
-    ignores: ['**/*.jsonc', '**/tsconfig*.json', '**/turbo.json'],
+    ignores: [...JSONC_FILE_GLOBS],
     ...recommended,
   },
   {
-    files: ['**/*.jsonc', '**/tsconfig*.json', '**/turbo.json'],
+    files: [...JSONC_FILE_GLOBS],
     ...contentOnlyJsonc,
   },
   // package.json's own member order is a distinct, separately-optional concern (syncpack-style field-priority pinning, not RFC 8785's plain alphabetical order) that exadevConfig({ packageJsonKeyOrder }) handles instead — see buildPackageJsonKeyOrderConfig. Everything else configs.recommended gives every other JSON file (canonical numbers/strings, pretty-printed layout) still applies to package.json too; only its own key order is turned back off here.

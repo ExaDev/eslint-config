@@ -1,7 +1,6 @@
 import type { ConfigArrayValue, PublicConfigArray } from './config-types';
-import { resolveJsonPlugin } from './json-plugin';
-import { tryRequire, type RequireFn } from './optional-plugin';
-import plugin from './plugin';
+import { buildJsonLanguageBlock, requireJsonPlugin } from './json-language-config';
+import type { RequireFn } from './optional-plugin';
 import { readWorkspaceArchitectureOptions, type WorkspaceArchitectureOptions } from './rules/workspace-options';
 import { toPublicConfigArray } from './to-public-config-array';
 
@@ -21,24 +20,19 @@ export function buildWorkspaceArchitectureConfig(options: WorkspaceArchitectureC
   const { requireFn, ...ruleOptions } = options;
   const validated = readWorkspaceArchitectureOptions(ruleOptions);
 
-  const jsonPlugin = resolveJsonPlugin(tryRequire('@eslint/json', requireFn));
-  if (jsonPlugin === undefined) {
-    throw new Error(
-      "@exadev/eslint-config: workspace architecture rules require '@eslint/json' but it could not be resolved. Install it with: pnpm add -D @eslint/json",
-    );
-  }
+  const jsonPlugin = requireJsonPlugin('workspace architecture rules', requireFn);
 
   return [
-    {
-      files: ['**/package.json'],
+    buildJsonLanguageBlock({
+      jsonPlugin,
       language: 'json/json',
-      plugins: { exadev: plugin, json: jsonPlugin },
+      files: ['**/package.json'],
       rules: {
         'exadev/no-uphill-dependency': ['error', validated],
         'exadev/no-dependency-cycle': ['error', validated],
         ...(validated.naming !== undefined && { 'exadev/package-name-mirrors-path': ['error', validated] }),
       },
-    },
+    }),
   ];
 }
 
