@@ -34,6 +34,7 @@ import preferDocComment from './rules/prefer-doc-comment';
 import preferOptionsObjectParam from './rules/prefer-options-object-param';
 import preferReadonlyArrayParam from './rules/prefer-readonly-array-param';
 import preferReadonlyObjectParam from './rules/prefer-readonly-object-param';
+import pureModule from './rules/pure-module';
 import requiredExports from './rules/required-exports';
 import requiredImports from './rules/required-imports';
 import requiredScripts from './rules/required-scripts';
@@ -93,6 +94,7 @@ const plugin: TSESLint.FlatConfig.Plugin = {
     'prefer-options-object-param': preferOptionsObjectParam,
     'prefer-readonly-array-param': preferReadonlyArrayParam,
     'prefer-readonly-object-param': preferReadonlyObjectParam,
+    'pure-module': pureModule,
     'required-exports': requiredExports,
     'required-imports': requiredImports,
     'required-scripts': requiredScripts,
