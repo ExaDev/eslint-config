@@ -2,9 +2,8 @@ import type { ConfigArrayValue, PublicConfigArray } from './config-types';
 import { isRecord } from './is-record';
 import plugin from './plugin';
 import { assertOnlyKeys } from './rules/file-entry';
-import { readFileGlobs } from './rules/file-scope';
+import { scopeBlock } from './config-globs';
 import { readPureModuleOptions, type PureModuleOptions } from './rules/pure-module-options';
-import { isExcludePattern } from './rules/workspace-glob';
 import { toPublicConfigArray } from './to-public-config-array';
 
 /**
@@ -28,12 +27,10 @@ export function buildPureModulesConfig(options: PureModulesOptions): ConfigArray
   const { files, noControlFlow, ...ruleOptions } = options;
   if (noControlFlow !== undefined && typeof noControlFlow !== 'boolean') throw new Error(`@exadev/eslint-config: "${OPTION_NAME}.noControlFlow" must be a boolean.`);
 
-  const globs = readFileGlobs(files, `${OPTION_NAME}.files`);
 
   return [
     {
-      files: globs.filter((glob) => !isExcludePattern(glob)),
-      ...(globs.some(isExcludePattern) && { ignores: globs.filter(isExcludePattern).map((glob) => glob.slice(1)) }),
+      ...scopeBlock(files, `${OPTION_NAME}.files`),
       plugins: { exadev: plugin },
       rules: { 'exadev/pure-module': ['error', readPureModuleOptions(ruleOptions)], ...(noControlFlow === true && { 'exadev/no-control-flow': 'error' }) },
     },
