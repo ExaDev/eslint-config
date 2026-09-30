@@ -124,8 +124,6 @@ describe('patternOutcome', () => {
     expect(outcome("expect(scan('x')).toBe(undefined);")).toBe('passes');
     expect(outcome("expect(scan('x')).toBeTruthy();")).toBe('catches');
     expect(outcome("expect(scan('x')).toBeFalsy();")).toBe('passes');
-    expect(outcome("expect(scan('x')).toBeDefined();")).toBe('catches');
-    expect(outcome("expect(scan('x')).toBeUndefined();")).toBe('passes');
     expect(outcome("expect(scan('x')).toBeNull();")).toBe('passes');
     expect(outcome("expect(scan('x')).toContain('a');")).toBe('catches');
     expect(outcome("expect(scan('x')).toContainEqual('a');")).toBe('catches');
@@ -135,7 +133,20 @@ describe('patternOutcome', () => {
     expect(outcome("expect(pattern.test('x')).not.toBe(true);")).toBe('passes');
     expect(outcome("expect(pattern.test('x')).not.toBe(false);")).toBe('catches');
     expect(outcome("expect(scan('x')).not.toBeNull();")).toBe('catches');
-    expect(outcome("expect(scan('x')).not.toEqual([]);")).toBe('catches');
+  });
+
+  it('does not read definedness as an outcome of a pattern, since matching returns null and reads state existence', () => {
+    expect(outcome("expect(scan('x')).toBeDefined();")).toBeUndefined();
+    expect(outcome("expect(scan('x')).toBeUndefined();")).toBeUndefined();
+    expect(outcome("expect(readFile('x')).toBeDefined();")).toBeUndefined();
+    expect(outcome("expect(scan('x')).not.toBeDefined();")).toBeUndefined();
+  });
+
+  it('leaves an assertion that reads as a lower bound to the bound alone', () => {
+    expect(outcome("expect(scan('x')).not.toEqual([]);")).toBeUndefined();
+    expect(outcome("expect(scan('x')).not.toStrictEqual([]);")).toBeUndefined();
+    expect(outcome("expect(scan('x')).not.toHaveLength(0);")).toBeUndefined();
+    expect(isLowerBound(assertionOf("expect(scan('x')).not.toEqual([]);"))).toBe(true);
   });
 
   it('looks through a member access, an optional chain, a non-null assertion and await to the call', () => {
@@ -284,6 +295,10 @@ ruleTester.run('non-vacuous-guard', rule, {
     `const check = (line, expected) => { expect(PATTERN.test(line)).toBe(expected); expect(find()).not.toHaveLength(0); };\nit('a', () => { check('x', true); expect(PATTERN.test('y')).toBe(true); expect(PATTERN.test('z')).toBe(false); });`,
   ],
   invalid: [
+    // A discovery assertion is not also a check of the pattern.
+    { code: `it('a', () => { expect(listFiles()).not.toEqual([]); expect(findViolations(files)).toEqual([]); });`, errors: [{ messageId: 'missingMustCatch' }] },
+    { code: `it('a', () => { ${lowerBound} expect(readFile('x')).toBeDefined(); ${passes} });`, errors: [{ messageId: 'missingMustCatch' }] },
+    { code: `it('a', () => { ${lowerBound} ${catches} expect(readFile('y')).toBeUndefined(); });`, errors: [{ messageId: 'missingMustNotCatch' }] },
     // A callback that runs once per element of what was discovered.
     { code: `it('g', () => { ${lowerBound} Array.from(files, (f) => { expect(scan(f)).toBe(true); expect(scan(f)).toBe(false); }); });`, errors: [{ messageId: 'missingMustCatch' }, { messageId: 'missingMustNotCatch' }] },
     { code: `describe.each([])('g', () => { it('x', () => { ${lowerBound} ${catches} ${passes} }); });`, errors: [{ messageId: 'missingLowerBound' }, { messageId: 'missingMustCatch' }, { messageId: 'missingMustNotCatch' }] },
