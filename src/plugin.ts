@@ -15,6 +15,7 @@ import markdownRequiredHeading from './rules/markdown-required-heading';
 import noArrayIsarrayMutation from './rules/no-array-isarray-mutation';
 import noBoundariesIgnore from './rules/no-boundaries-ignore';
 import noControlFlow from './rules/no-control-flow';
+import noDefensiveFallback from './rules/no-defensive-fallback';
 import noDependencyCycle from './rules/no-dependency-cycle';
 import noEnumNumberWidening from './rules/no-enum-number-widening';
 import noEnumReverseLookupWidening from './rules/no-enum-reverse-lookup-widening';
@@ -83,6 +84,7 @@ const plugin: TSESLint.FlatConfig.Plugin = {
     'no-array-isarray-mutation': noArrayIsarrayMutation,
     'no-boundaries-ignore': noBoundariesIgnore,
     'no-control-flow': noControlFlow,
+    'no-defensive-fallback': noDefensiveFallback,
     'no-dependency-cycle': noDependencyCycle,
     'no-enum-number-widening': noEnumNumberWidening,
     'no-enum-reverse-lookup-widening': noEnumReverseLookupWidening,
