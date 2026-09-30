@@ -164,3 +164,19 @@ export function buildViaSequentialAwaitOverride(): DefinedConfig {
     rules: { 'no-await-in-loop': 'off' },
   });
 }
+
+/**
+ * README's "Defensive fallbacks" section: the opt-in rule with a reasoned `allow` entry, in a block after the shared config.
+ */
+export function buildViaDefensiveFallbackAllow(): DefinedConfig {
+  return defineConfig(...exadevConfig({ react: false, nextjs: false }), {
+    files: ['src/**/*.ts'],
+    plugins: { exadev: plugin },
+    rules: {
+      'exadev/no-defensive-fallback': [
+        'error',
+        { allow: [{ files: ['src/config/**'], reason: 'optional settings default to empty at the parsing boundary' }] },
+      ],
+    },
+  });
+}

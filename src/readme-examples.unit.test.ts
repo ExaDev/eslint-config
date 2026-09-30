@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { plugin } from './index';
 import { isRecord } from './is-record';
 import {
+  buildViaDefensiveFallbackAllow,
   buildViaImportPolicy,
   buildViaManualRules,
   buildViaPluginConfigsReactAndNextjs,
@@ -148,5 +149,13 @@ describe('README defineConfig examples', () => {
     const eslint = new ESLint({ overrideConfigFile: true, overrideConfig: buildViaSequentialAwaitOverride(), cwd: import.meta.dirname });
     expect(await ruleSettingOf(eslint, 'src/migrations/run.ts', 'no-await-in-loop')).toStrictEqual([0]);
     expect(await ruleSettingOf(eslint, 'src/lib/pick.ts', 'no-await-in-loop')).toStrictEqual([2]);
+  });
+
+  it('the defensive-fallback example resolves the rule with its reasoned allow entry for the scoped files', async () => {
+    const eslint = new ESLint({ overrideConfigFile: true, overrideConfig: buildViaDefensiveFallbackAllow(), cwd: import.meta.dirname });
+    expect(await ruleSettingOf(eslint, 'src/feature/items.ts', 'exadev/no-defensive-fallback')).toStrictEqual([
+      2,
+      { allow: [{ files: ['src/config/**'], reason: 'optional settings default to empty at the parsing boundary' }] },
+    ]);
   });
 });
