@@ -1,3 +1,23 @@
+# [2.28.0](https://github.com/ExaDev/eslint-config/compare/v2.27.0...v2.28.0) (2026-09-30)
+
+
+### Bug Fixes
+
+* accept any unary expression as data and word the prop rule as data, not literal ([ae28306](https://github.com/ExaDev/eslint-config/commit/ae2830649c2a5a017b97c69eb7bd5be5199356d3))
+* decline the no-multiline-template-literal fix where the literal type is required ([cb218b1](https://github.com/ExaDev/eslint-config/commit/cb218b1b0a969ad50ae45a768a89d79652f7c9e8))
+* require the catch guard to test that the controller has aborted, not its negation ([1dc5dcf](https://github.com/ExaDev/eslint-config/commit/1dc5dcfa7dbef96bb76d63205f7d6c40bf175af2))
+* require the race to be awaited inside the try for its finally and catch to count ([db078e5](https://github.com/ExaDev/eslint-config/commit/db078e5a2154e2e83bd8b665d93eaa2080f24880))
+* require the timeout race to use the controller its timer aborts ([011cb45](https://github.com/ExaDev/eslint-config/commit/011cb45c9205629493a9508fdbc8800d417d4828))
+* treat only dot-slash paths as relative in no-external-member-jsx-tag ([e8eb328](https://github.com/ExaDev/eslint-config/commit/e8eb328990f367d9719765af8680db5eb2cec125))
+
+
+### Features
+
+* add markdown-required-heading rule and markdownHeadingsConfig preset ([c290ed9](https://github.com/ExaDev/eslint-config/commit/c290ed95b2758e8c3011acc8c119400ed6dbd877)), closes [#80](https://github.com/ExaDev/eslint-config/issues/80)
+* add no-multiline-template-literal rule with a string-preserving fix ([3c459ba](https://github.com/ExaDev/eslint-config/commit/3c459badaa80bb16e56815e7de7f88fd339287a9)), closes [#79](https://github.com/ExaDev/eslint-config/issues/79)
+* add server component boundary rules to the Next.js preset ([095ebb0](https://github.com/ExaDev/eslint-config/commit/095ebb08195dbe8263e2754b4379ce7c8fa0c6cb)), closes [#82](https://github.com/ExaDev/eslint-config/issues/82)
+* add timeout-aborts-request rule for Promise.race timeouts ([9e7b163](https://github.com/ExaDev/eslint-config/commit/9e7b1636c98ec6a96a8973a897c029fc99bd1a77)), closes [#81](https://github.com/ExaDev/eslint-config/issues/81)
+
 # [2.27.0](https://github.com/ExaDev/eslint-config/compare/v2.26.0...v2.27.0) (2026-09-30)
 
 
