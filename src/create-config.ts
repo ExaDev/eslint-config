@@ -18,7 +18,7 @@ import type { WorkspaceArchitectureOptions } from './rules/workspace-options';
 export interface ExadevConfigOptions {
   readonly react?: boolean;
   readonly nextjs?: boolean;
-  // true: report environment variables read in source that no turbo.json declares (eslint-plugin-turbo's no-undeclared-env-vars), throwing if eslint-plugin-turbo isn't resolvable. false: never. undefined (the default): auto-detect -- on if eslint-plugin-turbo is installed. Separate from `turbo`, which configures this package's own turbo rules and is off unless given. See src/turbo-env.ts.
+  // true: report environment variables read in source that no turbo.json declares (eslint-plugin-turbo's no-undeclared-env-vars), throwing if eslint-plugin-turbo isn't resolvable. false: never. undefined (the default): auto-detect, on if eslint-plugin-turbo is installed. Separate from `turbo`, which configures this package's own turbo rules and is off unless given. See src/turbo-env.ts.
   readonly turboEnv?: boolean;
   // true: enforce package.json key order (see src/rules/package-json-key-order.ts) regardless of syncpack. false: never enforce it. undefined (the default): auto-detect -- enabled unless the consumer's own project already has syncpack configured, since syncpack already produces this exact order for free.
   readonly packageJsonKeyOrder?: boolean;
