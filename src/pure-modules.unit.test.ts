@@ -91,6 +91,14 @@ describe('pureModulesConfig', () => {
   });
 });
 
+describe('exadev/pure-module configured directly', () => {
+  it('names the rule in an option error rather than the pureModules config option', () => {
+    const linter = new Linter({ configType: 'flat', cwd: '/repo' });
+    const config = [SOURCE_BLOCK, { files: FILES, plugins: { exadev: plugin }, rules: { 'exadev/pure-module': ['error', { allowImports: ['path'] }] } }];
+    expect(() => linter.verify('export const x = 1;', config, { filename: '/repo/src/core/x.ts' })).toThrow('"pure-module.allowImports" entry "path" selects no banned module');
+  });
+});
+
 describe('exadevConfig pureModules', () => {
   const base = { react: false, nextjs: false, turboEnv: false, packageJsonKeyOrder: false, gitignore: false } as const;
   const hasPureRule = (blocks: ReturnType<typeof exadevConfig>) => blocks.some((block) => block.rules !== undefined && 'exadev/pure-module' in block.rules);

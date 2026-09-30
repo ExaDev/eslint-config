@@ -3,8 +3,6 @@ import { isRecord } from '../is-record';
 import { assertOnlyKeys } from './file-entry';
 import { createPathMatcher, readFileGlobs } from './file-scope';
 
-const OPTION_NAME = 'pureModules';
-
 const GLOB_CHARACTERS = /[*?[\]{}]/u;
 
 /**
@@ -118,21 +116,23 @@ export const pureModuleSchema: JSONSchema4 = {
 };
 
 /**
- * Validates the `allowImports` option, adding what the schema cannot express: at least one include and balanced braces (`readFileGlobs`), no `!` exclude (the list only ever exempts), and that every entry selects a banned module. Throws naming the offending entry; returns the options unchanged otherwise.
+ * Validates the `allowImports` option of the rule or block named `optionName` (`pureModules` for the config option, `pure-module` for the rule), which errors quote so they name the option the reader wrote. Adds what the schema cannot express: at least one include and balanced braces (`readFileGlobs`), no `!` exclude (the list only ever exempts), and that every entry selects a banned module. Throws naming the offending entry; returns the options unchanged otherwise.
  */
-export function readPureModuleOptions(value: unknown): PureModuleOptions {
-  if (!isRecord(value)) throw new Error(`@exadev/eslint-config: "${OPTION_NAME}" must be an object.`);
-  assertOnlyKeys(value, ['allowImports'], OPTION_NAME);
+export function readPureModuleOptions(value: unknown, optionName: string): PureModuleOptions {
+  if (!isRecord(value)) throw new Error(`@exadev/eslint-config: "${optionName}" must be an object.`);
+  assertOnlyKeys(value, ['allowImports'], optionName);
   const { allowImports } = value;
   if (allowImports === undefined) return {};
-  const entries = readFileGlobs(allowImports, `${OPTION_NAME}.allowImports`);
+  const entries = readFileGlobs(allowImports, `${optionName}.allowImports`);
   for (const entry of entries) {
-    if (entry.startsWith('!')) throw new Error(`@exadev/eslint-config: "${OPTION_NAME}.allowImports" entry "${entry}" is an exclude. The list only exempts modules, so name the modules to allow.`);
-    const root = entry.replace(/^node:/u, '').split('/')[0] ?? entry;
+    if (entry.startsWith('!')) throw new Error(`@exadev/eslint-config: "${optionName}.allowImports" entry "${entry}" is an exclude. The list only exempts modules, so name the modules to allow.`);
+    const specifier = entry.replace(/^node:/u, '');
+    const slash = specifier.indexOf('/');
+    const root = slash === -1 ? specifier : specifier.slice(0, slash);
     const matchesRoot = createPathMatcher([root]);
     const selectsBanned = BANNED_MODULES.includes(root) || (GLOB_CHARACTERS.test(root) && BANNED_MODULES.some((module) => matchesRoot(module)));
     if (!selectsBanned) {
-      throw new Error(`@exadev/eslint-config: "${OPTION_NAME}.allowImports" entry "${entry}" selects no banned module, so it could never apply. Banned modules: ${BANNED_MODULES.join(', ')}.`);
+      throw new Error(`@exadev/eslint-config: "${optionName}.allowImports" entry "${entry}" selects no banned module, so it could never apply. Banned modules: ${BANNED_MODULES.join(', ')}.`);
     }
   }
 
