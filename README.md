@@ -346,6 +346,7 @@ Bundled into `exadevConfig()`'s default output the same way React/Next.js auto-d
 | `non-vacuous-guard` | | **A guard test must show it can fail:** an unconditional lower bound on what it discovered, and its pattern checked against an input it must catch and one it must not. Wired by `testHygieneConfig`. See [Guard and conformance test hygiene](#guard-and-conformance-test-hygiene). |
 | `no-multiline-template-literal` | ✓ | **An untagged template literal whose value spans several lines should be an array of lines joined with `\n`.** Autofixes only when the rewrite provably yields the same string. See [Multi-line template literals](#multi-line-template-literals). |
 | `markdown-required-heading` | | **A Markdown document must contain each configured heading:** a `{ depth, text }` per required heading, matched on the text as it renders. A Markdown-language rule (`@eslint/markdown`). Wired by `markdownHeadingsConfig`. See [Required Markdown headings](#required-markdown-headings). |
+| `timeout-aborts-request` | | **A `Promise.race` timeout must abort the request it raced against,** not only settle the race: the timer callback calls `.abort()` on an `AbortController` created in the same function, the timer id is cleared in a `finally`, and a `catch` returns early on `controller.signal.aborted`. Opt-in, needs no type information. See [Timeout races](#timeout-races). |
 
 ## Barrel policy
 
@@ -658,6 +659,48 @@ Each entry is a `depth` from 1 to 6 (`#` to `######`) and the `text` of the head
 The entries are a list rather than a single `{ depth, text }` because flat config replaces a rule's options when a later block sets the same rule for the same files, so a second required heading could not be added by enabling the rule again.
 
 Frontmatter is parsed as a node of its own (`yaml` by default, or `frontmatter: 'toml'` or `'json'`). Without that, a leading `---` block is read as a thematic break followed by a Setext heading made of the block's first line, which could satisfy or spoil a check; the preset always sets it. A repository that wires the rule by hand sets `languageOptions: { frontmatter: 'yaml' }` on its own block for the same reason. The frontmatter is never treated as a heading, so `title: Usage` does not satisfy a required `Usage`.
+
+## Timeout races
+
+A timeout that settles a `Promise.race` but leaves the request it raced against running is a leak: the caller moves on while the provider call keeps consuming budget and connections. `exadev/timeout-aborts-request` requires the shape that both settles the race and cancels the work:
+
+```ts
+async function complete(url: string): Promise<Response | undefined> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      fetch(url, { signal: controller.signal }),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          controller.abort();
+          reject(new Error('timed out'));
+        }, TIMEOUT_MS);
+      }),
+    ]);
+  } catch (error) {
+    if (controller.signal.aborted) return undefined;
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+```
+
+For each `Promise.race([...])` with an arm that is a `new Promise(executor)` whose executor calls `setTimeout` (written in place or named by a `const` first), the rule reports:
+
+- a timer callback that contains no `.abort()` call, including a callback it cannot read (an imported function, a bound method). Nothing aborts the request, so it keeps running after the race settles;
+- an `.abort()` whose receiver is not a local `const controller = new AbortController()` of the function holding the race: a controller created at module level, in an outer function, received as a parameter or read off `this` is shared with other races or belongs to the caller, so aborting it cancels more than this request;
+- a timer whose id is not kept in a variable and passed to `clearTimeout` in a `finally` around the race (a `try` statement's `finally`, or a `.finally(callback)` chained onto the race). A request that wins otherwise leaves the timer pending;
+- a `catch` around the race (a `catch` clause, or a `.catch(callback)` chained onto it) that has no `if` testing `controller.signal.aborted` with a `return` in its consequent, so a timeout is handled apart from a failure of the request.
+
+The rule is syntactic and reads one function. It cannot see that a helper the race calls forwards `controller.signal` to the request, which is cross-file, and it does not check that a particular SDK call receives the signal, which is vendor-specific and belongs in the [import policy](#import-policy) or a recipe. A race over work that cannot be cancelled is a false positive; the escape hatch is a scoped block that turns the rule off for those files:
+
+```ts
+{ files: ['src/legacy/**'], rules: { 'exadev/timeout-aborts-request': 'off' } }
+```
+
+Off unless enabled (`'exadev/timeout-aborts-request': 'error'` with the plugin registered), and not in `recommended`, since a project chooses to adopt the shape.
 
 ## Workspace architecture
 

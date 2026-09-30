@@ -44,6 +44,7 @@ import requiredImports from './rules/required-imports';
 import requiredScripts from './rules/required-scripts';
 import scopedFirstParameter from './rules/scoped-first-parameter';
 import testFileKind from './rules/test-file-kind';
+import timeoutAbortsRequest from './rules/timeout-aborts-request';
 import turboBoundariesConfig from './rules/turbo-boundaries-config';
 import turboBoundariesScript from './rules/turbo-boundaries-script';
 import turboJsonHygiene from './rules/turbo-json-hygiene';
@@ -109,6 +110,7 @@ const plugin: TSESLint.FlatConfig.Plugin = {
     'required-scripts': requiredScripts,
     'scoped-first-parameter': scopedFirstParameter,
     'test-file-kind': testFileKind,
+    'timeout-aborts-request': timeoutAbortsRequest,
     'turbo-boundaries-config': turboBoundariesConfig,
     'turbo-boundaries-script': turboBoundariesScript,
     'turbo-json-hygiene': turboJsonHygiene,
