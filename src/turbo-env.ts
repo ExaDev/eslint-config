@@ -3,9 +3,9 @@ import { readFlatConfig, tryRequire, type RequireFn } from './optional-plugin';
 import { SOURCE_FILE_GLOBS } from './turbo-config';
 
 export interface TurboEnvConfigOptions {
-  // true: force on, throwing if eslint-plugin-turbo isn't resolvable. false: force off. undefined (the default, whether omitted or passed explicitly -- exactOptionalPropertyTypes distinguishes the two, so both are named here): auto-detect, silently returning [] if unresolvable.
+  // true: force on, throwing if eslint-plugin-turbo isn't resolvable. false: force off. undefined (the default, whether omitted or passed explicitly, since exactOptionalPropertyTypes distinguishes the two and both are named here): auto-detect, silently returning [] if unresolvable.
   readonly enabled?: boolean | undefined;
-  // Test seam only -- defaults to the real resolver. Never exposed through exadevConfig()'s own public options.
+  // Test seam only: defaults to the real resolver. Never exposed through exadevConfig()'s own public options.
   readonly requireFn?: RequireFn;
 }
 
