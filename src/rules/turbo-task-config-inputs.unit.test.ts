@@ -43,6 +43,8 @@ describe('turbo-task-config-inputs meta', () => {
         'Task "{{task}}" runs {{tool}} in {{packages}}, which reads "{{file}}" at the repository root, but the cache key does not include it, so changing it restores a stale result. List it in "globalDependencies" or add "$TURBO_ROOT$/{{file}}" to the task\'s "inputs".',
       missingPackageConfig:
         'Task "{{task}}" runs {{tool}} in {{packages}}, which reads "{{file}}" in its package, but the task\'s "inputs" replace the default files without including it, so changing it restores a stale result. Add "{{file}}" to "inputs" or add "$TURBO_DEFAULT$".',
+      excludedConfig:
+        'Task "{{task}}" runs {{tool}} in {{packages}}, which reads "{{file}}", but the "inputs" glob "{{glob}}" excludes it from the cache key, so changing it restores a stale result. Narrow or remove that glob; listing the file or "$TURBO_DEFAULT$" does not override an exclusion.',
     });
   });
 
@@ -89,6 +91,18 @@ ruleTester.run('turbo-task-config-inputs', rule, {
       errors: [
         { messageId: 'missingPackageConfig', data: { task: '_typecheck', tool: 'tsc', file: 'tsconfig.json', packages: 'web' }, line: FIRST_TASK_LINE },
         { messageId: 'missingRootConfig', data: { task: '_typecheck', tool: 'tsc', file: 'tsconfig.base.json', packages: 'api, web' }, line: FIRST_TASK_LINE },
+      ],
+    },
+    // A ! glob that drops a config the task keeps $TURBO_DEFAULT$ for gets its own explanation.
+    {
+      code: turbo({ _lint: { inputs: ['$TURBO_DEFAULT$', '!eslint.config.ts'] } }),
+      filename: '/single/turbo.json',
+      errors: [
+        {
+          message:
+            'Task "_lint" runs eslint in //, which reads "eslint.config.ts", but the "inputs" glob "!eslint.config.ts" excludes it from the cache key, so changing it restores a stale result. Narrow or remove that glob; listing the file or "$TURBO_DEFAULT$" does not override an exclusion.',
+          line: FIRST_TASK_LINE,
+        },
       ],
     },
     // The single-package repository is checked when its inputs replace the default.

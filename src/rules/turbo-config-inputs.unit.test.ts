@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createMemoryFs } from './memory-fs';
-import { cacheKeyIncludes, checkConfigInputs, toolsRunBy, TURBO_DEFAULT, TURBO_ROOT_PREFIX } from './turbo-config-inputs';
+import { cacheKeyIncludes, checkConfigInputs, excludingInput, toolsRunBy, TURBO_DEFAULT, TURBO_ROOT_PREFIX } from './turbo-config-inputs';
 import { readTurboJson, type TurboTask } from './turbo-json';
 import { DEFAULT_TOOL_CONFIGS } from './turbo-options';
 import { listTurboPackages } from './turbo-workspace';
@@ -38,6 +38,22 @@ describe('toolsRunBy', () => {
 
   it('keeps the order of the tools it was given', () => {
     expect(toolsRunBy('tsc && eslint', ['eslint', 'tsc'])).toEqual(['eslint', 'tsc']);
+  });
+});
+
+describe('excludingInput', () => {
+  const dirs = { root: '/repo', pkg: '/repo/packages/web' };
+  const excluding = (file: string, inputs: readonly string[] | undefined) => excludingInput({ file, task: task(inputs === undefined ? {} : { inputs }), globalDependencies: [], dirs });
+
+  it('returns the first ! entry that matches the file, as written', () => {
+    expect(excluding('/repo/packages/web/a.ts', [TURBO_DEFAULT, '!*.ts', '!a.ts'])).toBe('!*.ts');
+    expect(excluding('/repo/tsconfig.base.json', [TURBO_DEFAULT, `!${TURBO_ROOT_PREFIX}tsconfig.base.json`])).toBe(`!${TURBO_ROOT_PREFIX}tsconfig.base.json`);
+  });
+
+  it('returns undefined when no ! entry matches, or there are none', () => {
+    expect(excluding('/repo/packages/web/a.ts', [TURBO_DEFAULT, '!b.ts'])).toBeUndefined();
+    expect(excluding('/repo/packages/web/a.ts', ['a.ts'])).toBeUndefined();
+    expect(excluding('/repo/packages/web/a.ts', undefined)).toBeUndefined();
   });
 });
 
@@ -110,6 +126,17 @@ describe('checkConfigInputs', () => {
   it('reports a root config that neither globalDependencies nor inputs list', () => {
     const problems = check({ ...web, '/repo/eslint.config.ts': '' }, { tasks: { _lint: {} } }, '_lint');
     expect(problems).toEqual([{ kind: 'missingRootConfig', tool: 'eslint', file: 'eslint.config.ts', packages: ['web'] }]);
+  });
+
+  it('reports the ! glob that drops a config the task would otherwise include, and not a missing entry', () => {
+    const files = { ...web, '/repo/packages/web/eslint.config.ts': '', '/repo/eslint.config.ts': '' };
+    expect(check(files, { globalDependencies: ['eslint.config.*'], tasks: { _lint: { inputs: [TURBO_DEFAULT, `!${TURBO_ROOT_PREFIX}eslint.config.ts`] } } }, '_lint')).toEqual([]);
+    expect(check(files, { tasks: { _lint: { inputs: [TURBO_DEFAULT, '!eslint.config.ts', '$TURBO_ROOT$/eslint.config.ts'] } } }, '_lint')).toEqual([
+      { kind: 'excludedConfig', tool: 'eslint', file: 'eslint.config.ts', excludedBy: '!eslint.config.ts', packages: ['web'] },
+    ]);
+    expect(check(files, { tasks: { _lint: { inputs: [TURBO_DEFAULT, '$TURBO_ROOT$/eslint.config.ts', '!$TURBO_ROOT$/eslint.*'] } } }, '_lint')).toEqual([
+      { kind: 'excludedConfig', tool: 'eslint', file: 'eslint.config.ts', excludedBy: '!$TURBO_ROOT$/eslint.*', packages: ['web'] },
+    ]);
   });
 
   it('accepts a root config listed in globalDependencies or through $TURBO_ROOT$', () => {
