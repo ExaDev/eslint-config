@@ -7,6 +7,8 @@ import { toPublicPlugin } from './to-public-plugin';
 import barrelDirectSiblingsOnly from './rules/barrel-direct-siblings-only';
 import barrelPolicy from './rules/barrel-policy';
 import devDependencyOnly from './rules/dev-dependency-only';
+import filenamePattern from './rules/filename-pattern';
+import importPolicy from './rules/import-policy';
 import noArrayIsarrayMutation from './rules/no-array-isarray-mutation';
 import noBoundariesIgnore from './rules/no-boundaries-ignore';
 import noControlFlow from './rules/no-control-flow';
@@ -32,6 +34,8 @@ import preferDocComment from './rules/prefer-doc-comment';
 import preferOptionsObjectParam from './rules/prefer-options-object-param';
 import preferReadonlyArrayParam from './rules/prefer-readonly-array-param';
 import preferReadonlyObjectParam from './rules/prefer-readonly-object-param';
+import requiredExports from './rules/required-exports';
+import requiredImports from './rules/required-imports';
 import requiredScripts from './rules/required-scripts';
 import testFileKind from './rules/test-file-kind';
 import turboBoundariesConfig from './rules/turbo-boundaries-config';
@@ -62,6 +66,8 @@ const plugin: TSESLint.FlatConfig.Plugin = {
     'barrel-direct-siblings-only': barrelDirectSiblingsOnly,
     'barrel-policy': barrelPolicy,
     'dev-dependency-only': devDependencyOnly,
+    'filename-pattern': filenamePattern,
+    'import-policy': importPolicy,
     'no-array-isarray-mutation': noArrayIsarrayMutation,
     'no-boundaries-ignore': noBoundariesIgnore,
     'no-control-flow': noControlFlow,
@@ -87,6 +93,8 @@ const plugin: TSESLint.FlatConfig.Plugin = {
     'prefer-options-object-param': preferOptionsObjectParam,
     'prefer-readonly-array-param': preferReadonlyArrayParam,
     'prefer-readonly-object-param': preferReadonlyObjectParam,
+    'required-exports': requiredExports,
+    'required-imports': requiredImports,
     'required-scripts': requiredScripts,
     'test-file-kind': testFileKind,
     'turbo-boundaries-config': turboBoundariesConfig,

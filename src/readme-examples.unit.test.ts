@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { plugin } from './index';
 import {
+  buildViaImportPolicy,
   buildViaManualRules,
   buildViaPluginConfigsReactAndNextjs,
   buildViaStringExtends,
@@ -83,5 +84,14 @@ describe('README defineConfig examples', () => {
     expect(ownEntries).toHaveLength(2);
     expect(ownEntries.find((entry) => JSON.stringify(entry.files) === JSON.stringify(['**/*.tsx']))).toBeDefined();
     expect(ownEntries.find((entry) => JSON.stringify(entry.files) === JSON.stringify(['**/*.ts', '**/*.tsx']))).toBeDefined();
+  });
+
+  it('the import policy example compiles all three policies into the one rule block', () => {
+    const policyBlock = buildViaImportPolicy().find((entry) => entry.rules?.['exadev/import-policy'] !== undefined);
+    const options = policyBlock?.rules?.['exadev/import-policy'];
+    if (!Array.isArray(options)) throw new Error('Unreachable: the block enables the rule with options.');
+    expect(options[0]).toBe('error');
+    const policies = options[1];
+    expect(Array.isArray(policies) ? policies.map((policy: { files: string[] }) => policy.files) : undefined).toStrictEqual([['src/worker/**'], ['src/**'], ['src/routes/**']]);
   });
 });

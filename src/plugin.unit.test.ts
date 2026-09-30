@@ -9,6 +9,22 @@ describe('plugin.meta', () => {
   });
 });
 
+describe('plugin.rules', () => {
+  it('registers the file-level rules under their documented names', () => {
+    for (const name of ['required-exports', 'required-imports', 'import-policy', 'filename-pattern']) {
+      expect(plugin.rules).toHaveProperty(name);
+    }
+  });
+
+  it('keeps the file-level rules out of the recommended bundle, since each needs project-specific options', () => {
+    const config = plugin.configs?.['recommended'];
+    if (Array.isArray(config)) throw new Error('Unreachable: the recommended config is a single object.');
+    for (const name of ['required-exports', 'required-imports', 'import-policy', 'filename-pattern']) {
+      expect(config?.rules).not.toHaveProperty(`exadev/${name}`);
+    }
+  });
+});
+
 describe('plugin.configs.recommended', () => {
   it('bundles the banned barrel policy plus this plugin\'s own always-present non-type-aware rules, referencing the fully-built plugin object', () => {
     const config = plugin.configs?.['recommended'];

@@ -1,6 +1,7 @@
 import type { TSESLint } from '@typescript-eslint/utils';
 import type { ConfigArrayValue, PublicConfigArray } from './config-types';
 import { buildGitignoreConfig } from './gitignore';
+import { buildImportPolicyConfig } from './import-policy';
 import jsdocAndTsdoc from './jsdoc';
 import jsonCanonicalConfig from './json-canonical';
 import { buildNextjsConfig } from './nextjs';
@@ -11,6 +12,7 @@ import stylisticCommentsConfig from './stylistic-comments';
 import { toPublicConfigArray } from './to-public-config-array';
 import { buildTurboConfig } from './turbo-config';
 import { buildTurboEnvConfig } from './turbo-env';
+import type { ImportPolicy } from './rules/import-policy-options';
 import type { TurboOptions } from './rules/turbo-options';
 import { buildWorkspaceArchitectureConfig } from './workspace-architecture';
 import type { WorkspaceArchitectureOptions } from './rules/workspace-options';
@@ -28,6 +30,8 @@ export interface ExadevConfigOptions {
   readonly workspaceArchitecture?: WorkspaceArchitectureOptions;
   // Off unless given, like workspaceArchitecture: turbo rules check a repository that uses turbo, which only its own configuration can say. An empty object enables the conventions with every default. See turboConfig in src/turbo-config.ts.
   readonly turbo?: TurboOptions;
+  // Off unless given, like workspaceArchitecture and turbo: import policies name the specifiers and files of one repository. See importPolicyConfig in src/import-policy.ts.
+  readonly importPolicies?: readonly ImportPolicy[];
 }
 
 /**
@@ -61,6 +65,7 @@ export function exadevConfig(options: ExadevConfigOptions = {}, ...userConfigs: 
     ...buildPackageJsonKeyOrderConfig({ enabled: options.packageJsonKeyOrder }),
     ...(options.workspaceArchitecture !== undefined ? buildWorkspaceArchitectureConfig(options.workspaceArchitecture) : []),
     ...(options.turbo !== undefined ? buildTurboConfig(withWorkspaceGroups(options.turbo, options.workspaceArchitecture)) : []),
+    ...(options.importPolicies !== undefined ? buildImportPolicyConfig(options.importPolicies) : []),
     ...userConfigs,
   ];
 
