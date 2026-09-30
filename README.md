@@ -170,6 +170,7 @@ export default tseslint.config(
 | [Turbo rules](#turbo) | Off unless given (only a repository can say it uses turbo) | `exadevConfig({ turbo })` / `turboConfig(options)` |
 | [Import policy](#import-policy) | Off unless given (only a repository can say which imports it forbids) | `exadevConfig({ importPolicies })` / `importPolicyConfig(policies)` |
 | [Pure modules](#pure-modules) | Off unless given (only a repository can say which modules are a functional core) | `exadevConfig({ pureModules })` / `pureModulesConfig(options)` |
+| [Guard and conformance test hygiene](#guard-and-conformance-test-hygiene) | Off unless given (only a repository can say which tests are guards); needs the optional peer `@vitest/eslint-plugin` | `exadevConfig({ testHygiene })` / `testHygieneConfig(options)` |
 | [Turbo environment variable checking](#environment-variables-read-in-source) | Auto-detected: on if `eslint-plugin-turbo` is installed | `exadevConfig({ turboEnv })` |
 
 Every tri-state option above (`true`/`false`/`undefined`) is passed through the named `exadevConfig(options, ...userConfigs)` factory export:
@@ -340,6 +341,7 @@ Bundled into `exadevConfig()`'s default output the same way React/Next.js auto-d
 | `filename-pattern` | | **Filename conventions by glob:** a name regex, a required sibling file, and a naming scheme required once a file passes a line count. See [Filename patterns](#filename-patterns). |
 | `pure-module` | | **Bans I/O, ambient state and `async` in the files it is wired onto:** imports of Node I/O modules, I/O and scheduling globals, argument-less `Date`, `Date.now`, `Math.random`, and `async`/`await`. Wired by `pureModulesConfig`. See [Pure modules](#pure-modules). |
 | `scoped-first-parameter` | | **Every method of the configured repository-like interfaces takes a scope parameter first.** Checks the signature only, not that the scope is used or that tenants are isolated. Requires type information. Opt-in: needs its `interfaces` and `parameter` options. See [Scoped first parameter](#scoped-first-parameter). |
+| `non-vacuous-guard` | | **A guard test must show it can fail:** an unconditional lower bound on what it discovered, and its pattern checked against an input it must catch and one it must not. Wired by `testHygieneConfig`. See [Guard and conformance test hygiene](#guard-and-conformance-test-hygiene). |
 
 ## Barrel policy
 
@@ -495,6 +497,55 @@ export default defineConfig(
 ```
 
 `complexity` counts each function on its own, starting at 1 and adding one per branch, so `max: 2` allows a single `if`, ternary or `&&` per function. Flat config keeps the last value a block sets for a rule, so a broader `complexity` setting that follows this block over the same files replaces the ceiling; keep the scoped block last.
+
+## Guard and conformance test hygiene
+
+Source-scanning guard tests and conformance suites are worth having only if they cannot silently stop running. A `.skip`, a stray `.only` or a test with no assertion leaves CI green while checking nothing, and so does a scan that discovers no files. `testHygieneConfig` (or `exadevConfig({ testHygiene })`) holds both kinds of file to that:
+
+```ts
+import { defineConfig } from 'eslint/config';
+import { exadevConfig } from '@exadev/eslint-config';
+
+export default defineConfig(
+  ...exadevConfig({
+    testHygiene: {
+      guardFiles: ['**/*.guard.test.ts'],
+      conformanceFiles: ['**/*conformance*.test.ts', 'packages/*/src/conformance.ts'],
+      assertFunctionNames: ['check*'],
+      skippableFiles: ['**/live.conformance.test.ts'],
+    },
+  }),
+);
+```
+
+Every field is optional and `{}` enables the defaults. The preset needs `@vitest/eslint-plugin`, an optional peer (`pnpm add -D @vitest/eslint-plugin`). Giving the option without it throws with the install command, as does an installed version that lacks `expect-expect`, `no-disabled-tests` or `no-focused-tests`. The plugin is registered under `vitest`, the namespace its own documentation uses.
+
+| Field | Meaning |
+| --- | --- |
+| `guardFiles` | Guard test globs. Default `**/*.guard.test.ts`. These get the three vitest rules below and `exadev/non-vacuous-guard`. |
+| `conformanceFiles` | Conformance suite globs. Default `**/*conformance*.test.ts`. These get the three vitest rules. A kit that is not named `*.test.ts` is listed by its own name (`conformance.ts`). |
+| `assertFunctionNames` | Helper names `expect-expect` counts as assertions, besides `expect` and `assert`. A kit that asserts by throwing from local helpers never calls `expect`. Wildcards are the plugin's (`check*`). |
+| `skippableFiles` | Globs of files that are deliberately skipped, exempted from `no-disabled-tests` and nothing else. Flat-config globs, so a bare name needs `**/`. |
+
+A leading `!` in `guardFiles` or `conformanceFiles` excludes, for that list only. All three vitest rules are set to `error`: `no-focused-tests`, `expect-expect` and `no-disabled-tests`. `describe.skipIf`, `describe.runIf` and `it.todo` are not reported by `no-disabled-tests`, so an opt-in project is written as `describe.skipIf(!process.env['LIVE'])` and needs no exemption; `skippableFiles` is for a file that is skipped unconditionally. Only vitest is supported: eslint-plugin-jest has rules of the same names, which a jest repository wires by hand, and `non-vacuous-guard` reads `expect` chains that both frameworks share.
+
+`guard` and `conformance` are test kinds to [`test-file-kind`](#rules), which by default accepts `unit`, `integration` and `e2e` only, so a repository using the default globs adds them:
+
+```ts
+{ rules: { 'exadev/test-file-kind': ['error', { kinds: ['unit', 'integration', 'e2e', 'guard', 'conformance'] }] } }
+```
+
+### Non-vacuous guards
+
+The vitest rules cannot catch the commonest way a guard goes quiet: a scan that discovers no files, or a pattern that matches nothing, passes every assertion with no skip, no focus and no assertion-free test. `exadev/non-vacuous-guard` requires each guard file to contain all three of:
+
+- a lower bound on what it discovered: `toBeGreaterThan(n)` with `n` at least 0, `toBeGreaterThanOrEqual(n)` with `n` at least 1, `toHaveLength(n)` with `n` at least 1, or `not.toHaveLength(0)`, `not.toBe(0)`, `not.toEqual([])`. A bound written as a name (`MINIMUM_FILES`) is accepted, since its value cannot be read from the syntax;
+- a check that its pattern flags an input it must: `toMatch`, or on a call subject `toBe(true)`, `toBeTruthy()`, `not.toBeNull()`, `not.toEqual([])` and the like, as in `expect(pattern.test(violation)).toBe(true)`;
+- a check that it leaves alone an input it must not: `not.toMatch`, or on a call subject `toBe(false)`, `toBeFalsy()`, `toBeNull()`, `toEqual([])` and the like.
+
+Only assertions that run unconditionally count. One inside a loop, a `forEach`/`map`/`filter` callback, a branch, a `switch` case or a `catch` never runs when what it iterates is empty, so `for (const file of files) expect(read(file)).not.toMatch(pattern)` is the scan itself and satisfies none of the three. A helper function that asserts counts, since whether it is called is not visible.
+
+The rule is syntactic. It shows the guard file states each of the three, not that the pattern checked is the one the scan uses or that the discovered count is the scan's; a table-driven check whose expected values are variables (`toBe(expected)`) is not recognised, so write the catch and the pass as separate assertions.
 
 ## Scoped first parameter
 
@@ -934,13 +985,14 @@ pnpm build
 - [`src/rules/specifier-match.ts`](src/rules/specifier-match.ts) matches import specifiers against patterns for `required-imports` and `import-policy`, reusing the path matcher `createPathMatcher` in `file-scope.ts`.
 - [`src/import-policy.ts`](src/import-policy.ts) builds the `importPolicyConfig` block from the validated policies in [`src/rules/import-policy-options.ts`](src/rules/import-policy-options.ts), which the rule reads with the same reader.
 - [`src/pure-modules.ts`](src/pure-modules.ts) builds the `pureModulesConfig` block: `files` becomes the block's `files` and `ignores`, and the rule options are read by [`src/rules/pure-module-options.ts`](src/rules/pure-module-options.ts), which also holds the ban lists. [`src/rules/pure-module.ts`](src/rules/pure-module.ts) reuses `moduleReferenceOf` from `import-policy.ts` so every import syntax is recognised the same way.
+- [`src/test-hygiene.ts`](src/test-hygiene.ts) builds the `testHygieneConfig` blocks: it resolves the optional `@vitest/eslint-plugin` through `tryRequire`, checks the three rules it relies on exist, and emits the vitest rules per list of globs plus `exadev/non-vacuous-guard` for guard files. [`src/config-globs.ts`](src/config-globs.ts) turns a validated glob list into a block's `files` and `ignores`, shared with the pure-module builder.
 - [`src/rules/file-reference.ts`](src/rules/file-reference.ts) is the option shape for a rule that reads another file: `{ path, relativeTo? }`, resolved against the linted file's directory (`file`, the default) or the workspace root (`root`, found the way the workspace architecture rules find it).
   - `readReferencedJson` parses the target as JSONC through [`src/rules/jsonc.ts`](src/rules/jsonc.ts) (comments, trailing commas and a leading byte order mark), returning `undefined` for a missing file and throwing, naming the path, for one that does not parse.
 - [`src/turbo-config.ts`](src/turbo-config.ts) builds the turbo blocks (`buildTurboConfig` internally, `turboConfig` publicly) from the one shared options object in [`src/rules/turbo-options.ts`](src/rules/turbo-options.ts).
   - The pure decisions live in [`src/rules/turbo-checks.ts`](src/rules/turbo-checks.ts), independent of ESLint, so they are tested against plain maps; the rules are thin visitors over them. [`src/rules/turbo-json.ts`](src/rules/turbo-json.ts) reads the parts of a `turbo.json` the rules need and finds the root one, [`src/rules/turbo-workspace.ts`](src/rules/turbo-workspace.ts) lists the packages and their scripts, and [`src/rules/turbo-commands.ts`](src/rules/turbo-commands.ts) reads a script command for a delegation, the tasks it invokes, or a boundaries run.
   - Rules that read sibling and ancestor files take a `WorkspaceFs` through their factory, and their tests use [`src/rules/memory-fs.ts`](src/rules/memory-fs.ts), an in-memory implementation, rather than fixture trees on disk.
 - [`src/create-config.ts`](src/create-config.ts) is config assembly's single source of truth.
-  - `exadevConfig(options, ...userConfigs)` concatenates, in order: `buildGitignoreConfig`, `recommendedTypeChecked`, `jsdocAndTsdoc`, `jsonCanonicalConfig`, `stylisticCommentsConfig`, `buildReactConfig`, `buildNextjsConfig`, `buildPackageJsonKeyOrderConfig` (each tri-state builder fed its matching option), `buildWorkspaceArchitectureConfig` (only when `workspaceArchitecture` is given; there is no auto-detected default), `buildTurboConfig` (only when `turbo` is given, likewise), `buildImportPolicyConfig` (only when `importPolicies` is given, likewise), `buildPureModulesConfig` (only when `pureModules` is given, likewise), and any trailing user configs.
+  - `exadevConfig(options, ...userConfigs)` concatenates, in order: `buildGitignoreConfig`, `recommendedTypeChecked`, `jsdocAndTsdoc`, `jsonCanonicalConfig`, `stylisticCommentsConfig`, `buildReactConfig`, `buildNextjsConfig`, `buildPackageJsonKeyOrderConfig` (each tri-state builder fed its matching option), `buildWorkspaceArchitectureConfig` (only when `workspaceArchitecture` is given; there is no auto-detected default), `buildTurboConfig` (only when `turbo` is given, likewise), `buildImportPolicyConfig` (only when `importPolicies` is given, likewise), `buildPureModulesConfig` (only when `pureModules` is given, likewise), `buildTestHygieneConfig` (only when `testHygiene` is given, likewise), and any trailing user configs.
   - `defaultConfig` is `exadevConfig()` evaluated once, eagerly, at module load.
 - [`src/stylistic-comments.ts`](src/stylistic-comments.ts) builds `stylisticCommentsConfig`: the hand-picked `@stylistic/eslint-plugin` rules plus this package's own `exadev/prefer-doc-comment`, in two blocks (one scoped to every JS/TS file, one scoped to JSX files only for the three JSX-specific rules). See [Stylistic comment, class-member and JSX rules](#stylistic-comment-class-member-and-jsx-rules).
 - [`src/index.ts`](src/index.ts) is the entry point, still a pure re-export barrel:
@@ -949,9 +1001,11 @@ pnpm build
   export { importPolicyConfig } from './import-policy';
   export { publicPlugin as plugin } from './plugin';
   export { pureModulesConfig } from './pure-modules';
+  export { testHygieneConfig } from './test-hygiene';
   export { turboConfig } from './turbo-config';
   export { workspaceArchitectureConfig } from './workspace-architecture';
   export type { PureModulesOptions } from './pure-modules';
+  export type { TestHygieneOptions } from './test-hygiene';
   export type { ImportConfine, ImportDeny, ImportExceptEdge, ImportPolicy } from './rules/import-policy-options';
   export type { FilenamePatternEntry } from './rules/filename-pattern';
   export type { RequiredExportsEntry } from './rules/required-exports';

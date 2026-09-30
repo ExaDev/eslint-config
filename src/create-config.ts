@@ -11,6 +11,7 @@ import { buildReactConfig } from './react';
 import recommendedTypeChecked from './recommended-type-checked';
 import stylisticCommentsConfig from './stylistic-comments';
 import { toPublicConfigArray } from './to-public-config-array';
+import { buildTestHygieneConfig, type TestHygieneOptions } from './test-hygiene';
 import { buildTurboConfig } from './turbo-config';
 import { buildTurboEnvConfig } from './turbo-env';
 import type { ImportPolicy } from './rules/import-policy-options';
@@ -35,6 +36,8 @@ export interface ExadevConfigOptions {
   readonly importPolicies?: readonly ImportPolicy[];
   // Off unless given, like importPolicies: which modules are a functional core is a per-repository decision. See pureModulesConfig in src/pure-modules.ts.
   readonly pureModules?: PureModulesOptions;
+  // Off unless given, like pureModules: which tests are guards and conformance suites is a per-repository decision. Giving it (an empty object enables the defaults) throws when the optional peer @vitest/eslint-plugin is not installed. See testHygieneConfig in src/test-hygiene.ts.
+  readonly testHygiene?: TestHygieneOptions;
 }
 
 /**
@@ -70,6 +73,7 @@ export function exadevConfig(options: ExadevConfigOptions = {}, ...userConfigs: 
     ...(options.turbo !== undefined ? buildTurboConfig(withWorkspaceGroups(options.turbo, options.workspaceArchitecture)) : []),
     ...(options.importPolicies !== undefined ? buildImportPolicyConfig(options.importPolicies) : []),
     ...(options.pureModules !== undefined ? buildPureModulesConfig(options.pureModules) : []),
+    ...(options.testHygiene !== undefined ? buildTestHygieneConfig(options.testHygiene) : []),
     ...userConfigs,
   ];
 

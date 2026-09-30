@@ -9,6 +9,7 @@ import {
   buildViaPureModules,
   buildViaPureModulesOption,
   buildViaScopedComplexity,
+  buildViaTestHygiene,
   buildViaStringExtends,
   buildViaTseslintPluginConfigsRecommended,
   buildViaWorkspaceArchitecture,
@@ -113,6 +114,15 @@ describe('README defineConfig examples', () => {
     expect(block?.ignores).toStrictEqual(['src/core/**/*.gen.ts']);
     expect(block?.rules).toStrictEqual({ 'exadev/pure-module': ['error', { allowImports: ['node:stream'] }], 'exadev/no-control-flow': 'error' });
     expect(buildViaPureModulesOption().some((entry) => entry.rules?.['exadev/pure-module'] !== undefined)).toBe(true);
+  });
+
+  it('the test hygiene example wires every list it names, and the kinds override accepts the guard and conformance kinds', () => {
+    const blocks = buildViaTestHygiene();
+    const filesOf = (rule: string) => blocks.filter((entry) => entry.rules?.[rule] !== undefined).map((entry) => entry.files);
+    expect(filesOf('exadev/non-vacuous-guard')).toContainEqual(['**/*.guard.test.ts']);
+    expect(filesOf('vitest/expect-expect')).toContainEqual(['**/*conformance*.test.ts', 'packages/*/src/conformance.ts']);
+    const kindsBlock = blocks.find((entry) => entry.rules?.['exadev/test-file-kind'] !== undefined && entry.files === undefined);
+    expect(kindsBlock?.rules?.['exadev/test-file-kind']).toStrictEqual(['error', { kinds: ['unit', 'integration', 'e2e', 'guard', 'conformance'] }]);
   });
 
   it('the scoped complexity example limits the scoped files only, because its block follows the shared config', async () => {
