@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createFileScope, fileGlobsSchema, readFileGlobs } from './file-scope';
+import { createFileScope, createPathMatcher, fileGlobsSchema, readFileGlobs, relativeToCwd } from './file-scope';
 
 const CWD = '/repo';
 
@@ -131,5 +131,26 @@ describe('createFileScope', () => {
     expect(scope('/repo/x/a.json', CWD)).toBe(true);
     expect(scope('/repo/x/b.json', CWD)).toBe(false);
     expect(scope('/repo/y/a.json', CWD)).toBe(true);
+  });
+});
+
+describe('createPathMatcher', () => {
+  it('matches a plain path, not only a file path, in the same dialect', () => {
+    const matches = createPathMatcher(['@scope/*', '!@scope/private']);
+    expect(matches('@scope/pkg')).toBe(true);
+    expect(matches('@scope/private')).toBe(false);
+    expect(matches('@other/pkg')).toBe(false);
+  });
+
+  it('matches nothing that starts by leaving the root', () => {
+    expect(createPathMatcher(['**'])('../x')).toBe(false);
+    expect(createPathMatcher(['**'])('a/x')).toBe(true);
+  });
+});
+
+describe('relativeToCwd', () => {
+  it('spells the path relative to cwd with forward slashes, and starts with .. outside it', () => {
+    expect(relativeToCwd('/repo/src/a.ts', '/repo')).toBe('src/a.ts');
+    expect(relativeToCwd('/elsewhere/a.ts', '/repo')).toBe('../elsewhere/a.ts');
   });
 });

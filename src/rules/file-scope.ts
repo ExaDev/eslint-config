@@ -69,19 +69,40 @@ function matchSegments(path: readonly string[], pattern: readonly CompiledSegmen
 export type FileScope = (filename: string, cwd: string) => boolean;
 
 /**
- * Compiles a validated glob list into a `FileScope`: in scope means at least one include matches and no `!` exclude does. Compile once per rule `create()` (or per options object), not per file.
+ * Decides whether a forward-slash path (already relative to whatever root the caller matches against) falls inside a configured glob list.
  */
-export function createFileScope(globs: readonly string[]): FileScope {
+export type PathMatcher = (path: string) => boolean;
+
+/**
+ * Compiles a validated glob list into a `PathMatcher`: a match means at least one include matches and no `!` exclude does. The path is split on `/` and matched segment by segment, so it need not be a file path: an import specifier matches the same way. A path whose first segment is `..` matches nothing, since it leaves the root the globs are relative to. Compile once per rule `create()` (or per options object), not per path.
+ */
+export function createPathMatcher(globs: readonly string[]): PathMatcher {
   const includes = globs.filter((glob) => !isExcludePattern(glob)).flatMap(compilePattern);
   const excludes = globs
     .filter(isExcludePattern)
     .map((glob) => glob.slice(1))
     .flatMap(compilePattern);
 
-  return (filename, cwd) => {
-    const path = splitPathSegments(relative(cwd, filename).split(sep).join('/'));
-    if (path[0] === '..') return false;
+  return (path) => {
+    const segments = splitPathSegments(path);
+    if (segments[0] === '..') return false;
 
-    return includes.some((pattern) => matchSegments(path, pattern)) && !excludes.some((pattern) => matchSegments(path, pattern));
+    return includes.some((pattern) => matchSegments(segments, pattern)) && !excludes.some((pattern) => matchSegments(segments, pattern));
   };
+}
+
+/**
+ * The forward-slash path of `filename` relative to `cwd`, the spelling every `FileScope` and file-glob option matches against. A file outside `cwd` starts with `..`.
+ */
+export function relativeToCwd(filename: string, cwd: string): string {
+  return relative(cwd, filename).split(sep).join('/');
+}
+
+/**
+ * Compiles a validated glob list into a `FileScope`: in scope means at least one include matches and no `!` exclude does. Compile once per rule `create()` (or per options object), not per file.
+ */
+export function createFileScope(globs: readonly string[]): FileScope {
+  const matches = createPathMatcher(globs);
+
+  return (filename, cwd) => matches(relativeToCwd(filename, cwd));
 }
