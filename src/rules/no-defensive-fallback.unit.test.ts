@@ -43,6 +43,13 @@ describe('readAllowedScopes', () => {
     expect(several?.('/repo/scripts/strict/build.ts', cwd)).toBe(false);
   });
 
+  it('widens a glob without a slash to any depth, as the per-file rules do', () => {
+    const [bare] = readAllowedScopes({ allow: [{ files: 'config.ts', reason: 'r' }] });
+    expect(bare?.('/repo/config.ts', cwd)).toBe(true);
+    expect(bare?.('/repo/src/config.ts', cwd)).toBe(true);
+    expect(bare?.('/repo/src/other.ts', cwd)).toBe(false);
+  });
+
   it('rejects malformed options, naming the option', () => {
     expect(() => readAllowedScopes('allow')).toThrow(/"exadev\/no-defensive-fallback" options must be an object/u);
     expect(() => readAllowedScopes({ allowed: [] })).toThrow(/unknown key "allowed"/u);
