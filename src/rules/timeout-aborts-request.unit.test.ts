@@ -46,6 +46,10 @@ ruleTester.run('timeout-aborts-request', rule, {
     shape({ catchClause: ' catch (error) {\n    if (error instanceof Error && controller.signal.aborted) { log(error); return undefined; }\n    throw error;\n  }' }),
     // The timer id may be declared in the function and assigned in the executor, or the arm named first.
     'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  const timeout = new Promise((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error("t")); }, 1); });\n  try {\n    return await Promise.race([fetch(url), timeout]);\n  } finally {\n    clearTimeout(timer);\n  }\n}',
+    // The race may be awaited through a type assertion, a chained then, or a const it is stored in.
+    shape({ race: 'await (Promise.race([fetch(url, { signal: controller.signal }), new Promise((_, reject) => {\n      TIMER\n    })]) as Promise<unknown>)' }),
+    shape({ race: 'await Promise.race([fetch(url, { signal: controller.signal }), new Promise((_, reject) => {\n      TIMER\n    })]).then((value) => value)' }),
+    'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  try {\n    const pending = Promise.race([fetch(url, { signal: controller.signal }), new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 5); })]);\n    return await pending;\n  } finally {\n    clearTimeout(timer);\n  }\n}',
     // Chained handlers are followed.
     'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  return Promise.race([fetch(url), new Promise((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error("t")); }, 1); })])\n    .catch((error) => { if (controller.signal.aborted) return undefined; throw error; })\n    .finally(() => { clearTimeout(timer); });\n}',
     // A race in a catch clause is still followed by the try statement's finally, but is not covered by that same catch clause.
@@ -177,6 +181,20 @@ ruleTester.run('timeout-aborts-request', rule, {
     // A race in the finally clause is followed by nothing of that statement.
     {
       code: 'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  try {\n    setup();\n  } finally {\n    clearTimeout(timer);\n    await Promise.race([fetch(url), new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 1); })]);\n  }\n}',
+      errors: [{ messageId: 'timerNotCleared' }],
+    },
+    // Returned without await inside the try: the finally runs at once, clearing the timer before it can fire, and the catch never sees the rejection.
+    {
+      code: 'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  try {\n    return Promise.race([fetch(url, { signal: controller.signal }), new Promise((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error("t")); }, 5); })]);\n  } catch (error) {\n    if (!controller.signal.aborted) return undefined;\n    throw error;\n  } finally {\n    clearTimeout(timer);\n  }\n}',
+      errors: [{ messageId: 'timerNotCleared' }],
+    },
+    {
+      code: 'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  try {\n    const pending = Promise.race([fetch(url, { signal: controller.signal }), new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 5); })]);\n    return pending;\n  } finally {\n    clearTimeout(timer);\n  }\n}',
+      errors: [{ messageId: 'timerNotCleared' }],
+    },
+    // Awaited after the try block has ended: the finally still runs first.
+    {
+      code: 'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  let pending;\n  try {\n    pending = Promise.race([fetch(url, { signal: controller.signal }), new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 5); })]);\n  } finally {\n    clearTimeout(timer);\n  }\n  return await pending;\n}',
       errors: [{ messageId: 'timerNotCleared' }],
     },
     // A catch that does not test the signal.

@@ -179,6 +179,38 @@ const timeoutAbortsRequest = createRule<[], MessageIds>({
       });
 
     /**
+     * The `await` that consumes the race, looking through what passes the promise along unchanged (a type assertion, a non-null assertion, chained `.then`, `.catch` and `.finally` calls) and through a `const` the race is stored in. `undefined` when the race is returned, passed on or left unused: the enclosing `try` then ends as soon as the promise exists, so its `finally` runs before the race settles and its `catch` never sees the rejection.
+     */
+    const awaitOfRace = (race: TSESTree.CallExpression): TSESTree.AwaitExpression | undefined => {
+      let current: TSESTree.Node = race;
+      for (;;) {
+        const parent: TSESTree.Node = current.parent;
+        if (parent.type === AST_NODE_TYPES.AwaitExpression) return parent;
+        if (parent.type === AST_NODE_TYPES.TSAsExpression || parent.type === AST_NODE_TYPES.TSNonNullExpression || parent.type === AST_NODE_TYPES.TSSatisfiesExpression) {
+          current = parent;
+        } else if (parent.type === AST_NODE_TYPES.MemberExpression && parent.object === current && parent.parent.type === AST_NODE_TYPES.CallExpression && parent.parent.callee === parent) {
+          current = parent.parent;
+        } else if (parent.type === AST_NODE_TYPES.VariableDeclarator && parent.init === current && parent.id.type === AST_NODE_TYPES.Identifier) {
+          const stored = ASTUtils.findVariable(sourceCode.getScope(parent), parent.id.name);
+          const awaited = stored?.references.map((reference) => reference.identifier.parent).find((user) => user.type === AST_NODE_TYPES.AwaitExpression);
+
+          return awaited?.type === AST_NODE_TYPES.AwaitExpression ? awaited : undefined;
+        } else {
+          return undefined;
+        }
+      }
+    };
+
+    /**
+     * Whether the race is awaited inside `part`, the block or clause of an enclosing `try` that holds it.
+     */
+    const awaitedWithin = (race: TSESTree.CallExpression, part: TSESTree.Node): boolean => {
+      const awaited = awaitOfRace(race);
+
+      return awaited !== undefined && awaited.range[0] >= part.range[0] && awaited.range[1] <= part.range[1];
+    };
+
+    /**
      * The `try` statements around the race in its own function, each with the part of it (`block`, `handler` or `finalizer`) that holds the race.
      */
     const enclosingTries = (race: TSESTree.CallExpression): { readonly statement: TSESTree.TryStatement; readonly part: TSESTree.Node }[] => {
@@ -193,18 +225,18 @@ const timeoutAbortsRequest = createRule<[], MessageIds>({
     };
 
     /**
-     * Every `finally` that runs after the race: the finalizer of an enclosing `try` whose `try` block or `catch` clause holds the race, and the callback of a `.finally(callback)` chained directly onto the race.
+     * Every `finally` that runs after the race settles: the finalizer of an enclosing `try` whose `try` block or `catch` clause awaits the race, and the callback of a `.finally(callback)` chained directly onto the race.
      */
     const finallyBodies = (race: TSESTree.CallExpression): TSESTree.Node[] => [
-      ...enclosingTries(race).flatMap(({ statement, part }) => (statement.finalizer !== null && (part === statement.block || part === statement.handler) ? [statement.finalizer] : [])),
+      ...enclosingTries(race).flatMap(({ statement, part }) => (statement.finalizer !== null && (part === statement.block || part === statement.handler) && awaitedWithin(race, part) ? [statement.finalizer] : [])),
       ...chainedHandlers(race).filter(({ name }) => name === 'finally').map(({ callback }) => callback),
     ];
 
     /**
-     * Every handler that sees the race's rejection: the `catch` clause of an enclosing `try` whose `try` block holds the race, and the callback of a `.catch(callback)` chained directly onto the race.
+     * Every handler that sees the race's rejection: the `catch` clause of an enclosing `try` whose `try` block awaits the race, and the callback of a `.catch(callback)` chained directly onto the race.
      */
     const catchHandlers = (race: TSESTree.CallExpression): TSESTree.Node[] => [
-      ...enclosingTries(race).flatMap(({ statement, part }) => (statement.handler !== null && part === statement.block ? [statement.handler] : [])),
+      ...enclosingTries(race).flatMap(({ statement, part }) => (statement.handler !== null && part === statement.block && awaitedWithin(race, part) ? [statement.handler] : [])),
       ...chainedHandlers(race).filter(({ name }) => name === 'catch').map(({ callback }) => callback),
     ];
 
