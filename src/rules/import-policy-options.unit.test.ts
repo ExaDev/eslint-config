@@ -84,6 +84,11 @@ describe('readImportPolicies', () => {
       expect(() => readImportPolicies(policy({ file: 'src/a?.ts', specifier: 'fs', reason: 'r' }))).toThrow(/"file" to be exact/u);
     });
 
+    it('stores the file in its normalised spelling, which the rule compares as a string', () => {
+      const [read] = readImportPolicies(policy({ file: './src/../src/a.ts', specifier: 'fs', reason: 'r' }));
+      expect(read?.exceptEdges).toEqual([{ file: 'src/a.ts', specifier: 'fs', reason: 'r' }]);
+    });
+
     it('rejects an edge that could never apply', () => {
       expect(() => readImportPolicies(policy({ file: 'lib/a.ts', specifier: 'fs', reason: 'r' }))).toThrow(/names a file the policy's files do not select/u);
       expect(() => readImportPolicies(policy({ file: 'src/skip/a.ts', specifier: 'fs', reason: 'r' }))).toThrow(/names a file the policy's files do not select/u);
