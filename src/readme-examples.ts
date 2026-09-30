@@ -123,3 +123,13 @@ export function buildViaPureModules() {
 export function buildViaPureModulesOption() {
   return defineConfig(exadevConfig({ react: false, nextjs: false, pureModules: { files: ['src/core/**'] } }));
 }
+
+/**
+ * README's "A complexity ceiling for logic-free modules" section: a files-scoped block after the shared config.
+ */
+export function buildViaScopedComplexity() {
+  return defineConfig(...exadevConfig({ react: false, nextjs: false }), {
+    files: ['src/views/**/*.ts', 'src/main.ts'],
+    rules: { complexity: ['error', { max: 2 }] },
+  });
+}

@@ -300,7 +300,7 @@ Bundled into `exadevConfig()`'s default output the same way React/Next.js auto-d
 | `no-non-barrel-reexport` | ✓ | **Re-exports belong only in a barrel.** Catches the split form across two statements (`import { x } from './y'; export { x };` or `export default x;`) which no AST selector alone can match. Autofix deletes the export and the now-pointless import when it was the import's only use. Self-scopes away from any index file. |
 | `no-side-effects-in-index` | | **A barrel may contain only re-export statements** — nothing that could execute at import time. Self-scopes to any index file. |
 | `barrel-direct-siblings-only` | | **A barrel may re-export only from a direct sibling** (`./module`), never a nested path, parent, or bare package specifier (mode 3). |
-| `no-control-flow` | | **Bans `if`/`switch`/loops/the ternary operator outright.** Not part of `recommended` or `barrel` — ordinary code legitimately needs control flow, so this is opt-in, wired via a consumer's own `files` glob for the specific packages that want it (a composition-root package selecting an adapter/strategy by a validated key, say): a lookup table replaces a branch, a declarative array method (`map`/`filter`/`some`/`every`/...) replaces a loop. Requires no type information. See also [Pure modules](#pure-modules), which can add it to a block. |
+| `no-control-flow` | | **Bans `if`/`switch`/loops/the ternary operator outright.** Not part of `recommended` or `barrel` — ordinary code legitimately needs control flow, so this is opt-in, wired via a consumer's own `files` glob for the specific packages that want it (a composition-root package selecting an adapter/strategy by a validated key, say): a lookup table replaces a branch, a declarative array method (`map`/`filter`/`some`/`every`/...) replaces a loop. Requires no type information. See also [Pure modules](#pure-modules), which can add it to a block, and [a complexity ceiling](#a-complexity-ceiling-for-logic-free-modules) for a softer limit. |
 | `no-pointless-reassignment` | ✓ | **Flags a `const` alias that adds no transformation** (`const foo = bar` where both sides are plain identifiers). Autofix rewrites every read to the original name and deletes the declaration. Still reported but deliberately not auto-fixable where collapsing the alias would change meaning: an explicit type annotation (`const exhaustive: never = item` — the annotation is the point), a read where the original name is shadowed, a read as a shorthand object property, more than one declarator in the statement, or a source that is written to anywhere. An alias that is itself part of the module's exported surface (`export const alias = original;`, a later `export { alias }`/`export { alias as other }`, or `export default alias;`) is neither reported nor fixed at all, since collapsing it would rename or delete a binding every importer of this module depends on. |
 | `no-object-assign` | ✓/suggestion | **`Object.assign` skips the type-checking object spread gets** — it doesn't check a source object's properties against the target's declared types. A fresh object-literal target autofixes to `{ ...target, ...source }`; mutating an existing reassignable binding offers a suggestion only (changes the object's identity); a `const` binding or a non-statement call site gets a plain report with no fix. |
 | `no-mutable-union-array-param` | ✓ | **A union-typed array parameter can be mutated with a value the caller's narrower array never declared.** A function parameter typed as an array of a union (`(string \| number)[]`) accepts a narrower caller array (`number[]`) by covariance; calling `push`/`unshift`/`splice`/`fill`/`copyWithin` on it can then insert a value the caller's own array was never declared to hold. Autofix marks the parameter `readonly`, turning the mutating call into a real compile error to resolve deliberately. Requires no type information. |
@@ -476,6 +476,25 @@ In the selected files the rule reports:
 `allowImports` lists specifiers, in the [specifier pattern](#specifier-patterns) dialect, exempted from the module ban. Every entry must select a banned module, so an entry that could never apply fails when the config is created. `noControlFlow: true` adds `exadev/no-control-flow` to the same block, for a module that should hold lookup tables and nothing else.
 
 It is one rule under one name, not a `no-restricted-imports`, `no-restricted-globals` and `no-restricted-syntax` recipe, because flat config replaces a rule's options when a later block sets the same rule for the same files. A consumer's own `no-restricted-syntax` block over the pure files would silently drop a recipe's entries; it cannot drop these. The bans are syntactic. They keep a module from reaching for ambient state directly, and they do not follow an alias (`const { random } = Math`) or prove the module deterministic. A repository needing a different list writes its own `no-restricted-*` blocks.
+
+### A complexity ceiling for logic-free modules
+
+`exadev/no-control-flow` is all or nothing: a module either may branch or may not. For view adapters and thin entry points that should hold almost no logic, a scoped `complexity` ceiling is the softer statement, and needs no new rule. Set it in a block for those globs, placed after the shared config:
+
+```ts
+import { defineConfig } from 'eslint/config';
+import { exadevConfig } from '@exadev/eslint-config';
+
+export default defineConfig(
+  ...exadevConfig(),
+  {
+    files: ['src/views/**/*.ts', 'src/main.ts'],
+    rules: { complexity: ['error', { max: 2 }] },
+  },
+);
+```
+
+`complexity` counts each function on its own, starting at 1 and adding one per branch, so `max: 2` allows a single `if`, ternary or `&&` per function. Flat config keeps the last value a block sets for a rule, so a broader `complexity` setting that follows this block over the same files replaces the ceiling; keep the scoped block last.
 
 ## Scoped first parameter
 

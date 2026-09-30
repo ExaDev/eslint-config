@@ -1,15 +1,25 @@
+import { ESLint, type Linter } from 'eslint';
 import { describe, expect, it } from 'vitest';
 import { plugin } from './index';
+import { isRecord } from './is-record';
 import {
   buildViaImportPolicy,
   buildViaManualRules,
   buildViaPluginConfigsReactAndNextjs,
   buildViaPureModules,
   buildViaPureModulesOption,
+  buildViaScopedComplexity,
   buildViaStringExtends,
   buildViaTseslintPluginConfigsRecommended,
   buildViaWorkspaceArchitecture,
 } from './readme-examples';
+
+async function complexityOf(eslint: ESLint, file: string): Promise<unknown> {
+  const config: unknown = await eslint.calculateConfigForFile(file);
+  if (!isRecord(config) || !isRecord(config['rules'])) throw new Error(`Unreachable: ESLint resolves a rules object for ${file}.`);
+
+  return config['rules']['complexity'];
+}
 
 // This file's only job is proving README.md's own defineConfig() examples still resolve to the exact real config content they document, not just typecheck, mirroring consumer-compatibility.unit.test.ts's own role for the default export. Every assertion below checks a value this file's own literal supplies, not the shared bundles (exadev/recommended, workspaceArchitectureConfig's own wiring) those literals pull in, which already have their own dedicated tests. Each builder is called here, inside the test, rather than imported as an already-built constant, so a broken example's own thrown error surfaces as this specific test failing.
 describe('README defineConfig examples', () => {
@@ -103,5 +113,19 @@ describe('README defineConfig examples', () => {
     expect(block?.ignores).toStrictEqual(['src/core/**/*.gen.ts']);
     expect(block?.rules).toStrictEqual({ 'exadev/pure-module': ['error', { allowImports: ['node:stream'] }], 'exadev/no-control-flow': 'error' });
     expect(buildViaPureModulesOption().some((entry) => entry.rules?.['exadev/pure-module'] !== undefined)).toBe(true);
+  });
+
+  it('the scoped complexity example limits the scoped files only, because its block follows the shared config', async () => {
+    const eslint = new ESLint({ overrideConfigFile: true, overrideConfig: buildViaScopedComplexity(), cwd: import.meta.dirname });
+    expect(await complexityOf(eslint, 'src/views/home.ts')).toStrictEqual([2, { max: 2 }]);
+    expect(await complexityOf(eslint, 'src/main.ts')).toStrictEqual([2, { max: 2 }]);
+    expect(await complexityOf(eslint, 'src/lib/pick.ts')).toBeUndefined();
+  });
+
+  it('a broader complexity setting placed after the scoped block replaces its ceiling, which is why the README puts the scoped block last', async () => {
+    const broaderBlock: Linter.Config = { files: ['src/**/*.ts'], rules: { complexity: ['error', { max: 20 }] } };
+    const broaderLast = [...buildViaScopedComplexity(), broaderBlock];
+    const eslint = new ESLint({ overrideConfigFile: true, overrideConfig: broaderLast, cwd: import.meta.dirname });
+    expect(await complexityOf(eslint, 'src/views/home.ts')).toStrictEqual([2, { max: 20 }]);
   });
 });
