@@ -214,7 +214,24 @@ export function missingEdges(task: TurboTask, required: readonly string[]): read
   return required.filter((edge) => !task.dependsOn.includes(edge));
 }
 
-/** Whether `schema`, a turbo.json's `$schema`, is `https://<host>/schema.json` for one of `hosts`. */
+// The schema file the `turbo` package ships, referenced from a turbo.json by a relative path that starts with `./` or `../` (turbo 2.4 and later, https://turborepo.dev/docs/getting-started/editor-integration).
+const LOCAL_SCHEMA_PATTERN = /^(?:\.{1,2}\/)+(?:[^/]+\/)*node_modules\/turbo\/schema\.json$/u;
+
+// The versioned subdomain label of a host, `v<major>-<minor>-<patch>` with optional pre-release segments (turbo 2.5.7 and later).
+const VERSIONED_SUBDOMAIN_PATTERN = /^v\d+-\d+-\d+(?:-[a-z0-9]+)*$/u;
+
+function isSchemaUrlOn(schema: string, host: string): boolean {
+  const scheme = 'https://';
+  const suffix = `.${host}/schema.json`;
+
+  return schema === `${scheme}${host}/schema.json` || (schema.startsWith(scheme) && schema.endsWith(suffix) && VERSIONED_SUBDOMAIN_PATTERN.test(schema.slice(scheme.length, -suffix.length)));
+}
+
+/**
+ * Whether `schema`, a turbo.json's `$schema`, is one turbo documents: `https://<host>/schema.json` for one of `hosts`, the same URL on a versioned subdomain of one of them (`https://v2-10-8.<host>/schema.json`), or the schema the installed `turbo` package ships, referenced by a relative path ending in `node_modules/turbo/schema.json`. The local path names no host, so `hosts` does not restrict it.
+ */
 export function isKnownSchema(schema: string | undefined, hosts: readonly string[]): boolean {
-  return hosts.some((host) => schema === `https://${host}/schema.json`);
+  if (schema === undefined) return false;
+
+  return LOCAL_SCHEMA_PATTERN.test(schema) || hosts.some((host) => isSchemaUrlOn(schema, host));
 }

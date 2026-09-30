@@ -15,7 +15,7 @@ export type TurboJsonHygieneRuleDefinition = JSONRuleDefinition<{
 }>;
 
 /**
- * Plain presence checks on turbo.json. Every turbo.json needs a `$schema` of the form `https://<host>/schema.json`, for a host in `hygiene.schemaHosts` (the three hosts turbo has published it under by default; give one to make it canonical and report the others), so editors validate the file. In the root turbo.json, two opt-in checks: `hygiene.requireCiPassThrough` requires `CI` in `globalPassThroughEnv`, which lets tasks that read it see it without it entering their cache key, and `hygiene.aggregateTask` requires a task of that name (graph-only, or backed by a no-op root script, either way it is a task entry) whose `dependsOn` lists every task in `includes`. Diagnostics land on the offending member, or on the document when the member is missing.
+ * Plain presence checks on turbo.json. Every turbo.json needs a `$schema`, so editors validate the file: `https://<host>/schema.json` for a host in `hygiene.schemaHosts` (the three hosts turbo has published it under by default; give one to make it canonical and report the others), the same URL on a versioned subdomain (`https://v2-10-8.<host>/schema.json`), or a relative path to the schema the `turbo` package ships (`./node_modules/turbo/schema.json`), which names no host. In the root turbo.json, two opt-in checks: `hygiene.requireCiPassThrough` requires `CI` in `globalPassThroughEnv`, which lets tasks that read it see it without it entering their cache key, and `hygiene.aggregateTask` requires a task of that name (graph-only, or backed by a no-op root script, either way it is a task entry) whose `dependsOn` lists every task in `includes`. Diagnostics land on the offending member, or on the document when the member is missing.
  */
 export function createTurboJsonHygieneRule(): TurboJsonHygieneRuleDefinition {
   return {
@@ -30,7 +30,7 @@ export function createTurboJsonHygieneRule(): TurboJsonHygieneRuleDefinition {
       },
       messages: {
         missingSchema: 'turbo.json has no "$schema", so editors cannot validate it. Add "$schema": "https://<host>/schema.json" with one of the hosts {{hosts}}.',
-        unknownSchema: '"$schema" is "{{schema}}", which is not "https://<host>/schema.json" for one of the hosts {{hosts}}.',
+        unknownSchema: '"$schema" is "{{schema}}", which is neither "https://<host>/schema.json" for one of the hosts {{hosts}} nor a relative path to "node_modules/turbo/schema.json".',
         missingCiPassThrough: 'turbo.json does not list "CI" in "globalPassThroughEnv", so a task that reads it either cannot see it or has it in its cache key. Add it.',
         missingAggregateTask: 'turbo.json has no task "{{task}}", the aggregate that runs {{includes}}. Add it with those tasks in its "dependsOn".',
         aggregateMissingDependency: 'Aggregate task "{{task}}" must list "{{dependency}}" in its "dependsOn", so running the aggregate runs it.',
