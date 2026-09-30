@@ -727,6 +727,7 @@ pnpm build
   - `tryRequire` wraps [`createRequire(import.meta.url)`](https://nodejs.org/api/module.html#modulecreaterequirefilename) in try/catch, returning `unknown` (never a cast) so every call site narrows explicitly before use.
   - `readFlatConfig` walks a property path through that `unknown` value via a real type guard, normalizing a stray legacy top-level `parserOptions` key into `languageOptions.parserOptions` along the way.
   - Confirmed necessary: `eslint-plugin-jsx-a11y`'s own `configs.recommended` export carries exactly this legacy shape, which flat config's schema rejects outright rather than ignores.
+  - `buildOptionalPluginConfig` is the builder shared by the presets that fold in a single plugin's flat config ([`src/nextjs.ts`](src/nextjs.ts), [`src/turbo-env.ts`](src/turbo-env.ts)): the package, the config path, the feature name for the error and an optional `files` scope go in, and the tri-state `enabled` behaviour comes out the same for each.
 - [`src/react.ts`](src/react.ts)/[`src/nextjs.ts`](src/nextjs.ts) each export a `build*Config(options)` function: resolve the relevant optional peer(s) via `tryRequire`, extract their real flat config via `readFlatConfig`, and return an array of 0-or-more config blocks.
   - `[]` if unresolvable and not explicitly forced on; a thrown `Error` if explicitly forced on (`enabled: true`) and still unresolvable.
   - `react.ts`'s blocks are scoped to `files: ['**/*.jsx', '**/*.tsx']`; `nextjs.ts`'s is not (see [Optional React and Next.js support](#optional-react-and-nextjs-support) for why).
