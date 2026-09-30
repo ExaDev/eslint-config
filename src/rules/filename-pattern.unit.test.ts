@@ -27,7 +27,9 @@ describe('filename-pattern options', () => {
     expect(read({ files: 'a.ts' })).toThrow(/"pattern" or a "sibling"/u);
     expect(read({ files: 'a.ts', pattern: '' })).toThrow(/"pattern" to be a non-empty regular expression/u);
     expect(read({ files: 'a.ts', pattern: 3 })).toThrow(/"pattern" to be a non-empty regular expression/u);
-    expect(read({ files: 'a.ts', pattern: '(' })).toThrow(SyntaxError);
+    expect(read({ files: 'a.ts', pattern: '[' })).toThrow(/"exadev\/filename-pattern" needs "pattern" to be a valid regular expression, but "\[" is not/u);
+    expect(read({ files: 'a.ts', pattern: '(' })).toThrow(/valid regular expression/u);
+    expect(read({ files: 'a.ts', pattern: 'z)|(q' })).toThrow(/valid regular expression/u);
     expect(read({ files: 'a.ts', sibling: [] })).toThrow(/"sibling"/u);
     expect(read({ files: 'a.ts', sibling: [''] })).toThrow(/"sibling"/u);
     expect(read({ files: 'a.ts', sibling: 3 })).toThrow(/"sibling"/u);

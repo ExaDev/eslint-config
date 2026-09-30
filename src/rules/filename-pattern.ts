@@ -34,6 +34,13 @@ function readPattern(value: unknown): ReadEntry['pattern'] {
   if (value === undefined) return undefined;
   if (typeof value !== 'string' || value.length === 0) throw new Error(`@exadev/eslint-config: "${OPTION_NAME}" needs "pattern" to be a non-empty regular expression source.`);
 
+  // The source must compile on its own: wrapped in the anchoring group, an unbalanced `z)|(q` would still compile and silently stop being anchored.
+  try {
+    new RegExp(value, 'u');
+  } catch (error) {
+    throw new Error(`@exadev/eslint-config: "${OPTION_NAME}" needs "pattern" to be a valid regular expression, but "${value}" is not: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+  }
+
   return { source: value, regexp: new RegExp(`^(?:${value})$`, 'u') };
 }
 
