@@ -275,3 +275,94 @@ describe('file scoping against a non-JS/TS language in the same config array', (
     expect(jsScopedRuleId).toBeUndefined();
   });
 });
+
+// Nesting one block more than the `max: 4` configured on max-depth is the smallest input that must be reported.
+const MAX_DEPTH = 4;
+
+function generateNestedIfs(depth: number): string {
+  const opening = Array.from({ length: depth }, () => 'if (flag) {').join('\n');
+
+  return `export function nested(flag: boolean): void {\n${opening}\nflag = !flag;\n${'}\n'.repeat(depth)}}\n`;
+}
+
+describe('robustness rules', () => {
+  it('eqeqeq bans loose equality, including the `== null` idiom', () => {
+    expect(lint('export const same = (a: number): boolean => a == 2;\n', 'src/foo.ts')).toContain('eqeqeq');
+    expect(lint('export const missing = (a: string | null): boolean => a == null;\n', 'src/foo.ts')).toContain('eqeqeq');
+    expect(lint('export const same = (a: number): boolean => a === 2;\n', 'src/foo.ts')).not.toContain('eqeqeq');
+  });
+
+  it('no-param-reassign bans rebinding a parameter and assigning to its properties', () => {
+    expect(lint('export function rebind(a: number): number {\n  a = 1;\n  return a;\n}\n', 'src/foo.ts')).toContain('no-param-reassign');
+    expect(lint('export function mutate(o: { x: number }): void {\n  o.x = 1;\n}\n', 'src/foo.ts')).toContain('no-param-reassign');
+    expect(lint('export function local(a: number): number {\n  const b = a + 1;\n  return b;\n}\n', 'src/foo.ts')).not.toContain('no-param-reassign');
+  });
+
+  it('no-await-in-loop bans an await inside a loop body but allows for await and an await outside any loop', () => {
+    const inLoop = 'export async function each(xs: readonly Promise<number>[]): Promise<void> {\n  for (const x of xs) {\n    await x;\n  }\n}\n';
+    const forAwait = 'export async function each(xs: AsyncIterable<number>): Promise<void> {\n  for await (const x of xs) {\n    void x;\n  }\n}\n';
+    const outside = 'export async function once(x: Promise<number>): Promise<number> {\n  return await x;\n}\n';
+    expect(lint(inLoop, 'src/foo.ts')).toContain('no-await-in-loop');
+    expect(lint(forAwait, 'src/foo.ts')).not.toContain('no-await-in-loop');
+    expect(lint(outside, 'src/foo.ts')).not.toContain('no-await-in-loop');
+  });
+
+  it('require-atomic-updates bans a read-modify-write that spans an await but allows reading after it', () => {
+    const spanning = 'let total = 0;\nexport async function add(p: Promise<number>): Promise<void> {\n  total += await p;\n}\n';
+    const afterwards = 'let total = 0;\nexport async function add(p: Promise<number>): Promise<void> {\n  const amount = await p;\n  total += amount;\n}\n';
+    expect(lint(spanning, 'src/foo.ts')).toContain('require-atomic-updates');
+    expect(lint(afterwards, 'src/foo.ts')).not.toContain('require-atomic-updates');
+  });
+
+  it('default-case-last bans a default clause that is not the last', () => {
+    expect(lint('export function f(n: number): number {\n  switch (n) {\n    default:\n      return 0;\n    case 1:\n      return 1;\n  }\n}\n', 'src/foo.ts')).toContain('default-case-last');
+    expect(lint('export function f(n: number): number {\n  switch (n) {\n    case 1:\n      return 1;\n    default:\n      return 0;\n  }\n}\n', 'src/foo.ts')).not.toContain('default-case-last');
+  });
+
+  it('no-return-assign bans returning an assignment, even parenthesised', () => {
+    expect(lint('let last = 0;\nexport const set = (n: number): number => (last = n);\n', 'src/foo.ts')).toContain('no-return-assign');
+    expect(lint('let last = 0;\nexport const set = (n: number): void => {\n  last = n;\n};\n', 'src/foo.ts')).not.toContain('no-return-assign');
+  });
+
+  it('max-depth bans nesting beyond four blocks and allows four', () => {
+    expect(lint(generateNestedIfs(MAX_DEPTH + 1), 'src/foo.ts')).toContain('max-depth');
+    expect(lint(generateNestedIfs(MAX_DEPTH), 'src/foo.ts')).not.toContain('max-depth');
+  });
+
+  it('no-implicit-coercion bans unary plus and string concatenation coercion but allows `!!` on an unambiguous operand', () => {
+    expect(lint('export const num = (s: string): number => +s;\n', 'src/foo.ts')).toContain('no-implicit-coercion');
+    expect(lint("export const str = (n: number): string => '' + n;\n", 'src/foo.ts')).toContain('no-implicit-coercion');
+    expect(lint('export const flag = (o: object): boolean => !!o;\n', 'src/foo.ts')).not.toContain('no-implicit-coercion');
+  });
+
+  it('leaves `!!` on an ambiguous operand to strict-boolean-expressions, which is why no-implicit-coercion can allow it', () => {
+    expect(lint('export const flag = (s: string | undefined): boolean => !!s;\n', 'src/foo.ts')).toContain('@typescript-eslint/strict-boolean-expressions');
+  });
+
+  it('explicit-module-boundary-types bans an exported function with no written return type', () => {
+    expect(lint('export function double(n: number) {\n  return n * 2;\n}\n', 'src/foo.ts')).toContain('@typescript-eslint/explicit-module-boundary-types');
+    expect(lint('export function double(n: number): number {\n  return n * 2;\n}\n', 'src/foo.ts')).not.toContain('@typescript-eslint/explicit-module-boundary-types');
+  });
+
+  it('explicit-module-boundary-types leaves a non-exported function alone', () => {
+    expect(lint('function double(n: number) {\n  return n * 2;\n}\nexport const four: number = double(2);\n', 'src/foo.ts')).not.toContain('@typescript-eslint/explicit-module-boundary-types');
+  });
+
+  it('switch-exhaustiveness-check does not let a default stand in for a union member', () => {
+    const viaDefault = "type Kind = 'a' | 'b';\nexport function f(k: Kind): number {\n  switch (k) {\n    case 'a':\n      return 1;\n    default:\n      return 2;\n  }\n}\n";
+    const complete = "type Kind = 'a' | 'b';\nexport function f(k: Kind): number {\n  switch (k) {\n    case 'a':\n      return 1;\n    case 'b':\n      return 2;\n  }\n}\n";
+    expect(lint(viaDefault, 'src/foo.ts')).toContain('@typescript-eslint/switch-exhaustiveness-check');
+    expect(lint(complete, 'src/foo.ts')).not.toContain('@typescript-eslint/switch-exhaustiveness-check');
+  });
+
+  it('switch-exhaustiveness-check requires a default when the discriminant is not a union', () => {
+    const noDefault = 'export function f(n: number): number {\n  switch (n) {\n    case 1:\n      return 1;\n  }\n  return 0;\n}\n';
+    const withDefault = 'export function f(n: number): number {\n  switch (n) {\n    case 1:\n      return 1;\n    default:\n      return 0;\n  }\n}\n';
+    expect(lint(noDefault, 'src/foo.ts')).toContain('@typescript-eslint/switch-exhaustiveness-check');
+    expect(lint(withDefault, 'src/foo.ts')).not.toContain('@typescript-eslint/switch-exhaustiveness-check');
+  });
+
+  it('applies to test files too, since the relaxation block only touches ts-expect-error and assertions', () => {
+    expect(lint('export const same = (a: number): boolean => a == 2;\n', 'src/foo.test.ts')).toContain('eqeqeq');
+  });
+});

@@ -1,6 +1,8 @@
+import { Linter } from 'eslint';
 import { describe, expect, it, vi } from 'vitest';
 import { JSX_FILE_PATTERNS } from './react';
 import plugin from './plugin';
+import { UNTYPED_ROBUSTNESS_RULES } from './robustness-rules';
 
 describe('plugin.meta', () => {
   it('carries the exact package name and rule-reference namespace', () => {
@@ -40,6 +42,30 @@ describe('plugin.configs.recommended', () => {
       expect(config?.rules?.['exadev/prefer-readonly-array-param']).toBe('error');
       expect(config?.rules?.['exadev/test-file-kind']).toBe('error');
       expect(config?.rules?.['max-params']).toStrictEqual(['error', { max: 4 }]);
+      expect(config?.rules?.['no-implicit-coercion']).toBe('error');
+      for (const [ruleId, setting] of Object.entries(UNTYPED_ROBUSTNESS_RULES)) {
+        expect(config?.rules?.[ruleId]).toStrictEqual(setting);
+      }
+    }
+  });
+
+  it('reports each core robustness rule against plain JavaScript, with no typescript-eslint plugin registered', () => {
+    const config = plugin.configs?.['recommended'];
+    if (Array.isArray(config) || config === undefined) throw new Error('Unreachable: the recommended config is a single object.');
+    const linter = new Linter();
+    const cases: Readonly<Record<string, string>> = {
+      eqeqeq: 'export const same = (a) => a == 2;',
+      'no-implicit-coercion': 'export const flag = (a) => !!a;',
+      'no-param-reassign': 'export function f(a) { a.x = 1; }',
+      'no-await-in-loop': 'export async function f(xs) { for (const x of xs) { await x; } }',
+      'require-atomic-updates': 'let total = 0; export async function f(p) { total += await p; }',
+      'default-case-last': 'export function f(n) { switch (n) { default: return 0; case 1: return 1; } }',
+      'no-return-assign': 'let last = 0; export const set = (n) => (last = n);',
+      'max-depth': 'export function f(a) { if (a) { if (a) { if (a) { if (a) { if (a) { return 1; } } } } } return 0; }',
+    };
+    for (const [ruleId, code] of Object.entries(cases)) {
+      const messages = linter.verify(code, [{ ...config, files: ['**/*.js'], languageOptions: { sourceType: 'module' } } as Linter.Config], 'src/foo.js');
+      expect(messages.map((message) => message.ruleId), ruleId).toContain(ruleId);
     }
   });
 });
