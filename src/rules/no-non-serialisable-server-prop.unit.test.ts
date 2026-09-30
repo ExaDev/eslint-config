@@ -60,8 +60,8 @@ const dataProbe = ESLintUtils.RuleCreator((name) => name)<[], 'data' | 'notData'
 
 const probeTester = new RuleTester({ languageOptions: { parser: tseslint.parser, parserOptions: { ecmaFeatures: { jsx: true } }, sourceType: 'module' } });
 
-const DATA = ['"a"', '1', 'true', 'null', '10n', '-1', '!0', '`a`', '`a${1}`', 'undefined', '[1, "a", , [2]]', '({ a: 1, "b": [2], [`c`]: 3 })', '({ a: 1 } as const)', '(1 satisfies number)', '<A />', '<></>', '`${undefined}`'];
-const NOT_DATA = ['Icon', 'lib.Icon', 'make()', '() => 1', '(function () {})', '(class {})', '/x/u', '`a${Icon}`', '[...items]', '[Icon]', '({ ...rest })', '({ a: Icon })', '({ a() {} })', '({ get a() { return 1; } })', '({ [key]: 1 })', '-Icon', 'a ? 1 : 2', 'new Icon()', '(Icon!)', '(Icon as unknown)', 'null ?? Icon'];
+const DATA = ['"a"', '1', 'true', 'null', '10n', '-1', '!0', '`a`', '`a${1}`', 'undefined', '[1, "a", , [2]]', '({ a: 1, "b": [2], [`c`]: 3 })', '({ a: 1 } as const)', '(1 satisfies number)', '<A />', '<></>', '`${undefined}`', '-Icon', '!Icon', 'typeof Icon', 'void Icon', '~Icon'];
+const NOT_DATA = ['Icon', 'lib.Icon', 'make()', '() => 1', '(function () {})', '(class {})', '/x/u', '`a${Icon}`', '[...items]', '[Icon]', '({ ...rest })', '({ a: Icon })', '({ a() {} })', '({ get a() { return 1; } })', '({ [key]: 1 })', 'a ? 1 : 2', 'new Icon()', '(Icon!)', '(Icon as unknown)', 'null ?? Icon'];
 
 probeTester.run('isSerialisableData', dataProbe, {
   valid: [],
