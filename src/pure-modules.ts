@@ -27,12 +27,11 @@ export function buildPureModulesConfig(options: PureModulesOptions): ConfigArray
   const { files, noControlFlow, ...ruleOptions } = options;
   if (noControlFlow !== undefined && typeof noControlFlow !== 'boolean') throw new Error(`@exadev/eslint-config: "${OPTION_NAME}.noControlFlow" must be a boolean.`);
 
-
   return [
     {
       ...scopeBlock(files, `${OPTION_NAME}.files`),
       plugins: { exadev: plugin },
-      rules: { 'exadev/pure-module': ['error', readPureModuleOptions(ruleOptions)], ...(noControlFlow === true && { 'exadev/no-control-flow': 'error' }) },
+      rules: { 'exadev/pure-module': ['error', readPureModuleOptions(ruleOptions, OPTION_NAME)], ...(noControlFlow === true && { 'exadev/no-control-flow': 'error' }) },
     },
   ];
 }

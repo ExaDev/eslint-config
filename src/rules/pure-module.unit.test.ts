@@ -20,41 +20,49 @@ describe('pure-module metadata', () => {
 
 describe('readPureModuleOptions', () => {
   it('accepts no allowImports and returns an empty options object', () => {
-    expect(readPureModuleOptions({})).toStrictEqual({});
+    expect(readPureModuleOptions({}, 'pureModules')).toStrictEqual({});
   });
 
   it('returns the allowed specifiers unchanged', () => {
-    expect(readPureModuleOptions({ allowImports: ['node:fs/promises', 'stream'] })).toStrictEqual({ allowImports: ['node:fs/promises', 'stream'] });
+    expect(readPureModuleOptions({ allowImports: ['node:fs/promises', 'stream'] }, 'pureModules')).toStrictEqual({ allowImports: ['node:fs/promises', 'stream'] });
   });
 
   it('rejects options that are not an object', () => {
-    expect(() => readPureModuleOptions(['fs'])).toThrow('"pureModules" must be an object.');
-    expect(() => readPureModuleOptions(null)).toThrow('"pureModules" must be an object.');
+    expect(() => readPureModuleOptions(['fs'], 'pureModules')).toThrow('"pureModules" must be an object.');
+    expect(() => readPureModuleOptions(null, 'pureModules')).toThrow('"pureModules" must be an object.');
   });
 
   it('rejects an unknown key, so a misspelt option fails instead of being ignored', () => {
-    expect(() => readPureModuleOptions({ allowImport: ['fs'] })).toThrow('has an unknown key "allowImport"');
+    expect(() => readPureModuleOptions({ allowImport: ['fs'] }, 'pureModules')).toThrow('has an unknown key "allowImport"');
   });
 
   it('rejects an allowed specifier that selects no banned module, since it could never apply', () => {
-    expect(() => readPureModuleOptions({ allowImports: ['path'] })).toThrow('entry "path" selects no banned module');
-    expect(() => readPureModuleOptions({ allowImports: ['./fs'] })).toThrow('selects no banned module');
+    expect(() => readPureModuleOptions({ allowImports: ['path'] }, 'pureModules')).toThrow('entry "path" selects no banned module');
+    expect(() => readPureModuleOptions({ allowImports: ['./fs'] }, 'pureModules')).toThrow('selects no banned module');
   });
 
   it('rejects an exclude, since the list only ever exempts', () => {
-    expect(() => readPureModuleOptions({ allowImports: ['fs', '!fs/promises'] })).toThrow('entry "!fs/promises" is an exclude');
+    expect(() => readPureModuleOptions({ allowImports: ['fs', '!fs/promises'] }, 'pureModules')).toThrow('entry "!fs/promises" is an exclude');
   });
 
   it('accepts a subpath and a node: form of a banned module', () => {
-    expect(() => readPureModuleOptions({ allowImports: ['node:fs/promises'] })).not.toThrow();
+    expect(() => readPureModuleOptions({ allowImports: ['node:fs/promises'] }, 'pureModules')).not.toThrow();
   });
 
   it('rejects a relative specifier, which is never a builtin', () => {
-    expect(() => readPureModuleOptions({ allowImports: ['./fs'] })).toThrow('selects no banned module');
+    expect(() => readPureModuleOptions({ allowImports: ['./fs'] }, 'pureModules')).toThrow('selects no banned module');
+  });
+
+  it('names the option it was asked to read in every error, so a rule configured directly is not blamed on pureModules', () => {
+    expect(() => readPureModuleOptions(null, 'pure-module')).toThrow('"pure-module" must be an object.');
+    expect(() => readPureModuleOptions({ allowImport: [] }, 'pure-module')).toThrow('"pure-module" has an unknown key');
+    expect(() => readPureModuleOptions({ allowImports: ['path'] }, 'pure-module')).toThrow('"pure-module.allowImports" entry "path"');
+    expect(() => readPureModuleOptions({ allowImports: ['fs', '!fs/promises'] }, 'pure-module')).toThrow('"pure-module.allowImports" entry "!fs/promises" is an exclude');
+    expect(() => readPureModuleOptions({ allowImports: [] }, 'pure-module')).toThrow('pure-module.allowImports');
   });
 
   it('accepts a glob that selects a banned module', () => {
-    expect(() => readPureModuleOptions({ allowImports: ['child_*'] })).not.toThrow();
+    expect(() => readPureModuleOptions({ allowImports: ['child_*'] }, 'pureModules')).not.toThrow();
   });
 });
 

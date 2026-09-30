@@ -9,6 +9,7 @@ const createRule = ESLintUtils.RuleCreator((name) => `https://github.com/ExaDev/
 
 const bannedModule = createSpecifierMatcher(BANNED_MODULES);
 const bannedGlobals: ReadonlySet<string> = new Set(BANNED_GLOBALS);
+const OPTION_NAME = 'pure-module';
 const nodeCrypto = createSpecifierMatcher(['crypto']);
 const nodeCryptoNondeterministic: ReadonlySet<string> = new Set(NODE_CRYPTO_NONDETERMINISTIC);
 
@@ -81,7 +82,7 @@ const pureModule = createRule<[PureModuleOptions], MessageIds>({
   defaultOptions: [{}],
   create(context, [options]) {
     const { sourceCode } = context;
-    const { allowImports } = readPureModuleOptions(options);
+    const { allowImports } = readPureModuleOptions(options, OPTION_NAME);
     const allowed = allowImports === undefined ? undefined : createSpecifierMatcher(allowImports);
 
     const checkModule = (node: TSESTree.Node): void => {
