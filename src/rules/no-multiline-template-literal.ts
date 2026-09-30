@@ -188,9 +188,12 @@ function needsLiteralType(node: TSESTree.TemplateLiteral): boolean {
  * The text before `node` on its first line, reduced to the whitespace it starts with, so the array elements can be indented one level deeper than the statement holding the template.
  */
 function indentationOf(sourceCode: Readonly<TSESLint.SourceCode>, node: TSESTree.Node): string {
-  const lineText = sourceCode.lines[node.loc.start.line - 1] ?? '';
+  const lineText = sourceCode.lines[node.loc.start.line - 1];
+  if (lineText === undefined) throw new Error('Unreachable: a node starts on a line the source has.');
+  const match = /^[\t ]*/u.exec(lineText);
+  if (match === null) throw new Error('Unreachable: a pattern that may match nothing always matches.');
 
-  return /^[\t ]*/u.exec(lineText)?.[0] ?? '';
+  return match[0];
 }
 
 type MessageIds = 'multiline';
