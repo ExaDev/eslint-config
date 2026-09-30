@@ -6,6 +6,7 @@ import jsdocAndTsdoc from './jsdoc';
 import jsonCanonicalConfig from './json-canonical';
 import { buildNextjsConfig } from './nextjs';
 import { buildPackageJsonKeyOrderConfig } from './package-json-key-order';
+import { buildPureModulesConfig, type PureModulesOptions } from './pure-modules';
 import { buildReactConfig } from './react';
 import recommendedTypeChecked from './recommended-type-checked';
 import stylisticCommentsConfig from './stylistic-comments';
@@ -32,6 +33,8 @@ export interface ExadevConfigOptions {
   readonly turbo?: TurboOptions;
   // Off unless given, like workspaceArchitecture and turbo: import policies name the specifiers and files of one repository. See importPolicyConfig in src/import-policy.ts.
   readonly importPolicies?: readonly ImportPolicy[];
+  // Off unless given, like importPolicies: which modules are a functional core is a per-repository decision. See pureModulesConfig in src/pure-modules.ts.
+  readonly pureModules?: PureModulesOptions;
 }
 
 /**
@@ -66,6 +69,7 @@ export function exadevConfig(options: ExadevConfigOptions = {}, ...userConfigs: 
     ...(options.workspaceArchitecture !== undefined ? buildWorkspaceArchitectureConfig(options.workspaceArchitecture) : []),
     ...(options.turbo !== undefined ? buildTurboConfig(withWorkspaceGroups(options.turbo, options.workspaceArchitecture)) : []),
     ...(options.importPolicies !== undefined ? buildImportPolicyConfig(options.importPolicies) : []),
+    ...(options.pureModules !== undefined ? buildPureModulesConfig(options.pureModules) : []),
     ...userConfigs,
   ];
 
