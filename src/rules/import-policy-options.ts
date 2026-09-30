@@ -1,6 +1,6 @@
 import type { JSONSchema4 } from '@typescript-eslint/utils/json-schema';
 import { assertOnlyKeys, readEntryRecords, readRequiredString, readRequiredStrings } from './file-entry';
-import { createFileScope, readFileGlobs } from './file-scope';
+import { createFileScope, readFileGlobs, relativeToCwd } from './file-scope';
 import { createSpecifierMatcher } from './specifier-match';
 
 const OPTION_NAME = 'importPolicies';
@@ -146,7 +146,8 @@ function readExceptEdge(entry: Readonly<Record<string, unknown>>, name: string):
     if (GLOB_CHARACTERS.test(text)) throw new Error(`@exadev/eslint-config: "${name}" needs "${field}" to be exact, but "${text}" contains a glob character. An exception names one file and one specifier.`);
   }
 
-  return { file, specifier, reason: readRequiredString(entry, 'reason', name) };
+  // The rule compares this string with the linted file's path relative to the working directory, so the spelling is normalised once here (`./src/a.ts` and `src/../src/a.ts` become `src/a.ts`).
+  return { file: relativeToCwd(`/${file}`, '/'), specifier, reason: readRequiredString(entry, 'reason', name) };
 }
 
 // A stale exception is a defect the reader can see without a filesystem: an edge naming a file outside the policy's scope, or a specifier no restriction selects, can never suppress anything.

@@ -102,6 +102,12 @@ ruleTester.run('import-policy', rule, {
     // Not a restricted specifier.
     { code: "import { x } from './local';\nimport z from 'zod';", filename: WORKER_FILE, options: NODE_ONLY },
     { code: "import fsevents from 'fsevents';", filename: WORKER_FILE, options: NODE_ONLY },
+    // An exception edge spelt with a leading ./ still lifts the ban on that file.
+    {
+      code: "import fs from 'fs';",
+      filename: WORKER_FILE,
+      options: [[{ files: ['src/worker/**'], deny: [{ specifiers: ['fs'], message: WORKER_MESSAGE }], exceptEdges: [{ file: `./${WORKER_FILE}`, specifier: 'fs', reason: 'needed' }] }]],
+    },
     // ignores removes a file from a policy.
     {
       code: "import fs from 'fs';",
