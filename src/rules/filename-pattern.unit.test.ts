@@ -33,6 +33,9 @@ describe('filename-pattern options', () => {
     expect(read({ files: 'a.ts', sibling: [] })).toThrow(/"sibling"/u);
     expect(read({ files: 'a.ts', sibling: [''] })).toThrow(/"sibling"/u);
     expect(read({ files: 'a.ts', sibling: 3 })).toThrow(/"sibling"/u);
+    expect(read({ files: 'a.ts', sibling: ['{name}.css', '{name}.css'] })).toThrow(/"sibling" to be a non-empty array of distinct non-empty strings/u);
+    expect(read({ files: 'a.ts', sibling: '{nam}.css' })).toThrow(/"\{nam\}\.css" with a placeholder other than \{name\}/u);
+    expect(read({ files: 'a.ts', sibling: ['{name}.css', '{Name}.scss'] })).toThrow(/"\{Name\}\.scss" with a placeholder/u);
     expect(read({ files: 'a.ts', pattern: 'x', overLines: -1 })).toThrow(/"overLines" to be a non-negative integer/u);
     expect(read({ files: 'a.ts', pattern: 'x', overLines: 1.5 })).toThrow(/"overLines" to be a non-negative integer/u);
     expect(read({ files: 'a.ts', pattern: 'x', overLines: '5' })).toThrow(/"overLines" to be a non-negative integer/u);

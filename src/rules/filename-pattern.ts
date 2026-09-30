@@ -1,6 +1,6 @@
 import { basename, dirname, extname, resolve } from 'node:path';
 import { ESLintUtils } from '@typescript-eslint/utils';
-import { assertOnlyKeys, createEntryScope, entryFilesSchema, readEntryFiles, readEntryRecords } from './file-entry';
+import { assertOnlyKeys, createEntryScope, entryFilesSchema, readEntryFiles, readEntryRecords, readRequiredStrings } from './file-entry';
 import { realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
 
 const OPTION_NAME = 'exadev/filename-pattern';
@@ -44,14 +44,16 @@ function readPattern(value: unknown): ReadEntry['pattern'] {
   return { source: value, regexp: new RegExp(`^(?:${value})$`, 'u') };
 }
 
+// Only `{name}` is a placeholder, so any other brace group is a misspelling that would otherwise look for a file literally called `{nam}.css`.
+const UNKNOWN_PLACEHOLDER = /\{(?!name\})[^{}]*\}/u;
+
 function readSiblings(value: unknown): readonly string[] {
   if (value === undefined) return [];
-  const list = typeof value === 'string' ? [value] : value;
-  if (!Array.isArray(list) || list.length === 0 || !list.every((item): item is string => typeof item === 'string' && item.length > 0)) {
-    throw new Error(`@exadev/eslint-config: "${OPTION_NAME}" needs "sibling" to be a non-empty string or a non-empty array of non-empty strings.`);
-  }
+  const siblings = readRequiredStrings({ sibling: typeof value === 'string' ? [value] : value }, 'sibling', OPTION_NAME);
+  const unknown = siblings.find((template) => UNKNOWN_PLACEHOLDER.test(template));
+  if (unknown !== undefined) throw new Error(`@exadev/eslint-config: "${OPTION_NAME}" has a "sibling" template "${unknown}" with a placeholder other than ${SIBLING_NAME_PLACEHOLDER}.`);
 
-  return list;
+  return siblings;
 }
 
 function readOverLines(value: unknown): number | undefined {
