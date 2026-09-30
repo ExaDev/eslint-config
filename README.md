@@ -82,7 +82,6 @@ export default defineConfig(
 - **[`prefer-readonly`](https://typescript-eslint.io/rules/prefer-readonly/)**, **[`promise-function-async`](https://typescript-eslint.io/rules/promise-function-async/)**, **[`require-array-sort-compare`](https://typescript-eslint.io/rules/require-array-sort-compare/)** — plain presence, no extra config.
 - **[`strict-void-return`](https://typescript-eslint.io/rules/strict-void-return/)** — bans passing a value-returning function where a void-returning one is expected (e.g. `arr.forEach(x => otherArray.push(x))`).
   - *Why:* not yet in any typescript-eslint preset; this typechecks today only because of TS's own void-return contravariance leniency.
-- **[`switch-exhaustiveness-check`](https://typescript-eslint.io/rules/switch-exhaustiveness-check/)** — plain presence, no extra config.
 - **[`strict-boolean-expressions`](https://typescript-eslint.io/rules/strict-boolean-expressions/)** at the rule's own bare defaults.
   - *Why:* an unambiguous non-nullable truthy check stays allowed; an ambiguous nullable check does not.
 - **[`no-magic-numbers`](https://typescript-eslint.io/rules/no-magic-numbers/)** — tuned to exempt array indexes, enum members, readonly class properties, default parameter values, numeric literal types (e.g. `type Indent = 2 | 4`), and the handful of universally-idiomatic bare numbers (`-1`, `0`, `1`, `2`).
@@ -93,6 +92,12 @@ export default defineConfig(
 - **[`no-warning-comments`](https://eslint.org/docs/latest/rules/no-warning-comments)** — bans any comment containing `Stryker disable`.
   - *Why:* that's Stryker's own mutation-testing suppression directive, invisible to `noInlineConfig` above since it isn't an eslint-disable comment.
 
+- **[`explicit-module-boundary-types`](https://typescript-eslint.io/rules/explicit-module-boundary-types/)** — an exported function or class member writes out its parameter and return types.
+  - *Why:* an inferred return type changes silently when the body does; `isolatedDeclarations` is the compiler-side alternative and is a tsconfig matter.
+- **[`switch-exhaustiveness-check`](https://typescript-eslint.io/rules/switch-exhaustiveness-check/)** set to `{ considerDefaultExhaustiveForUnions: false, requireDefaultForNonUnion: true }`.
+  - *Why:* a `default` branch cannot stand in for handling a newly added union member, and a switch over a non-union needs a `default` because the checker cannot prove its cases complete.
+- **Core robustness rules** — `eqeqeq`, `no-implicit-coercion`, `no-param-reassign`, `no-await-in-loop`, `require-atomic-updates`, `default-case-last`, `no-return-assign` and `max-depth`. See [Robustness rules](#robustness-rules).
+
 **Test files** (`**/*.{test,spec}.{ts,tsx,mts,cts,js,jsx,mjs,cjs}`) get two narrow relaxations of this package's own additions, and only these two:
 
 - **`@ts-expect-error`** reverts to `allow-with-description`.
@@ -101,6 +106,30 @@ export default defineConfig(
   - *Why:* the legacy `<Type>value` form stays banned everywhere.
 
 Nothing else inherited from the presets is relaxed.
+
+### Robustness rules
+
+Core ESLint rules that nothing in the typescript-eslint presets enables. All need no type information, so `plugin.configs.recommended` carries them as well, with the same settings except `no-implicit-coercion` (below).
+
+| Rule | Setting | Why |
+| --- | --- | --- |
+| [`eqeqeq`](https://eslint.org/docs/latest/rules/eqeqeq) | `always` | `== null` hides which of `null` and `undefined` the code means, so there is no `null` carve-out. |
+| [`no-implicit-coercion`](https://eslint.org/docs/latest/rules/no-implicit-coercion) | `{ boolean: false }` in the default export, defaults in `plugin.configs.recommended` | `!!value` is allowed where `strict-boolean-expressions` backs it, because that rule already rejects `!` on an operand whose truthiness is ambiguous (a nullable string or number). `plugin.configs.recommended` registers no typescript-eslint rules, so it keeps banning `!!`. `+value`, `'' + value` and similar stay banned in both. |
+| [`no-param-reassign`](https://eslint.org/docs/latest/rules/no-param-reassign) | `{ props: true }` | A parameter is the caller's value; assigning to it or to one of its properties is a hidden side effect. |
+| [`no-await-in-loop`](https://eslint.org/docs/latest/rules/no-await-in-loop) | on | Iterations that could run together run one after another. `for await` is allowed. |
+| [`require-atomic-updates`](https://eslint.org/docs/latest/rules/require-atomic-updates) | on | `total += await p` reads `total` before the `await` and writes it after, losing any update made in between. |
+| [`default-case-last`](https://eslint.org/docs/latest/rules/default-case-last) | on | A `default` that is not last hides the cases written after it. |
+| [`no-return-assign`](https://eslint.org/docs/latest/rules/no-return-assign) | `always` | Even a parenthesised assignment cannot be the returned value. |
+| [`max-depth`](https://eslint.org/docs/latest/rules/max-depth) | `{ max: 4 }` | The rule's own default, written out so a change to it cannot loosen the limit. |
+
+A loop that is sequential by design (migrations that must run in order, a rate-limited API) is exempted by a `files`-scoped override placed after the shared config, never by an inline disable comment, since `noInlineConfig` is on:
+
+```ts
+export default defineConfig(...exadevConfig(), {
+  files: ['src/migrations/**/*.ts'],
+  rules: { 'no-await-in-loop': 'off' },
+});
+```
 
 ## The lighter option: the `plugin` named export
 
@@ -134,7 +163,7 @@ export default defineConfig([
   {
     files: ['**/*.ts'],
     plugins: { exadev: plugin },
-    extends: ['exadev/recommended'], // this plugin's own non-type-aware rules, plus linterOptions.noInlineConfig — no type-checked rules at all
+    extends: ['exadev/recommended'], // this plugin's own non-type-aware rules, the core robustness rules, plus linterOptions.noInlineConfig — no type-checked rules at all
     // or: extends: ['exadev/barrel'], // just the barrel-discipline trio (no-non-barrel-index, no-non-barrel-reexport, no-side-effects-in-index)
   },
 ]);

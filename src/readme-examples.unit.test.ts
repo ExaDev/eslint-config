@@ -9,17 +9,22 @@ import {
   buildViaPureModules,
   buildViaPureModulesOption,
   buildViaScopedComplexity,
+  buildViaSequentialAwaitOverride,
   buildViaTestHygiene,
   buildViaStringExtends,
   buildViaTseslintPluginConfigsRecommended,
   buildViaWorkspaceArchitecture,
 } from './readme-examples';
 
-async function complexityOf(eslint: ESLint, file: string): Promise<unknown> {
+async function ruleSettingOf(eslint: ESLint, file: string, ruleId: string): Promise<unknown> {
   const config: unknown = await eslint.calculateConfigForFile(file);
   if (!isRecord(config) || !isRecord(config['rules'])) throw new Error(`Unreachable: ESLint resolves a rules object for ${file}.`);
 
-  return config['rules']['complexity'];
+  return config['rules'][ruleId];
+}
+
+async function complexityOf(eslint: ESLint, file: string): Promise<unknown> {
+  return ruleSettingOf(eslint, file, 'complexity');
 }
 
 // This file's only job is proving README.md's own defineConfig() examples still resolve to the exact real config content they document, not just typecheck, mirroring consumer-compatibility.unit.test.ts's own role for the default export. Every assertion below checks a value this file's own literal supplies, not the shared bundles (exadev/recommended, workspaceArchitectureConfig's own wiring) those literals pull in, which already have their own dedicated tests. Each builder is called here, inside the test, rather than imported as an already-built constant, so a broken example's own thrown error surfaces as this specific test failing.
@@ -137,5 +142,11 @@ describe('README defineConfig examples', () => {
     const broaderLast = [...buildViaScopedComplexity(), broaderBlock];
     const eslint = new ESLint({ overrideConfigFile: true, overrideConfig: broaderLast, cwd: import.meta.dirname });
     expect(await complexityOf(eslint, 'src/views/home.ts')).toStrictEqual([2, { max: 20 }]);
+  });
+
+  it('the sequential-await example turns no-await-in-loop off for the scoped files only', async () => {
+    const eslint = new ESLint({ overrideConfigFile: true, overrideConfig: buildViaSequentialAwaitOverride(), cwd: import.meta.dirname });
+    expect(await ruleSettingOf(eslint, 'src/migrations/run.ts', 'no-await-in-loop')).toStrictEqual([0]);
+    expect(await ruleSettingOf(eslint, 'src/lib/pick.ts', 'no-await-in-loop')).toStrictEqual([2]);
   });
 });
