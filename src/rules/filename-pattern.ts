@@ -1,9 +1,11 @@
 import { basename, dirname, extname, resolve } from 'node:path';
-import { ESLintUtils } from '@typescript-eslint/utils';
+import { ESLintUtils, type TSESLint } from '@typescript-eslint/utils';
 import { assertOnlyKeys, createEntryScope, entryFilesSchema, readEntryFiles, readEntryRecords, readRequiredStrings } from './file-entry';
 import { realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
 
 const OPTION_NAME = 'exadev/filename-pattern';
+
+type FilenamePatternMessageId = 'nameMismatch' | 'oversizedNameMismatch' | 'missingSibling';
 
 /**
  * The placeholder in a `sibling` template that stands for the linted file's name without its final extension (`Button` for `Button.tsx`).
@@ -91,10 +93,10 @@ function countLines(lines: readonly string[]): number {
 /**
  * Builds the rule around an injectable filesystem, so a test drives the sibling check from an in-memory tree.
  */
-export function createFilenamePatternRule(fs: WorkspaceFs = realWorkspaceFs) {
+export function createFilenamePatternRule(fs: WorkspaceFs = realWorkspaceFs): TSESLint.RuleModule<FilenamePatternMessageId, [unknown]> {
   const createRule = ESLintUtils.RuleCreator((name) => `https://github.com/ExaDev/eslint-config/blob/main/src/rules/${name}.ts`);
 
-  return createRule<[unknown], 'nameMismatch' | 'oversizedNameMismatch' | 'missingSibling'>({
+  return createRule<[unknown], FilenamePatternMessageId>({
     name: 'filename-pattern',
     meta: {
       type: 'problem',
