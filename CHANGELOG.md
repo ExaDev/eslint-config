@@ -1,3 +1,27 @@
+# [2.27.0](https://github.com/ExaDev/eslint-config/compare/v2.26.0...v2.27.0) (2026-09-30)
+
+
+### Bug Fixes
+
+* ban console, worker and sqlite in pure modules and see through globalThis ([b9131ca](https://github.com/ExaDev/eslint-config/commit/b9131caf96a3bac03be0c4c4e00f6a05a1b290a1))
+* mirror the README test hygiene example without a duplicate block set ([7d818c8](https://github.com/ExaDev/eslint-config/commit/7d818c8c7de2db2f4ece14b6d69bc253cf3231d1))
+* name the configured option in pure-module option errors ([6dbc915](https://github.com/ExaDev/eslint-config/commit/6dbc91542fe8659122158f2ec6dbc55d17f4dfec))
+* report Node crypto randomness and key generation in pure modules ([199d219](https://github.com/ExaDev/eslint-config/commit/199d21977e59ae735e00387d019deec25eccf31c))
+* resolve the scope parameter's declared name through aliases in scoped-first-parameter ([bf017b3](https://github.com/ExaDev/eslint-config/commit/bf017b3c2ebb537b3c8f7366015bb03c56ff8e80))
+* stop counting a discovery assertion as evidence about the pattern in non-vacuous-guard ([077bee8](https://github.com/ExaDev/eslint-config/commit/077bee8ed6895c32494b7cf90ff0425b23c61666))
+* treat a possibly empty each table callback as conditional in non-vacuous-guard ([621e307](https://github.com/ExaDev/eslint-config/commit/621e307d5d41eb9cd4b79196237b3eeaa16c4ef7))
+* treat the Array.from mapper as running per element in non-vacuous-guard ([856615f](https://github.com/ExaDev/eslint-config/commit/856615f5e63ae91e7df679ccd746d6134a16556d))
+
+
+### Features
+
+* add non-vacuous-guard rule requiring guard tests to show they can fail ([5d412b1](https://github.com/ExaDev/eslint-config/commit/5d412b12ba7e3272f7b8e7254161d9d66a36f1f3))
+* add pure-module rule banning I/O, ambient state and async in configured files ([1d3b4a9](https://github.com/ExaDev/eslint-config/commit/1d3b4a9948133a4bc0f8381846b9acf831c2a19d))
+* add pureModules option and pureModulesConfig for functional-core files ([5d5b715](https://github.com/ExaDev/eslint-config/commit/5d5b7156475c6bf7f3f52943ca7f8b6f381097d7))
+* add scoped-first-parameter rule for repository interface methods ([e7ac227](https://github.com/ExaDev/eslint-config/commit/e7ac227c0e6dbcb13ed64bbce820075cc244d868))
+* add testHygiene option for guard and conformance test files ([fc6d707](https://github.com/ExaDev/eslint-config/commit/fc6d70787824164550d05a886bcc48be70689a35))
+* check test functions a conformance kit receives as parameters ([459607e](https://github.com/ExaDev/eslint-config/commit/459607e6cd1e39a3ab7b656bb8c07a516b096249))
+
 # [2.26.0](https://github.com/ExaDev/eslint-config/compare/v2.25.0...v2.26.0) (2026-09-30)
 
 
