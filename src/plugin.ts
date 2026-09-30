@@ -17,6 +17,7 @@ import noControlFlow from './rules/no-control-flow';
 import noDependencyCycle from './rules/no-dependency-cycle';
 import noEnumNumberWidening from './rules/no-enum-number-widening';
 import noEnumReverseLookupWidening from './rules/no-enum-reverse-lookup-widening';
+import noExternalMemberJsxTag from './rules/no-external-member-jsx-tag';
 import noFixInCachedTaskScript from './rules/no-fix-in-cached-task-script';
 import noIndexFiles from './rules/no-index-files';
 import noMapInstanceofMutation from './rules/no-map-instanceof-mutation';
@@ -24,6 +25,7 @@ import noMultilineTemplateLiteral from './rules/no-multiline-template-literal';
 import noMutableUnionArrayParam from './rules/no-mutable-union-array-param';
 import noNonBarrelIndex from './rules/no-non-barrel-index';
 import noNonBarrelReexport from './rules/no-non-barrel-reexport';
+import noNonSerialisableServerProp from './rules/no-non-serialisable-server-prop';
 import noObjectAssign from './rules/no-object-assign';
 import nonVacuousGuard from './rules/non-vacuous-guard';
 import noPointlessReassignment from './rules/no-pointless-reassignment';
@@ -83,6 +85,7 @@ const plugin: TSESLint.FlatConfig.Plugin = {
     'no-dependency-cycle': noDependencyCycle,
     'no-enum-number-widening': noEnumNumberWidening,
     'no-enum-reverse-lookup-widening': noEnumReverseLookupWidening,
+    'no-external-member-jsx-tag': noExternalMemberJsxTag,
     'no-fix-in-cached-task-script': noFixInCachedTaskScript,
     'no-index-files': noIndexFiles,
     'no-map-instanceof-mutation': noMapInstanceofMutation,
@@ -90,6 +93,7 @@ const plugin: TSESLint.FlatConfig.Plugin = {
     'no-mutable-union-array-param': noMutableUnionArrayParam,
     'no-non-barrel-index': noNonBarrelIndex,
     'no-non-barrel-reexport': noNonBarrelReexport,
+    'no-non-serialisable-server-prop': noNonSerialisableServerProp,
     'no-object-assign': noObjectAssign,
     'no-pointless-reassignment': noPointlessReassignment,
     'no-set-instanceof-mutation': noSetInstanceofMutation,
@@ -155,7 +159,7 @@ const plugin: TSESLint.FlatConfig.Plugin = {
     },
     // Mirrors `react` above — explicit selection, throws if @next/eslint-plugin-next isn't installed (see src/nextjs.ts).
     get nextjs(): ConfigValue {
-      return buildNextjsConfig({ enabled: true });
+      return buildNextjsConfig({ enabled: true, plugin });
     },
   },
 };

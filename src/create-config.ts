@@ -7,6 +7,7 @@ import jsonCanonicalConfig from './json-canonical';
 import { buildMarkdownHeadingsConfig, type MarkdownHeadingsOptions } from './markdown-headings';
 import { buildNextjsConfig } from './nextjs';
 import { buildPackageJsonKeyOrderConfig } from './package-json-key-order';
+import plugin from './plugin';
 import { buildPureModulesConfig, type PureModulesOptions } from './pure-modules';
 import { buildReactConfig } from './react';
 import recommendedTypeChecked from './recommended-type-checked';
@@ -69,7 +70,7 @@ export function exadevConfig(options: ExadevConfigOptions = {}, ...userConfigs: 
     ...jsonCanonicalConfig,
     ...stylisticCommentsConfig,
     ...buildReactConfig({ enabled: options.react }),
-    ...buildNextjsConfig({ enabled: options.nextjs }),
+    ...buildNextjsConfig({ enabled: options.nextjs, plugin }),
     ...buildTurboEnvConfig({ enabled: options.turboEnv }),
     ...buildPackageJsonKeyOrderConfig({ enabled: options.packageJsonKeyOrder }),
     ...(options.workspaceArchitecture !== undefined ? buildWorkspaceArchitectureConfig(options.workspaceArchitecture) : []),

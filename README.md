@@ -204,7 +204,7 @@ React/hooks/a11y and Next.js rule blocks fold in automatically, with no separate
    pnpm add -D @next/eslint-plugin-next                                               # Next.js support
    ```
    If none of these resolve, `@exadev/eslint-config`'s default export is byte-for-byte identical to the plain TypeScript ruleset — nothing about the base package changes.
-2. **For React specifically, the file must actually be `.jsx`/`.tsx`.** The React/hooks/a11y rule block is scoped to `files: ['**/*.jsx', '**/*.tsx']`, so even if `eslint-plugin-react` is resolvable only incidentally (e.g. hoisted as a transitive dependency of something unrelated in a monorepo, with zero real JSX anywhere in the linted project), its rules never match a file that isn't JSX. `@next/eslint-plugin-next`'s block carries no such glob: its own presence is already an unambiguous signal (nothing installs it except a real Next.js project).
+2. **For React specifically, the file must actually be `.jsx`/`.tsx`.** The React/hooks/a11y rule block is scoped to `files: ['**/*.jsx', '**/*.tsx']`, so even if `eslint-plugin-react` is resolvable only incidentally (e.g. hoisted as a transitive dependency of something unrelated in a monorepo, with zero real JSX anywhere in the linted project), its rules never match a file that isn't JSX. `@next/eslint-plugin-next`'s own block carries no such glob: its own presence is already an unambiguous signal (nothing installs it except a real Next.js project). The [server component boundary](#server-component-boundary) rules added beside it are scoped to the same JSX files.
 
 React support pairs `eslint-plugin-react`'s `flat/recommended` with its own `flat/jsx-runtime` config, turning [`react/react-in-jsx-scope`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/react-in-jsx-scope.md) and [`react/jsx-uses-react`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-uses-react.md) back off. `flat/recommended` alone assumes the classic runtime, where every file using JSX needs `import React` in scope; the automatic JSX runtime (the default since React 17, and the only mode Next.js's own compiler supports) needs no such import. Without this pairing, a consumer on the automatic runtime would see `react/react-in-jsx-scope` fire on every JSX file.
 
@@ -238,6 +238,34 @@ React support pairs `eslint-plugin-react`'s `flat/recommended` with its own `fla
 | `undefined` / omitted | Auto-detect (the default) | Auto-detect (the default) |
 
 **Compatibility note:** a consumer who already has `eslint-plugin-react`/`@next/eslint-plugin-next` resolvable for unrelated reasons (e.g. hoisted in a monorepo) and writes `.jsx`/`.tsx` files may see new rule activity the moment they upgrade to a version of this package that ships React/Next.js support, with zero action on their part. This is the normal, widely-accepted ESLint-ecosystem convention that adding rules to a shared/recommended config is a minor bump even though it can newly trip an existing `--max-warnings 0` gate — not a breaking change. Use the `react`/`nextjs` options above to force it off explicitly if needed.
+
+#### Server component boundary
+
+Props a server component passes to a client component must be serialisable, and two easy mistakes surface only at runtime in a production build. The Next.js preset (auto-detected, `exadevConfig({ nextjs: true })` or `plugin.configs.nextjs`) therefore adds a block for `.jsx` and `.tsx` files enabling two rules. Both apply only to a file without a top-level `"use client"` directive, so a client file is never reported; neither needs type information.
+
+- **`exadev/no-non-serialisable-server-prop`** reports a JSX attribute named in `names` (default `['component']`) whose value is not data. Data is a literal (not a regular expression), a template literal, object or array of data, `undefined`, a signed or negated literal, or a JSX element, which React serialises. An identifier, member access, call, function, class, spread, or object member holding a function is reported, since it may be a function or component reference. Passing `component={Icon}` to a client component fails; passing a string key or `component={<Icon />}` does not.
+- **`exadev/no-external-member-jsx-tag`** reports every member tag (`<Lib.Icon>`, `<Lib.Icons.Home>`) whose root identifier is bound by an import from a non-relative source, whether a namespace, default, named or `import x = require()` binding. Whether a library attaches statics after export cannot be worked out from one file, so the rule is deliberately over-broad. A relative import is the project's own code and is not reported; an alias to project code such as `@/ui` looks like a package, so list it in `allowSources`.
+
+Both are approximations. They report a file without the directive that is only ever imported by client code (add the directive), a server-safe `<Ctx.Provider>` from an imported context (list it in `allowTags`), and a component passed to an element that is itself a server component (list the element in `allowElements`). Options, by rule:
+
+| Rule | Option | Meaning |
+| --- | --- | --- |
+| `no-non-serialisable-server-prop` | `names` | Prop names whose value must be data. Replaces the default `['component']`. |
+| `no-non-serialisable-server-prop` | `allowElements` | JSX element names as written (`Link`, `Lib.Icon`) whose props are not checked. |
+| `no-external-member-jsx-tag` | `allowSources` | Import specifiers, in the [specifier pattern](#specifier-patterns) dialect (each also selects everything beneath it), whose member tags are not reported. |
+| `no-external-member-jsx-tag` | `allowTags` | Tags as written (`Ctx.Provider`) that are not reported. |
+
+The preset enables both at `error` with the defaults. To tune them, add a later block that sets the rule again for the same files:
+
+```ts
+{
+  files: ['**/*.tsx'],
+  rules: {
+    'exadev/no-non-serialisable-server-prop': ['error', { names: ['component', 'icon'], allowElements: ['Link'] }],
+    'exadev/no-external-member-jsx-tag': ['error', { allowSources: ['@/ui'], allowTags: ['ThemeCtx.Provider'] }],
+  },
+}
+```
 
 ### Gitignore-derived ignores
 
@@ -347,6 +375,8 @@ Bundled into `exadevConfig()`'s default output the same way React/Next.js auto-d
 | `no-multiline-template-literal` | ✓ | **An untagged template literal whose value spans several lines should be an array of lines joined with `\n`.** Autofixes only when the rewrite provably yields the same string. See [Multi-line template literals](#multi-line-template-literals). |
 | `markdown-required-heading` | | **A Markdown document must contain each configured heading:** a `{ depth, text }` per required heading, matched on the text as it renders. A Markdown-language rule (`@eslint/markdown`). Wired by `markdownHeadingsConfig`. See [Required Markdown headings](#required-markdown-headings). |
 | `timeout-aborts-request` | | **A `Promise.race` timeout must abort the request it raced against,** not only settle the race: the timer callback calls `.abort()` on an `AbortController` created in the same function, the timer id is cleared in a `finally`, and a `catch` returns early on `controller.signal.aborted`. Opt-in, needs no type information. See [Timeout races](#timeout-races). |
+| `no-non-serialisable-server-prop` | | **A configured prop (default `component`) of a JSX element in a file without `"use client"` must be a literal.** A function or component reference cannot cross from a server component to a client component. Enabled by the Next.js preset. See [Server component boundary](#server-component-boundary). |
+| `no-external-member-jsx-tag` | | **A member tag (`<Lib.Icon>`) rooted at an import from a package, in a file without `"use client"`, is reported.** Statics a library attaches after export may not survive the server component boundary. Enabled by the Next.js preset. See [Server component boundary](#server-component-boundary). |
 
 ## Barrel policy
 
@@ -1077,7 +1107,7 @@ pnpm build
   - `buildOptionalPluginConfig` is the builder shared by the presets that fold in a single plugin's flat config ([`src/nextjs.ts`](src/nextjs.ts), [`src/turbo-env.ts`](src/turbo-env.ts)): the package, the config path, the feature name for the error and an optional `files` scope go in, and the tri-state `enabled` behaviour comes out the same for each.
 - [`src/react.ts`](src/react.ts)/[`src/nextjs.ts`](src/nextjs.ts) each export a `build*Config(options)` function: resolve the relevant optional peer(s) via `tryRequire`, extract their real flat config via `readFlatConfig`, and return an array of 0-or-more config blocks.
   - `[]` if unresolvable and not explicitly forced on; a thrown `Error` if explicitly forced on (`enabled: true`) and still unresolvable.
-  - `react.ts`'s blocks are scoped to `files: ['**/*.jsx', '**/*.tsx']`; `nextjs.ts`'s is not (see [Optional React and Next.js support](#optional-react-and-nextjs-support) for why).
+  - `react.ts`'s blocks are scoped to `files: ['**/*.jsx', '**/*.tsx']`; `nextjs.ts`'s upstream block is not (see [Optional React and Next.js support](#optional-react-and-nextjs-support) for why). `buildNextjsConfig` also takes this package's own plugin and adds the [server component boundary](#server-component-boundary) rule block after the upstream config, only when that resolves; the plugin is a parameter because `plugin.ts` builds `plugin.configs.nextjs` from `nextjs.ts`, and importing it back would make the two modules import each other.
 - [`src/json-language-config.ts`](src/json-language-config.ts) is the shared groundwork for every rule that lints JSON files through `@eslint/json`, an optional peer.
   - `tryResolveJsonPlugin` and `requireJsonPlugin` are the silent and the throwing resolution paths, the second naming the feature that needs the peer and the install command.
   - `buildJsonLanguageBlock` assembles the `exadev` and `json` plugin registration for a `files` list under `json/json` or `json/jsonc`; the `json/jsonc` form also admits trailing commas, matching the JSONC config in [`src/json-canonical.ts`](src/json-canonical.ts). `JSONC_FILE_GLOBS` (`tsconfig*.json`, `turbo.json`, `*.jsonc`) lists the files that carry comments, so a rule targeting them must be wired under `json/jsonc`, and a rule meant for both languages declares both in `meta.languages`.
