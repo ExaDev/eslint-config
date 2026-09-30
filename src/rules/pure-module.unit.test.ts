@@ -2,7 +2,7 @@ import { RuleTester } from '@typescript-eslint/rule-tester';
 import tseslint from 'typescript-eslint';
 import { describe, expect, it } from 'vitest';
 import rule from './pure-module';
-import { BANNED_GLOBALS, BANNED_MEMBERS, BANNED_MODULES, readPureModuleOptions } from './pure-module-options';
+import { BANNED_GLOBALS, BANNED_MEMBERS, BANNED_MODULES, NODE_CRYPTO_NONDETERMINISTIC, readPureModuleOptions } from './pure-module-options';
 
 const ruleTester = new RuleTester({
   languageOptions: { parser: tseslint.parser, sourceType: 'module' },
@@ -98,6 +98,16 @@ ruleTester.run('pure-module', rule, {
     // A type query is erased and reads nothing.
     'declare const handler: typeof fetch; export type Handler = typeof handler;',
     'export type Env = typeof process.env;',
+    // Hashing through Node's crypto is deterministic.
+    "import crypto from 'node:crypto'; export const digest = crypto.createHash('sha256');",
+    "import * as nodeCrypto from 'crypto'; export const digest = nodeCrypto.createHash('sha256');",
+    // A type-only import binds nothing at runtime.
+    "import type { randomUUID } from 'node:crypto';",
+    "import { type randomBytes } from 'node:crypto';",
+    // A local binding that shadows the imported one is not the module.
+    "import crypto from 'node:crypto'; export const f = (crypto: { randomUUID: () => string }) => crypto.randomUUID();",
+    // A namespace import from a module that is not Node's crypto.
+    "import * as crypto from './crypto'; export const id = crypto.randomUUID();",
     // Every I/O module is allowed where it is listed.
     { code: "import { readFile } from 'node:fs/promises';", options: [{ allowImports: ['fs'] }] },
     { code: "import { readFile } from 'fs/promises';", options: [{ allowImports: ['node:fs'] }] },
@@ -142,6 +152,13 @@ ruleTester.run('pure-module', rule, {
     { code: "export const r = Math['random']();", errors: [nondeterministicMember('Math.random')] },
     { code: 'export const id = crypto.randomUUID();', errors: [nondeterministicMember('crypto.randomUUID')] },
     { code: 'export const bytes = crypto.getRandomValues(new Uint8Array(4));', errors: [nondeterministicMember('crypto.getRandomValues')] },
+    // Node's crypto module: named imports, and members of a default or namespace import.
+    { code: "import { randomUUID } from 'node:crypto'; export const id = randomUUID();", errors: [nondeterministicMember('crypto.randomUUID')] },
+    { code: "import { randomBytes as bytes, createHash } from 'crypto';", errors: [nondeterministicMember('crypto.randomBytes')] },
+    { code: "import crypto from 'node:crypto'; export const id = crypto.randomUUID();", errors: [nondeterministicMember('crypto.randomUUID')] },
+    { code: "import * as nodeCrypto from 'crypto'; export const n = nodeCrypto.randomInt(10);", errors: [nondeterministicMember('crypto.randomInt')] },
+    { code: "import crypto from 'node:crypto'; export const n = crypto['randomBytes'](8);", errors: [nondeterministicMember('crypto.randomBytes')] },
+    ...NODE_CRYPTO_NONDETERMINISTIC.map((name) => ({ code: `import { ${name} } from 'node:crypto';`, errors: [nondeterministicMember(`crypto.${name}`)] })),
     { code: 'export const t = performance.now();', errors: [nondeterministicMember('performance.now')] },
 
     { code: 'export const t = new Date();', errors: [{ messageId: 'clockRead' }] },
