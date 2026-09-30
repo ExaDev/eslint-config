@@ -30,7 +30,7 @@ export function readAllowedScopes(options: unknown): readonly FileScope[] {
 }
 
 /**
- * Whether `node` is a literal for "nothing here": an empty array, empty object, empty string (quoted or an untagged template with no content), `0`, `false` or `null`.
+ * Whether `node` is a literal for "nothing here": an empty array, empty object, empty string (quoted or an untagged template with no content), `0`, `0n`, `false` or `null`.
  */
 function isEmptyLiteral(node: TSESTree.Node): boolean {
   const target = unwrapTypeOnly(node);
@@ -38,7 +38,7 @@ function isEmptyLiteral(node: TSESTree.Node): boolean {
   if (target.type === AST_NODE_TYPES.ObjectExpression) return target.properties.length === 0;
   if (target.type === AST_NODE_TYPES.TemplateLiteral) return target.expressions.length === 0 && target.quasis.every((quasi) => quasi.value.cooked === '');
 
-  return target.type === AST_NODE_TYPES.Literal && (target.raw === 'null' || target.value === '' || target.value === 0 || target.value === false);
+  return target.type === AST_NODE_TYPES.Literal && (target.raw === 'null' || target.value === '' || target.value === 0 || target.value === BigInt(0) || target.value === false);
 }
 
 /**
@@ -49,7 +49,7 @@ function isConstantValue(node: TSESTree.Node): boolean {
   if (target.type === AST_NODE_TYPES.Literal) return true;
   if (target.type === AST_NODE_TYPES.Identifier) return target.name === 'undefined';
   if (target.type === AST_NODE_TYPES.TemplateLiteral) return target.expressions.length === 0;
-  if (target.type === AST_NODE_TYPES.UnaryExpression) return (target.operator === '-' || target.operator === '+' || target.operator === '!') && isConstantValue(target.argument);
+  if (target.type === AST_NODE_TYPES.UnaryExpression) return (target.operator === '-' || target.operator === '+' || target.operator === '!' || target.operator === 'void') && isConstantValue(target.argument);
   if (target.type === AST_NODE_TYPES.ArrayExpression) {
     return target.elements.every((element) => element === null || (element.type !== AST_NODE_TYPES.SpreadElement && isConstantValue(element)));
   }
@@ -63,11 +63,12 @@ function isConstantValue(node: TSESTree.Node): boolean {
 }
 
 /**
- * How a block that stands in for error handling ends without handling anything, or `undefined` when it does something else. A block is swallowing when it is empty (a comment-only block included) or holds exactly one `return` that gives back nothing or a constant value.
+ * How a block that stands in for error handling ends without handling anything, or `undefined` when it does something else. A block is swallowing when it is empty (a comment-only block included) or holds exactly one `continue`, or one `return` that gives back nothing or a constant value.
  */
 function swallowOutcome(body: readonly TSESTree.Statement[]): string | undefined {
   const [only] = body;
   if (only === undefined) return 'does nothing';
+  if (only.type === AST_NODE_TYPES.ContinueStatement) return 'skips to the next iteration';
   if (only.type !== AST_NODE_TYPES.ReturnStatement) return undefined;
   if (only.argument === null) return 'returns nothing';
 
