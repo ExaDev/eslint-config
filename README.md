@@ -339,6 +339,7 @@ Bundled into `exadevConfig()`'s default output the same way React/Next.js auto-d
 | `import-policy` | | **Glob-scoped import policy:** deny lists, specifiers confined to named files, and exact exception edges, with a message that names the requirement. Wired by `importPolicyConfig`. See [Import policy](#import-policy). |
 | `filename-pattern` | | **Filename conventions by glob:** a name regex, a required sibling file, and a naming scheme required once a file passes a line count. See [Filename patterns](#filename-patterns). |
 | `pure-module` | | **Bans I/O, ambient state and `async` in the files it is wired onto:** imports of Node I/O modules, I/O and scheduling globals, argument-less `Date`, `Date.now`, `Math.random`, and `async`/`await`. Wired by `pureModulesConfig`. See [Pure modules](#pure-modules). |
+| `scoped-first-parameter` | | **Every method of the configured repository-like interfaces takes a scope parameter first.** Checks the signature only, not that the scope is used or that tenants are isolated. Requires type information. Opt-in: needs its `interfaces` and `parameter` options. See [Scoped first parameter](#scoped-first-parameter). |
 
 ## Barrel policy
 
@@ -475,6 +476,36 @@ In the selected files the rule reports:
 `allowImports` lists specifiers, in the [specifier pattern](#specifier-patterns) dialect, exempted from the module ban. Every entry must select a banned module, so an entry that could never apply fails when the config is created. `noControlFlow: true` adds `exadev/no-control-flow` to the same block, for a module that should hold lookup tables and nothing else.
 
 It is one rule under one name, not a `no-restricted-imports`, `no-restricted-globals` and `no-restricted-syntax` recipe, because flat config replaces a rule's options when a later block sets the same rule for the same files. A consumer's own `no-restricted-syntax` block over the pure files would silently drop a recipe's entries; it cannot drop these. The bans are syntactic. They keep a module from reaching for ambient state directly, and they do not follow an alias (`const { random } = Math`) or prove the module deterministic. A repository needing a different list writes its own `no-restricted-*` blocks.
+
+## Scoped first parameter
+
+In a multi-tenant codebase, every method of a repository or store interface should take the tenant scope first, so that a call cannot be written without one. `exadev/scoped-first-parameter` reports the methods that do not:
+
+```ts
+// eslint.config.ts
+export default defineConfig(
+  ...exadevConfig(),
+  {
+    files: ['src/**/*.ts'],
+    plugins: { exadev: plugin },
+    rules: {
+      'exadev/scoped-first-parameter': ['error', { interfaces: 'Repository$|Store$', parameter: { name: 'scope', type: 'TenantScope' } }],
+    },
+  },
+);
+```
+
+```ts
+interface OrderRepository {
+  find(scope: TenantScope, id: OrderId): Promise<Order | undefined>; // ok
+  list(): Promise<Order[]>; // reported: takes no parameters
+  findAll(ids: OrderId[]): Promise<Order[]>; // reported: first parameter is OrderId[], not TenantScope
+}
+```
+
+`interfaces` is a regular expression tested against the name of each interface and type alias; only the members of a matching declaration are checked. `parameter.type` is the declared name of the type the first parameter must resolve to, and the optional `parameter.name` fixes the parameter's name. The type is resolved with the checker, so `type Scope = TenantScope` and `import Scope = Auth.TenantScope` both count, and a type parameter constrained to the scope (`<S extends TenantScope>(scope: S)`) stands for the scope. A structurally identical type of another name does not count, and neither does a union that merely includes the scope. Method signatures and function-typed properties are both checked; an optional or rest first parameter is reported, since a call could then leave the scope out. TypeScript's `this` pseudo-parameter is skipped.
+
+This checks signatures, not isolation. A method can accept a `TenantScope` and ignore it, or read across tenants anyway, so a clean run shows only that no call can be written without a scope. Showing that tenants are actually isolated takes conformance tests run against each implementation, which [`required-imports`](#required-imports) can require every adapter to wire in.
 
 ## Filename patterns
 
