@@ -374,7 +374,7 @@ In every mode, re-exports are banned outside a permitted barrel, and a permitted
 ]]
 ```
 
-A file matching `files` must export every name in `exports`. Counted: `export const`, `let`, `var` (destructuring included), functions, classes, enums, interfaces, type aliases and namespaces, `export { a, b as c }` with or without `from`, `export type { ... }`, `export * as ns from`, and `export default` as the name `default`. A bare `export * from './x'` counts nothing, because the names it forwards live in a file this rule does not read; list the names in an explicit re-export if a barrel must satisfy the rule. When several entries match one file, the file is reported once, listing every missing name.
+A file matching `files` must export every name in `exports`. Counted: `export const`, `let`, `var` (destructuring included), functions, classes, enums, interfaces, type aliases and namespaces, `export { a, b as c }` with or without `from`, `export type { ... }`, `export * as ns from`, and `export default` as the name `default`. `export = x` (a CommonJS-style TypeScript module) counts nothing, since it exports the value rather than a name. A bare `export * from './x'` counts nothing, because the names it forwards live in a file this rule does not read; list the names in an explicit re-export if a barrel must satisfy the rule. When several entries match one file, the file is reported once, listing every missing name.
 
 ### Required imports
 
