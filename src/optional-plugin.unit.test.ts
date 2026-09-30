@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFlatConfig, tryRequire } from './optional-plugin';
+import { buildOptionalPluginConfig, readFlatConfig, tryRequire } from './optional-plugin';
 
 describe('tryRequire', () => {
   it('returns the resolved module on real, successful resolution', () => {
@@ -84,5 +84,44 @@ describe('readFlatConfig', () => {
       languageOptions: { sourceType: 'module', parserOptions: { ecmaFeatures: { jsx: true } } },
       rules: {},
     });
+  });
+});
+
+describe('buildOptionalPluginConfig', () => {
+  const preset = { packageName: 'some-plugin', configPath: ['configs', 'flat/recommended'], feature: 'Some feature' };
+  const upstream = { rules: { 'some/rule': 'error' } };
+  const present = () => ({ configs: { 'flat/recommended': upstream } });
+  const absent = () => {
+    throw new Error('simulated missing package');
+  };
+
+  it('returns the config at the path when the package resolves, and [] when it does not', () => {
+    expect(buildOptionalPluginConfig(preset, { requireFn: present })).toEqual([upstream]);
+    expect(buildOptionalPluginConfig(preset, { requireFn: absent })).toEqual([]);
+  });
+
+  it('returns [] for enabled: false even when the package resolves', () => {
+    expect(buildOptionalPluginConfig(preset, { enabled: false, requireFn: present })).toEqual([]);
+  });
+
+  it('treats enabled: undefined, given explicitly, as auto-detect', () => {
+    expect(buildOptionalPluginConfig(preset, { enabled: undefined, requireFn: present })).toEqual([upstream]);
+    expect(buildOptionalPluginConfig(preset, { enabled: undefined, requireFn: absent })).toEqual([]);
+  });
+
+  it('throws with the feature, package and install command for enabled: true when the package or the config path is missing', () => {
+    const message = "@exadev/eslint-config: Some feature was explicitly requested but 'some-plugin' could not be resolved. Install it with: pnpm add -D some-plugin";
+    expect(() => buildOptionalPluginConfig(preset, { enabled: true, requireFn: absent })).toThrow(message);
+    expect(() => buildOptionalPluginConfig(preset, { enabled: true, requireFn: () => ({ configs: {} }) })).toThrow(message);
+    expect(buildOptionalPluginConfig(preset, { enabled: true, requireFn: present })).toEqual([upstream]);
+  });
+
+  it('replaces the upstream files with a copy of the preset files, leaving the upstream config untouched', () => {
+    const files = ['**/*.ts'];
+    const [config] = buildOptionalPluginConfig({ ...preset, files }, { requireFn: present });
+    expect(config).toEqual({ ...upstream, files: ['**/*.ts'] });
+    expect(config?.files).not.toBe(files);
+    expect(upstream).not.toHaveProperty('files');
+    expect(buildOptionalPluginConfig({ ...preset, files }, { requireFn: () => ({ configs: { 'flat/recommended': { files: ['x'] } } }) })).toEqual([{ files: ['**/*.ts'] }]);
   });
 });
