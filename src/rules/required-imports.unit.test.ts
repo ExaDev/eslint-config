@@ -59,6 +59,11 @@ ruleTester.run('required-imports', rule, {
     { code: "import * as kit from '@acme/contract/conformance';\nkit.run(a);", filename: ADAPTER_TEST, options: CALLED },
     { code: "import * as kit from '@acme/contract/conformance';\nkit.nested.run?.(a);", filename: ADAPTER_TEST, options: CALLED },
     { code: "import { run } from '@acme/contract/conformance';\ndescribe('x', () => { run(a); });", filename: ADAPTER_TEST, options: CALLED },
+    // A construction, a non-null-asserted callee and a tagged template invoke the binding too.
+    { code: "import { Kit } from '@acme/contract/conformance';\nnew Kit(a);", filename: ADAPTER_TEST, options: CALLED },
+    { code: "import { run } from '@acme/contract/conformance';\nrun!(a);", filename: ADAPTER_TEST, options: CALLED },
+    { code: "import * as kit from '@acme/contract/conformance';\nkit.run!(a);", filename: ADAPTER_TEST, options: CALLED },
+    { code: "import { run } from '@acme/contract/conformance';\nrun`x`;", filename: ADAPTER_TEST, options: CALLED },
     // Without call, a bare import of a binding is enough, even unused.
     { code: "import { run } from '@acme/contract/conformance';", filename: ADAPTER_TEST, options: IMPORTED },
     { code: "import { type Kit, run } from '@acme/contract/conformance';", filename: ADAPTER_TEST, options: IMPORTED },
@@ -100,6 +105,9 @@ ruleTester.run('required-imports', rule, {
     { code: "import { run } from '@acme/contract/conformance';\nregister(run);", filename: ADAPTER_TEST, options: CALLED, errors: [{ messageId: 'missingCall' }] },
     { code: "import { run } from '@acme/contract/conformance';\nother.run(run);", filename: ADAPTER_TEST, options: CALLED, errors: [{ messageId: 'missingCall' }] },
     { code: "import { run } from '@acme/contract/conformance';\nconst x = run.length;", filename: ADAPTER_TEST, options: CALLED, errors: [{ messageId: 'missingCall' }] },
+    // An argument of a construction or a tagged template is not the invoked binding.
+    { code: "import { run } from '@acme/contract/conformance';\nnew Other(run);", filename: ADAPTER_TEST, options: CALLED, errors: [{ messageId: 'missingCall' }] },
+    { code: "import { run } from '@acme/contract/conformance';\nother`${run}`;", filename: ADAPTER_TEST, options: CALLED, errors: [{ messageId: 'missingCall' }] },
     // Used as a computed key, the binding is not what is called.
     { code: "import { run } from '@acme/contract/conformance';\nother[run]();", filename: ADAPTER_TEST, options: CALLED, errors: [{ messageId: 'missingCall' }] },
     // A call to something else does not satisfy it.

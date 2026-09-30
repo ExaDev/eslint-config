@@ -41,14 +41,21 @@ export function readRequiredImportsEntries(value: unknown): readonly ReadEntry[]
 }
 
 /**
- * Whether the identifier is the callee of a call, directly (`kit()`) or through property access (`kit.run()`, for a namespace or default import that is an object). Only the identifier's own call counts; passing it as an argument does not.
+ * Whether the identifier is invoked: as the callee of a call (`kit()`), a construction (`new Kit()`) or the tag of a tagged template, directly or through property access (`kit.run()`, for a namespace or default import that is an object) and non-null assertions (`kit!()`). Only the identifier's own invocation counts; passing it as an argument does not.
  */
 function isCalled(identifier: TSESTree.Node): boolean {
   let current: TSESTree.Node = identifier;
-  while (current.parent?.type === AST_NODE_TYPES.MemberExpression && current.parent.object === current) current = current.parent;
+  while (current.parent !== undefined) {
+    const { parent } = current;
+    const isMemberObject = parent.type === AST_NODE_TYPES.MemberExpression && parent.object === current;
+    if (!isMemberObject && parent.type !== AST_NODE_TYPES.TSNonNullExpression) break;
+    current = parent;
+  }
   const { parent } = current;
+  if (parent === undefined) return false;
+  if (parent.type === AST_NODE_TYPES.CallExpression || parent.type === AST_NODE_TYPES.NewExpression) return parent.callee === current;
 
-  return parent?.type === AST_NODE_TYPES.CallExpression && parent.callee === current;
+  return parent.type === AST_NODE_TYPES.TaggedTemplateExpression && parent.tag === current;
 }
 
 function isTypeOnly(declaration: TSESTree.ImportDeclaration): boolean {
