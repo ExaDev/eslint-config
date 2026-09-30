@@ -159,6 +159,48 @@ ruleTester.run('no-multiline-template-literal', rule, {
       output: null,
       errors: [{ messageId: 'multiline' }],
     },
+    // Reported without a fix: the joined string is a plain string, which loses the literal type these positions need.
+    {
+      code: 'const a = `x\ny` as const;',
+      output: null,
+      errors: [{ messageId: 'multiline' }],
+    },
+    {
+      code: 'const a = { b: [`x\ny`] } as const;',
+      output: null,
+      errors: [{ messageId: 'multiline' }],
+    },
+    {
+      code: 'enum E { A = `x\ny` }',
+      output: null,
+      errors: [{ messageId: 'multiline' }],
+    },
+    {
+      code: "const a: 'x\\ny' = `x\ny`;",
+      output: null,
+      errors: [{ messageId: 'multiline' }],
+    },
+    {
+      code: "class C { readonly a: 'x\\ny' = `x\ny`; }",
+      output: null,
+      errors: [{ messageId: 'multiline' }],
+    },
+    {
+      code: 'const a = `x\ny` satisfies string;',
+      output: null,
+      errors: [{ messageId: 'multiline' }],
+    },
+    {
+      code: 'const a = <const>`x\ny`;',
+      output: null,
+      errors: [{ messageId: 'multiline' }],
+    },
+    // Still fixed: a plain declaration and a call argument have no literal-type requirement the rule can see.
+    {
+      code: 'f(`x\ny`);',
+      output: "f([\n  'x',\n  'y'\n].join('\\n'));",
+      errors: [{ messageId: 'multiline' }],
+    },
     // The outer template is rewritten on the first pass and the nested one, reported by its own node, on the second.
     {
       code: 'const a = `x ${`p\nq`}\ny`;',

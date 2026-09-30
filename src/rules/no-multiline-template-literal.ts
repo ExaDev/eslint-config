@@ -175,6 +175,24 @@ function renderLine(line: readonly Part[]): string {
 }
 
 /**
+ * Whether the template sits where TypeScript needs its literal type, which `[...].join('\n')` (a plain `string`) does not have: under a `const` assertion, a type assertion or `satisfies`, as a string enum member's initialiser, or as the initialiser of a declaration with a type annotation, whose annotation may be a literal type. Containers (an array, an object, a property, a non-null assertion) are looked through, so an object under `as const` is covered. Without type information the contextual type of an argument, a return value or an assignment target cannot be known, so those positions are still fixed.
+ */
+function needsLiteralType(node: TSESTree.TemplateLiteral): boolean {
+  let child: TSESTree.Node = node;
+  for (let parent: TSESTree.Node | undefined = node.parent; parent !== undefined; child = parent, parent = parent.parent) {
+    if (parent.type === AST_NODE_TYPES.TSAsExpression || parent.type === AST_NODE_TYPES.TSSatisfiesExpression || parent.type === AST_NODE_TYPES.TSTypeAssertion) return true;
+    if (parent.type === AST_NODE_TYPES.TSEnumMember) return parent.initializer === child;
+    if (parent.type === AST_NODE_TYPES.VariableDeclarator) return parent.init === child && parent.id.typeAnnotation !== undefined;
+    if (parent.type === AST_NODE_TYPES.PropertyDefinition) return parent.value === child && parent.typeAnnotation !== undefined;
+    const isContainer =
+      parent.type === AST_NODE_TYPES.TSNonNullExpression || parent.type === AST_NODE_TYPES.ArrayExpression || parent.type === AST_NODE_TYPES.ObjectExpression || parent.type === AST_NODE_TYPES.Property;
+    if (!isContainer) return false;
+  }
+
+  return false;
+}
+
+/**
  * The text before `node` on its first line, reduced to the whitespace it starts with, so the array elements can be indented one level deeper than the statement holding the template.
  */
 function indentationOf(sourceCode: Readonly<TSESLint.SourceCode>, node: TSESTree.Node): string {
@@ -188,7 +206,7 @@ type MessageIds = 'multiline';
 const createRule = ESLintUtils.RuleCreator((name) => `https://github.com/ExaDev/eslint-config/blob/main/src/rules/${name}.ts`);
 
 /**
- * Reports an untagged template literal whose cooked value contains a line feed and rewrites it to `['line one', 'line two'].join('\n')` when the rewrite provably yields the same string. A tagged template is never reported: the tag receives the literal's pieces, so joining them would change what it is called with, and multi-line tagged templates (`sql`, `css`, `markdown`) are the point of the syntax. No type information is read.
+ * Reports an untagged template literal whose cooked value contains a line feed and rewrites it to `['line one', 'line two'].join('\n')` when the rewrite provably yields the same string and the template is not in a position that needs its literal type. A tagged template is never reported: the tag receives the literal's pieces, so joining them would change what it is called with, and multi-line tagged templates (`sql`, `css`, `markdown`) are the point of the syntax. No type information is read.
  */
 const noMultilineTemplateLiteral = createRule<[unknown], MessageIds>({
   name: 'no-multiline-template-literal',
@@ -213,7 +231,7 @@ const noMultilineTemplateLiteral = createRule<[unknown], MessageIds>({
       TemplateLiteral(node) {
         if (node.parent.type === AST_NODE_TYPES.TaggedTemplateExpression && node.parent.quasi === node) return;
         if (!node.quasis.some((quasi) => cookedLineFeeds(quasi) > 0)) return;
-        const split = splitTemplate(sourceCode, node);
+        const split = needsLiteralType(node) ? undefined : splitTemplate(sourceCode, node);
         context.report({
           node,
           messageId: 'multiline',
