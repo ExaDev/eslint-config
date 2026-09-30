@@ -122,6 +122,10 @@ ruleTester.run('no-defensive-fallback', rule, {
     'promise.catch(() => null, extra);',
     'promise["catch"](() => null);',
     'promise.then(() => null);',
+    'promise.then(() => null, handler);',
+    'promise.then(ok, (error) => report(error));',
+    'promise.then(ok, () => null, extra);',
+    'promise.then();',
     'catchIt(() => null);',
     // A call that only happens to have a method named catch on a non-call member.
     'const c = promise.catch;',
@@ -187,6 +191,8 @@ ruleTester.run('no-defensive-fallback', rule, {
     { code: 'promise.catch(() => {});', errors: [swallowed('.catch() handler', 'does nothing')] },
     { code: 'promise.catch((error) => { return; });', errors: [swallowed('.catch() handler', 'returns nothing')] },
     { code: 'promise.catch(function () { return 0; });', errors: [swallowed('.catch() handler', 'returns a fixed value')] },
+    { code: 'promise.then(ok, () => null);', errors: [swallowed('.then() rejection handler', 'returns a fixed value')] },
+    { code: 'promise.then(ok, function () {});', errors: [swallowed('.then() rejection handler', 'does nothing')] },
     { code: 'fetchAll().then(use).catch(() => undefined);', errors: [swallowed('.catch() handler', 'returns a fixed value')] },
     // Both forms in one file are reported independently.
     {
