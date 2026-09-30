@@ -38,6 +38,7 @@ import pureModule from './rules/pure-module';
 import requiredExports from './rules/required-exports';
 import requiredImports from './rules/required-imports';
 import requiredScripts from './rules/required-scripts';
+import scopedFirstParameter from './rules/scoped-first-parameter';
 import testFileKind from './rules/test-file-kind';
 import turboBoundariesConfig from './rules/turbo-boundaries-config';
 import turboBoundariesScript from './rules/turbo-boundaries-script';
@@ -98,6 +99,7 @@ const plugin: TSESLint.FlatConfig.Plugin = {
     'required-exports': requiredExports,
     'required-imports': requiredImports,
     'required-scripts': requiredScripts,
+    'scoped-first-parameter': scopedFirstParameter,
     'test-file-kind': testFileKind,
     'turbo-boundaries-config': turboBoundariesConfig,
     'turbo-boundaries-script': turboBoundariesScript,
