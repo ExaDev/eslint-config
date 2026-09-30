@@ -42,12 +42,10 @@ export interface TestHygieneOptions {
   readonly skippableFiles?: readonly string[];
 }
 
-export interface TestHygieneBuildOptions extends TestHygieneOptions {
-  // Test seam only, never exposed through testHygieneConfig()'s own public parameter; defaults to the real resolver.
-  readonly requireFn?: RequireFn;
-}
-
-function readPlugin(requireFn: RequireFn | undefined): TSESLint.FlatConfig.Plugin {
+/**
+ * Resolves `@vitest/eslint-plugin` and checks it provides the rules the preset relies on. Throws with the install command when it is missing or too old. `requireFn` replaces the module resolver in tests.
+ */
+export function readVitestPlugin(requireFn?: RequireFn): TSESLint.FlatConfig.Plugin {
   const loaded = tryRequire(PLUGIN_PACKAGE, requireFn);
   const candidate = isRecord(loaded) && isRecord(loaded['default']) ? loaded['default'] : loaded;
   if (!isRecord(candidate) || !isRecord(candidate['rules'])) {
@@ -73,7 +71,7 @@ function readNames(value: unknown): readonly string[] {
 
 function assertShape(options: unknown): void {
   if (!isRecord(options)) throw new Error(`@exadev/eslint-config: "${OPTION_NAME}" must be an object.`);
-  assertOnlyKeys(options, ['guardFiles', 'conformanceFiles', 'assertFunctionNames', 'skippableFiles', 'requireFn'], OPTION_NAME);
+  assertOnlyKeys(options, ['guardFiles', 'conformanceFiles', 'assertFunctionNames', 'skippableFiles'], OPTION_NAME);
 }
 
 function readSkippable(value: unknown): readonly string[] {
@@ -90,36 +88,45 @@ function hygieneBlocks(vitest: TSESLint.FlatConfig.Plugin, scope: GlobScope, ass
   const scopedBlock = (ignored: readonly string[]) => {
     const ignores = [...(scope.ignores ?? []), ...ignored];
 
-    return { files, ...(ignores.length > 0 && { ignores }), plugins: { vitest } };
+    return { files, ...(ignores.length > 0 && { ignores }), plugins: { vitest, exadev: plugin } };
   };
+  // The vitest plugin reads a test function a kit receives as a parameter as a local binding and skips it, so the same three checks run there through `exadev/injected-test-hygiene`. Its `.skip` report is the counterpart of `vitest/no-disabled-tests`, and is exempted the same way.
+  const injected = (reportDisabled: boolean): Record<string, TSESLint.FlatConfig.RuleEntry> => ({ 'exadev/injected-test-hygiene': ['error', { assertFunctionNames: [...assertFunctionNames], reportDisabled }] });
   const always: Record<string, TSESLint.FlatConfig.RuleEntry> = { 'vitest/no-focused-tests': 'error', 'vitest/expect-expect': ['error', { assertFunctionNames: [...assertFunctionNames] }] };
   const disabled: Record<string, TSESLint.FlatConfig.RuleEntry> = { 'vitest/no-disabled-tests': 'error' };
 
-  // no-disabled-tests gets its own block only when some files are exempt from it: the exemption is an `ignores` entry, which would otherwise exempt those files from the other two rules as well.
+  // no-disabled-tests gets its own block only when some files are exempt from it: the exemption is an `ignores` entry, which would otherwise exempt those files from the other rules as well. The later block sets the injected rule's options again for the files that are not exempt.
   return skippable.length === 0
-    ? [{ ...scopedBlock([]), rules: { ...always, ...disabled } }]
+    ? [{ ...scopedBlock([]), rules: { ...always, ...disabled, ...injected(true) } }]
     : [
-        { ...scopedBlock([]), rules: always },
-        { ...scopedBlock(skippable), rules: disabled },
+        { ...scopedBlock([]), rules: { ...always, ...injected(false) } },
+        { ...scopedBlock(skippable), rules: { ...disabled, ...injected(true) } },
       ];
 }
 
 /**
- * Wires `no-focused-tests`, `expect-expect` and `no-disabled-tests` from `@vitest/eslint-plugin` onto guard tests and conformance suites at `error`, and `exadev/non-vacuous-guard` onto guard tests. The preset is opt-in and always requests the plugin, so it throws with the install command when the plugin cannot be resolved, or when it lacks a rule the preset relies on. Internal: consumed by create-config.ts as more `ConfigArrayValue` entries.
+ * Builds the blocks around a vitest plugin loaded by `loadPlugin`, after the options have been validated, so an option error is reported before a missing plugin. Exported so tests can supply a plugin without touching module resolution; the public options have no such seam.
  */
-export function buildTestHygieneConfig(options: TestHygieneBuildOptions = {}): ConfigArrayValue {
+export function assembleTestHygieneConfig(options: TestHygieneOptions, loadPlugin: () => TSESLint.FlatConfig.Plugin): ConfigArrayValue {
   assertShape(options);
   const guard = scopeBlock(options.guardFiles ?? DEFAULT_GUARD_FILES, `${OPTION_NAME}.guardFiles`);
   const conformance = scopeBlock(options.conformanceFiles ?? DEFAULT_CONFORMANCE_FILES, `${OPTION_NAME}.conformanceFiles`);
   const assertFunctionNames = readNames(options.assertFunctionNames);
   const skippable = readSkippable(options.skippableFiles);
-  const vitest = readPlugin(options.requireFn);
+  const vitest = loadPlugin();
 
   return [
     ...hygieneBlocks(vitest, guard, assertFunctionNames, skippable),
     ...hygieneBlocks(vitest, conformance, assertFunctionNames, skippable),
     { ...guard, plugins: { exadev: plugin }, rules: { 'exadev/non-vacuous-guard': 'error' } },
   ];
+}
+
+/**
+ * Wires `no-focused-tests`, `expect-expect` and `no-disabled-tests` from `@vitest/eslint-plugin` onto guard tests and conformance suites at `error`, `exadev/injected-test-hygiene` beside them for the test functions a kit receives as parameters, and `exadev/non-vacuous-guard` onto guard tests. The preset is opt-in and always requests the plugin, so it throws with the install command when the plugin cannot be resolved, or when it lacks a rule the preset relies on. Internal: consumed by create-config.ts as more `ConfigArrayValue` entries.
+ */
+export function buildTestHygieneConfig(options: TestHygieneOptions = {}): ConfigArrayValue {
+  return assembleTestHygieneConfig(options, readVitestPlugin);
 }
 
 /**

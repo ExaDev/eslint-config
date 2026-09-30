@@ -3,7 +3,7 @@ import tseslint from 'typescript-eslint';
 import { describe, expect, it } from 'vitest';
 import { exadevConfig } from './create-config';
 import plugin from './plugin';
-import { buildTestHygieneConfig, DEFAULT_CONFORMANCE_FILES, DEFAULT_GUARD_FILES, testHygieneConfig } from './test-hygiene';
+import { assembleTestHygieneConfig, buildTestHygieneConfig, DEFAULT_CONFORMANCE_FILES, DEFAULT_GUARD_FILES, readVitestPlugin, testHygieneConfig } from './test-hygiene';
 
 // A block naming the extension, as exadevConfig() supplies, and the parser the vitest rules need to read TypeScript.
 const SOURCE_BLOCK = { files: ['**/*.ts'], languageOptions: { parser: tseslint.parser, sourceType: 'module' as const } };
@@ -29,8 +29,9 @@ describe('testHygieneConfig blocks', () => {
   it('wires the vitest rules onto guard and conformance files separately, and the guard rule onto guard files only', () => {
     const blocks = testHygieneConfig();
     const rulesOf = (files: readonly string[]) => blocks.filter((block) => JSON.stringify(block.files) === JSON.stringify(files)).map((block) => Object.keys(block.rules ?? {}).sort());
-    expect(rulesOf(DEFAULT_GUARD_FILES)).toStrictEqual([['vitest/expect-expect', 'vitest/no-disabled-tests', 'vitest/no-focused-tests'], ['exadev/non-vacuous-guard']]);
-    expect(rulesOf(DEFAULT_CONFORMANCE_FILES)).toStrictEqual([['vitest/expect-expect', 'vitest/no-disabled-tests', 'vitest/no-focused-tests']]);
+    const hygiene = ['exadev/injected-test-hygiene', 'vitest/expect-expect', 'vitest/no-disabled-tests', 'vitest/no-focused-tests'];
+    expect(rulesOf(DEFAULT_GUARD_FILES)).toStrictEqual([hygiene, ['exadev/non-vacuous-guard']]);
+    expect(rulesOf(DEFAULT_CONFORMANCE_FILES)).toStrictEqual([hygiene]);
   });
 
   it('registers the exadev plugin for the guard rule', () => {
@@ -70,25 +71,38 @@ describe('testHygieneConfig validation', () => {
     expect(() => testHygieneConfig({ skippableFiles: ['a', '!b'] })).toThrow('"testHygiene.skippableFiles" entry "!b" is an exclude.');
   });
 
+  it('does not accept the requireFn test seam as a public option', () => {
+    expect(() => buildTestHygieneConfig({ requireFn: () => ({}) } as never)).toThrow('has an unknown key "requireFn"');
+    expect(() => testHygieneConfig({ requireFn: () => ({}) } as never)).toThrow('has an unknown key "requireFn"');
+  });
+
+  it('validates the options before it loads the plugin, so an option error is not hidden by a missing plugin', () => {
+    const neverLoaded = () => {
+      throw new Error('the plugin was loaded');
+    };
+    expect(() => assembleTestHygieneConfig({ guardFile: ['a'] } as never, neverLoaded)).toThrow('has an unknown key "guardFile"');
+    expect(() => assembleTestHygieneConfig({}, neverLoaded)).toThrow('the plugin was loaded');
+  });
+
   it('throws with the install command when the plugin cannot be resolved', () => {
     const missing = () => {
       throw new Error('simulated missing package');
     };
-    expect(() => buildTestHygieneConfig({ requireFn: missing })).toThrow(
+    expect(() => assembleTestHygieneConfig({}, () => readVitestPlugin(missing))).toThrow(
       "@exadev/eslint-config: Guard and conformance test hygiene was requested but '@vitest/eslint-plugin' could not be resolved. Install it with: pnpm add -D @vitest/eslint-plugin",
     );
-    expect(() => buildTestHygieneConfig({ requireFn: () => ({}) })).toThrow('could not be resolved');
+    expect(() => assembleTestHygieneConfig({}, () => readVitestPlugin(() => ({})))).toThrow('could not be resolved');
   });
 
   it('throws naming every rule the installed plugin lacks', () => {
     const outdated = () => ({ rules: { 'expect-expect': {} } });
-    expect(() => buildTestHygieneConfig({ requireFn: outdated })).toThrow("'@vitest/eslint-plugin' does not provide the rules no-disabled-tests, no-focused-tests, which test hygiene relies on.");
+    expect(() => assembleTestHygieneConfig({}, () => readVitestPlugin(outdated))).toThrow("'@vitest/eslint-plugin' does not provide the rules no-disabled-tests, no-focused-tests, which test hygiene relies on.");
   });
 
   it('accepts the plugin under either module shape', () => {
     const rules = { 'expect-expect': {}, 'no-disabled-tests': {}, 'no-focused-tests': {} };
-    expect(() => buildTestHygieneConfig({ requireFn: () => ({ rules }) })).not.toThrow();
-    expect(() => buildTestHygieneConfig({ requireFn: () => ({ default: { rules } }) })).not.toThrow();
+    expect(() => assembleTestHygieneConfig({}, () => readVitestPlugin(() => ({ rules })))).not.toThrow();
+    expect(() => assembleTestHygieneConfig({}, () => readVitestPlugin(() => ({ default: { rules } })))).not.toThrow();
   });
 });
 
@@ -134,6 +148,45 @@ describe('testHygieneConfig in a real linter run', () => {
   it('applies to a kit named by its own file name', () => {
     const code = `${HEADER}it('a', () => {});`;
     expect(lint(code, 'src/conformance.ts', { conformanceFiles: ['**/conformance.ts'] })).toStrictEqual(['vitest/expect-expect:2']);
+  });
+});
+
+// A conformance kit receives its test functions as parameters, which @vitest/eslint-plugin reads as local bindings and never checks.
+describe('testHygieneConfig on a kit that takes its test functions as parameters', () => {
+  const kit = (body: string) => `export function runConformance({ describe, it }: Api, store: Store) {\n  describe('kit', () => {\n${body}\n  });\n}`;
+
+  it('reports a focused test, a skipped test and a test with no assertion', () => {
+    const code = kit("    it.only('a', () => { expect(store.get('k')).toBe(1); });\n    it.skip('b', () => { expect(1).toBe(1); });\n    it('c', () => { store.get('k'); });");
+    expect(lint(code, 'src/kv.conformance.test.ts')).toStrictEqual(['exadev/injected-test-hygiene:3', 'exadev/injected-test-hygiene:4', 'exadev/injected-test-hygiene:5']);
+  });
+
+  it('reports through a parameter object too', () => {
+    const code = "export function runConformance(t: Api) {\n  t.it.only('a', () => { expect(1).toBe(1); });\n  t.it('b', () => {});\n}";
+    expect(lint(code, 'src/kv.conformance.test.ts')).toStrictEqual(['exadev/injected-test-hygiene:2', 'exadev/injected-test-hygiene:3']);
+  });
+
+  it('applies to a kit that is not named as a test file, once its name is listed', () => {
+    const code = kit("    it('c', () => {});");
+    expect(lint(code, 'src/conformance.ts')).toStrictEqual([]);
+    expect(lint(code, 'src/conformance.ts', { conformanceFiles: ['**/conformance.ts'] })).toStrictEqual(['exadev/injected-test-hygiene:3']);
+  });
+
+  it('counts a kit helper as an assertion once its name is given', () => {
+    const code = kit("    it('c', () => { checkRoundTrip(store); });");
+    expect(lint(code, 'src/kv.conformance.test.ts')).toStrictEqual(['exadev/injected-test-hygiene:3']);
+    expect(lint(code, 'src/kv.conformance.test.ts', { assertFunctionNames: ['check*'] })).toStrictEqual([]);
+  });
+
+  it('exempts a skippable file from the skip report only', () => {
+    const code = kit("    it.skip('a', () => { expect(1).toBe(1); });\n    it.only('b', () => { expect(1).toBe(1); });");
+    const options = { skippableFiles: ['**/live.conformance.test.ts'] };
+    expect(lint(code, 'src/live.conformance.test.ts', options)).toStrictEqual(['exadev/injected-test-hygiene:4']);
+    expect(lint(code, 'src/kv.conformance.test.ts', options)).toStrictEqual(['exadev/injected-test-hygiene:3', 'exadev/injected-test-hygiene:4']);
+  });
+
+  it('leaves a kit that only conditionally skips alone', () => {
+    const code = kit("    it.skipIf(!process.env['LIVE'])('a', () => { expect(1).toBe(1); });");
+    expect(lint(code, 'src/kv.conformance.test.ts')).toStrictEqual([]);
   });
 });
 
