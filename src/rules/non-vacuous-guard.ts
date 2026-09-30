@@ -20,9 +20,9 @@ const ITERATION_METHODS: ReadonlySet<string> = new Set(['every', 'filter', 'find
 // `it.each(table)(name, callback)` and its `describe`, `for` and tagged-template forms run the callback once per table row.
 const TABLE_METHODS: ReadonlySet<string> = new Set(['each', 'for']);
 
-// Matchers that state the outcome of evaluating something. They say nothing about a pattern when the subject is a plain value, so each needs a subject that is a call (`re.test(line)`, `findViolations(line)`); `toMatch` states the outcome of a pattern by its own name and needs no such subject.
-const CATCH_MATCHERS: ReadonlySet<string> = new Set(['toBeDefined', 'toBeTruthy', 'toContain', 'toContainEqual']);
-const PASS_MATCHERS: ReadonlySet<string> = new Set(['toBeFalsy', 'toBeNull', 'toBeUndefined']);
+// Matchers that state the outcome of evaluating something. They say nothing about a pattern when the subject is a plain value, so each needs a subject that is a call (`re.test(line)`, `findViolations(line)`); `toMatch` states the outcome of a pattern by its own name and needs no such subject. `toBeDefined` and `toBeUndefined` are absent on purpose: `RegExp` matching returns `null` rather than `undefined`, so they hold for any pattern, and on a read (`readFile(name)`) they state that a file exists, which is discovery and not a check of the pattern.
+const CATCH_MATCHERS: ReadonlySet<string> = new Set(['toBeTruthy', 'toContain', 'toContainEqual']);
+const PASS_MATCHERS: ReadonlySet<string> = new Set(['toBeFalsy', 'toBeNull']);
 const EQUALITY_MATCHERS: ReadonlySet<string> = new Set(['toBe', 'toEqual', 'toStrictEqual']);
 
 /**
@@ -146,9 +146,12 @@ function statedOutcome(subject: TSESTree.CallExpressionArgument | undefined, mat
 }
 
 /**
- * Whether the assertion states the outcome of evaluating a pattern (or a function built on one) against an input: that it found something (`catches`) or found nothing (`passes`). Recognised: `toMatch`, and, on a call subject, `toBe(true)`, `toBe(false)`, `toBeTruthy`, `toBeFalsy`, `toBeNull`, `toBeUndefined`, `toBeDefined`, `toContain`, `toEqual([])` and their `.not` forms. A bare `expect(files.length).toBe(0)` is not read as a check of the pattern. Exported for direct testing.
+ * Whether the assertion states the outcome of evaluating a pattern (or a function built on one) against an input: that it found something (`catches`) or found nothing (`passes`). Recognised: `toMatch`, and, on a call subject, `toBe(true)`, `toBe(false)`, `toBeTruthy`, `toBeFalsy`, `toBeNull`, `toContain`, `toEqual([])` and their `.not` forms. A bare `expect(files.length).toBe(0)` is not read as a check of the pattern, and neither is an assertion that reads as a lower bound (`not.toEqual([])`), which counts as the bound alone. Exported for direct testing.
  */
-export function patternOutcome({ subject, matcher, negated, matcherArguments }: Assertion): 'catches' | 'passes' | undefined {
+export function patternOutcome(assertion: Assertion): 'catches' | 'passes' | undefined {
+  // An assertion counts once, as the bound when it reads as one: `expect(findFiles()).not.toEqual([])` shows something was discovered, and cannot also show that a pattern flags an input.
+  if (isLowerBound(assertion)) return undefined;
+  const { subject, matcher, negated, matcherArguments } = assertion;
   const outcome = statedOutcome(subject, matcher, matcherArguments[0]);
   if (outcome === undefined || !negated) return outcome;
 
