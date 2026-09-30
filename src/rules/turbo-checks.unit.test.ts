@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOUNDARIES_COMMAND, checkBoundariesScripts, checkConvention, checkTaskScripts, fixFlagsIn, implementingScripts, isExemptTask, isKnownSchema, missingEdges, outputProblem, requiredEdges, tagProblem } from './turbo-checks';
+import { BOUNDARIES_COMMAND, checkBoundariesScripts, checkConvention, checkTaskScripts, fixFlagsIn, implementingScripts, isExemptTask, isKnownSchema, missingEdges, outputProblem, requiredEdges, tagProblem, unmatchedGraphTasks } from './turbo-checks';
 import type { TurboJson, TurboTask } from './turbo-json';
 import type { TurboPackage } from './turbo-workspace';
 
@@ -465,4 +465,22 @@ describe('isKnownSchema', () => {
       expect(isKnownSchema(schema, hosts)).toBe(false);
     },
   );
+});
+
+describe('unmatchedGraphTasks', () => {
+  const graph = [
+    { task: '_build', dependsOn: ['a'] },
+    { task: 'web#_lint', dependsOn: ['b'] },
+    { task: '//#_test', dependsOn: ['c'] },
+  ];
+
+  it('returns the requirements no task entry covers, in order', () => {
+    expect(unmatchedGraphTasks(graph, [])).toEqual(['_build', 'web#_lint', '//#_test']);
+    expect(unmatchedGraphTasks(graph, ['api#_build', 'web#_lint'])).toEqual(['//#_test']);
+  });
+
+  it('lets a generic requirement be met by a package entry but not by the root package task, and a qualified one only by its own entry', () => {
+    expect(unmatchedGraphTasks(graph, ['web#_build', 'web#_lint', '//#_test'])).toEqual([]);
+    expect(unmatchedGraphTasks(graph, ['//#_build', 'api#_lint', '//#_test'])).toEqual(['_build', 'web#_lint']);
+  });
 });

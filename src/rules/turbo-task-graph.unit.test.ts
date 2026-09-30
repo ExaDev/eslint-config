@@ -47,6 +47,7 @@ describe('turbo-task-graph meta', () => {
       missingEdge: 'Task "{{task}}" must list "{{edge}}" in its "dependsOn", as the taskGraph option requires.',
       missingPackageEdge:
         'Task "{{task}}" must list "{{edge}}" in its "dependsOn", as the taskGraph option requires. A "package#task" entry replaces the generic task instead of extending it, so it lists every edge itself.',
+      unmatchedRequirement: 'The taskGraph option requires edges for "{{task}}", but no task entry of this turbo.json has that name, so the requirement never applies. Check it for a typo.',
       droppedEdge:
         'Task "{{task}}" drops "{{edge}}" from its "dependsOn", which the taskGraph option requires. A package task replaces the inherited "dependsOn" unless it lists "$TURBO_EXTENDS$" to keep the root entries.',
     });
@@ -65,14 +66,16 @@ ruleTester.run('turbo-task-graph', rule, {
     // Every edge present, in any order.
     { code: turbo({ _build: { dependsOn: ['^_build', '_typecheck', 'other'] } }), filename: ROOT, options: OPTIONS },
     // A task the graph does not name.
-    { code: turbo({ _lint: {}, _build2: {}, x_build: {} }), filename: ROOT, options: OPTIONS },
+    { code: turbo({ _build: { dependsOn: ['_typecheck', '^_build'] }, _lint: {}, _build2: {}, x_build: {} }), filename: ROOT, options: OPTIONS },
     // A package entry that repeats the edges, and a requirement written for exactly that entry.
     { code: turbo({ 'web#_build': { dependsOn: ['_typecheck', '^_build'] } }), filename: ROOT, options: OPTIONS },
-    { code: turbo({ 'web#_build': {} }), filename: ROOT, options: [{ taskGraph: [{ task: 'api#_build', dependsOn: ['y'] }] }] },
+    { code: turbo({ 'web#_build': {}, 'api#_build': { dependsOn: ['y'] } }), filename: ROOT, options: [{ taskGraph: [{ task: 'api#_build', dependsOn: ['y'] }] }] },
     // The root package's own task is covered only by a requirement written with its qualifier.
-    { code: turbo({ '//#_build': {} }), filename: ROOT, options: OPTIONS },
+    { code: turbo({ '//#_build': {}, _build: { dependsOn: ['_typecheck', '^_build'] } }), filename: ROOT, options: OPTIONS },
     // Exempt tasks, by full key and by unqualified name.
     { code: turbo({ _build: {}, 'web#_build': {} }), filename: ROOT, options: [{ taskGraph: GRAPH, exemptTasks: ['_build'] }] },
+    // An exempt task's requirement is not reported as unmatched either.
+    { code: turbo({ _lint: {} }), filename: ROOT, options: [{ taskGraph: GRAPH, exemptTasks: ['_build'] }] },
     // A package override that keeps the edges: by omission, by $TURBO_EXTENDS$, or by listing them.
     { code: turbo({ _build: { inputs: ['a'] } }, { extends: ['//'] }), filename: WEB, options: OPTIONS },
     { code: turbo({ _build: { dependsOn: [EXTENDS, 'gen'] } }, { extends: ['//'] }), filename: WEB, options: OPTIONS },
@@ -85,11 +88,26 @@ ruleTester.run('turbo-task-graph', rule, {
     { code: turbo({ _build: { dependsOn: [] } }, { extends: ['//'] }), filename: '/lonely/turbo.json', options: OPTIONS },
     // An edge the root task already lacks is reported at the root, not again in the package.
     { code: turbo({ _build: { inputs: ['a'] } }, { extends: ['//'] }), filename: WEB, options: [{ taskGraph: [{ task: '_build', dependsOn: ['missing-at-root'] }] }] },
-    // A nested object is not the document.
-    { code: JSON.stringify({ nested: { tasks: { _build: {} } } }), filename: ROOT, options: OPTIONS },
-    { code: '{}', filename: ROOT, options: OPTIONS },
   ],
   invalid: [
+    // A requirement whose task no entry has is reported, on `tasks` or, without one, on the document; a nested object is not the document.
+    { code: turbo({ _buidl: {} }), filename: ROOT, options: OPTIONS, errors: [{ message: 'The taskGraph option requires edges for "_build", but no task entry of this turbo.json has that name, so the requirement never applies. Check it for a typo.', line: 2 }] },
+    { code: '{}', filename: ROOT, options: OPTIONS, errors: [{ messageId: 'unmatchedRequirement', data: { task: '_build' }, line: 1 }] },
+    { code: JSON.stringify({ nested: { tasks: { _build: {} } } }), filename: ROOT, options: OPTIONS, errors: [{ messageId: 'unmatchedRequirement', line: 1 }] },
+    // Each unmatched task is reported, in the option's order; a matched one is not.
+    {
+      code: turbo({ _lint: { dependsOn: ['c'] } }),
+      filename: ROOT,
+      options: [{ taskGraph: [{ task: '_build', dependsOn: ['a'] }, { task: '_lint', dependsOn: ['c'] }, { task: '_test', dependsOn: ['b'] }] }],
+      errors: [
+        { messageId: 'unmatchedRequirement', data: { task: '_build' } },
+        { messageId: 'unmatchedRequirement', data: { task: '_test' } },
+      ],
+    },
+    // A package or root qualifier needs its own entry, and a generic requirement is not met by the root package task alone.
+    { code: turbo({ 'web#_build': {} }), filename: ROOT, options: [{ taskGraph: [{ task: 'api#_build', dependsOn: ['y'] }] }], errors: [{ messageId: 'unmatchedRequirement', data: { task: 'api#_build' } }] },
+    { code: turbo({ '//#_build': {} }), filename: ROOT, options: [{ taskGraph: [{ task: '_build', dependsOn: ['y'] }] }], errors: [{ messageId: 'unmatchedRequirement', data: { task: '_build' } }] },
+
     {
       code: turbo({ _lint: {}, _build: { dependsOn: ['^_build'] } }),
       filename: ROOT,

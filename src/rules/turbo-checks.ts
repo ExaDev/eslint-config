@@ -204,9 +204,17 @@ export function checkBoundariesScripts(commands: ReadonlyMap<string, string | un
  * The `dependsOn` entries the `taskGraph` option requires of the task at `key`. A requirement names a task either exactly (`_build`, `//#_build`, `web#_build`) or, when written without a package qualifier, all of its package entries too: `_build` also covers `web#_build`, since a `package#task` entry replaces the generic task instead of adding to it, but not `//#_build`, the root package's own task, which only a requirement written `//#_build` covers.
  */
 export function requiredEdges(key: string, graph: readonly TaskGraphRequirement[]): readonly string[] {
-  const covers = (task: string): boolean => task === key || (!task.includes('#') && !key.startsWith(ROOT_TASK_PREFIX) && baseTaskName(key) === task);
+  return [...new Set(graph.filter(({ task }) => requirementCovers(task, key)).flatMap(({ dependsOn }) => dependsOn))];
+}
 
-  return [...new Set(graph.filter(({ task }) => covers(task)).flatMap(({ dependsOn }) => dependsOn))];
+// Whether a `taskGraph` requirement written for `task` applies to the task entry `key`.
+function requirementCovers(task: string, key: string): boolean {
+  return task === key || (!task.includes('#') && !key.startsWith(ROOT_TASK_PREFIX) && baseTaskName(key) === task);
+}
+
+/** The task names of `graph`, in order, that cover none of the task entries `keys`: a requirement that can never apply, usually a misspelt task name. */
+export function unmatchedGraphTasks(graph: readonly TaskGraphRequirement[], keys: readonly string[]): readonly string[] {
+  return graph.map(({ task }) => task).filter((task) => !keys.some((key) => requirementCovers(task, key)));
 }
 
 /** The entries of `required` that `task` does not list in its `dependsOn`, compared as written. */
