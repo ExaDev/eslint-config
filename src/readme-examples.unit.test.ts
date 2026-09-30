@@ -4,6 +4,8 @@ import {
   buildViaImportPolicy,
   buildViaManualRules,
   buildViaPluginConfigsReactAndNextjs,
+  buildViaPureModules,
+  buildViaPureModulesOption,
   buildViaStringExtends,
   buildViaTseslintPluginConfigsRecommended,
   buildViaWorkspaceArchitecture,
@@ -93,5 +95,13 @@ describe('README defineConfig examples', () => {
     expect(options[0]).toBe('error');
     const policies = options[1];
     expect(Array.isArray(policies) ? policies.map((policy: { files: string[] }) => policy.files) : undefined).toStrictEqual([['src/worker/**'], ['src/**'], ['src/routes/**']]);
+  });
+
+  it('the pure modules examples wire the one rule, with the exclude as an ignore, and no-control-flow when asked for', () => {
+    const block = buildViaPureModules().find((entry) => entry.rules?.['exadev/pure-module'] !== undefined);
+    expect(block?.files).toStrictEqual(['src/core/**']);
+    expect(block?.ignores).toStrictEqual(['src/core/**/*.gen.ts']);
+    expect(block?.rules).toStrictEqual({ 'exadev/pure-module': ['error', { allowImports: ['node:stream'] }], 'exadev/no-control-flow': 'error' });
+    expect(buildViaPureModulesOption().some((entry) => entry.rules?.['exadev/pure-module'] !== undefined)).toBe(true);
   });
 });

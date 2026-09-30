@@ -169,6 +169,7 @@ export default tseslint.config(
 | [Workspace architecture rules](#workspace-architecture) | Off unless given (no sensible default for `groups`) | `exadevConfig({ workspaceArchitecture })` / `workspaceArchitectureConfig(options)` |
 | [Turbo rules](#turbo) | Off unless given (only a repository can say it uses turbo) | `exadevConfig({ turbo })` / `turboConfig(options)` |
 | [Import policy](#import-policy) | Off unless given (only a repository can say which imports it forbids) | `exadevConfig({ importPolicies })` / `importPolicyConfig(policies)` |
+| [Pure modules](#pure-modules) | Off unless given (only a repository can say which modules are a functional core) | `exadevConfig({ pureModules })` / `pureModulesConfig(options)` |
 | [Turbo environment variable checking](#environment-variables-read-in-source) | Auto-detected: on if `eslint-plugin-turbo` is installed | `exadevConfig({ turboEnv })` |
 
 Every tri-state option above (`true`/`false`/`undefined`) is passed through the named `exadevConfig(options, ...userConfigs)` factory export:
@@ -299,7 +300,7 @@ Bundled into `exadevConfig()`'s default output the same way React/Next.js auto-d
 | `no-non-barrel-reexport` | ✓ | **Re-exports belong only in a barrel.** Catches the split form across two statements (`import { x } from './y'; export { x };` or `export default x;`) which no AST selector alone can match. Autofix deletes the export and the now-pointless import when it was the import's only use. Self-scopes away from any index file. |
 | `no-side-effects-in-index` | | **A barrel may contain only re-export statements** — nothing that could execute at import time. Self-scopes to any index file. |
 | `barrel-direct-siblings-only` | | **A barrel may re-export only from a direct sibling** (`./module`), never a nested path, parent, or bare package specifier (mode 3). |
-| `no-control-flow` | | **Bans `if`/`switch`/loops/the ternary operator outright.** Not part of `recommended` or `barrel` — ordinary code legitimately needs control flow, so this is opt-in, wired via a consumer's own `files` glob for the specific packages that want it (a composition-root package selecting an adapter/strategy by a validated key, say): a lookup table replaces a branch, a declarative array method (`map`/`filter`/`some`/`every`/...) replaces a loop. Requires no type information. |
+| `no-control-flow` | | **Bans `if`/`switch`/loops/the ternary operator outright.** Not part of `recommended` or `barrel` — ordinary code legitimately needs control flow, so this is opt-in, wired via a consumer's own `files` glob for the specific packages that want it (a composition-root package selecting an adapter/strategy by a validated key, say): a lookup table replaces a branch, a declarative array method (`map`/`filter`/`some`/`every`/...) replaces a loop. Requires no type information. See also [Pure modules](#pure-modules), which can add it to a block. |
 | `no-pointless-reassignment` | ✓ | **Flags a `const` alias that adds no transformation** (`const foo = bar` where both sides are plain identifiers). Autofix rewrites every read to the original name and deletes the declaration. Still reported but deliberately not auto-fixable where collapsing the alias would change meaning: an explicit type annotation (`const exhaustive: never = item` — the annotation is the point), a read where the original name is shadowed, a read as a shorthand object property, more than one declarator in the statement, or a source that is written to anywhere. An alias that is itself part of the module's exported surface (`export const alias = original;`, a later `export { alias }`/`export { alias as other }`, or `export default alias;`) is neither reported nor fixed at all, since collapsing it would rename or delete a binding every importer of this module depends on. |
 | `no-object-assign` | ✓/suggestion | **`Object.assign` skips the type-checking object spread gets** — it doesn't check a source object's properties against the target's declared types. A fresh object-literal target autofixes to `{ ...target, ...source }`; mutating an existing reassignable binding offers a suggestion only (changes the object's identity); a `const` binding or a non-statement call site gets a plain report with no fix. |
 | `no-mutable-union-array-param` | ✓ | **A union-typed array parameter can be mutated with a value the caller's narrower array never declared.** A function parameter typed as an array of a union (`(string \| number)[]`) accepts a narrower caller array (`number[]`) by covariance; calling `push`/`unshift`/`splice`/`fill`/`copyWithin` on it can then insert a value the caller's own array was never declared to hold. Autofix marks the parameter `readonly`, turning the mutating call into a real compile error to resolve deliberately. Requires no type information. |
@@ -337,6 +338,7 @@ Bundled into `exadevConfig()`'s default output the same way React/Next.js auto-d
 | `required-imports` | | **Files matching a glob must import, and optionally call, a module matching a specifier pattern.** See [File-level rules](#file-level-rules). |
 | `import-policy` | | **Glob-scoped import policy:** deny lists, specifiers confined to named files, and exact exception edges, with a message that names the requirement. Wired by `importPolicyConfig`. See [Import policy](#import-policy). |
 | `filename-pattern` | | **Filename conventions by glob:** a name regex, a required sibling file, and a naming scheme required once a file passes a line count. See [Filename patterns](#filename-patterns). |
+| `pure-module` | | **Bans I/O, ambient state and `async` in the files it is wired onto:** imports of Node I/O modules, I/O and scheduling globals, argument-less `Date`, `Date.now`, `Math.random`, and `async`/`await`. Wired by `pureModulesConfig`. See [Pure modules](#pure-modules). |
 
 ## Barrel policy
 
@@ -442,6 +444,37 @@ A policy selects files with `files` and `ignores` and holds them to:
 Specifiers follow [Specifier patterns](#specifier-patterns). The rule is syntactic and covers `import`, `import type`, `export ... from`, `export * from`, `import x = require()`, dynamic `import()` with a static string, `require()` with a static string that is not shadowed, and `import('x')` type queries. A specifier built at runtime cannot be judged and is skipped.
 
 ESLint's core `no-restricted-imports` covers only the static forms (`import`, `export ... from`, `export * from` and `import x = require()`); it has no check for dynamic `import()`, `require()` or `import('x')` type queries, and `no-restricted-modules` is deprecated since ESLint 7. A preset compiled to `no-restricted-imports` blocks would also inherit flat config's rule-level override: when two policies select the same file, the later block's option list replaces the earlier one's, and an exception edge would have to restate every other restriction of the file. So the preset compiles to one block for a purpose-built rule instead, where every policy that selects a file applies to it. Files outside a policy's `files` are untouched.
+
+## Pure modules
+
+A functional core should not touch I/O, read the clock, roll dice or wait on anything. `pureModulesConfig` (or `exadevConfig({ pureModules })`) wires `exadev/pure-module` onto the files that must stay pure:
+
+```ts
+import { defineConfig } from 'eslint/config';
+import { exadevConfig, pureModulesConfig } from '@exadev/eslint-config';
+
+export default defineConfig(
+  ...exadevConfig(),
+  ...pureModulesConfig({
+    files: ['src/core/**', '!src/core/**/*.gen.ts'],
+    allowImports: ['node:stream'],
+    noControlFlow: true,
+  }),
+);
+```
+
+The same object goes to `exadevConfig({ pureModules: { files: ['src/core/**'] } })`. `files` follows the [file glob dialect](#file-level-rules) used across this package, with a leading `!` excluding. Like any flat-config `files` list, a glob that ends in `/**` or `/*` selects files only alongside a block that names their extension, which `exadevConfig()` provides for JavaScript and TypeScript.
+
+In the selected files the rule reports:
+
+- an import of a Node I/O module (`child_process`, `fs`, `http`, `net`, `os`, `process`, `stream`, `worker_threads` and their kin, the full list being `BANNED_MODULES` in [`src/rules/pure-module-options.ts`](src/rules/pure-module-options.ts)), through any syntax `import-policy` recognises. Subpaths and the `node:` form are covered by the module name. A type-only import is left alone, since it is erased before the module runs;
+- a read of an I/O, scheduling or environment global (`fetch`, `process`, `setTimeout`, `WebSocket`, `localStorage`, `document` and the rest of `BANNED_GLOBALS`), including through `globalThis`;
+- `Date.now`, `Math.random`, `performance.now`, `crypto.randomUUID`, `crypto.getRandomValues`, and `Date()` or `new Date()` with no argument. `new Date(value)` is pure and passes;
+- an `async` function or method, `await`, and `for await`.
+
+`allowImports` lists specifiers, in the [specifier pattern](#specifier-patterns) dialect, exempted from the module ban. Every entry must select a banned module, so an entry that could never apply fails when the config is created. `noControlFlow: true` adds `exadev/no-control-flow` to the same block, for a module that should hold lookup tables and nothing else.
+
+It is one rule under one name, not a `no-restricted-imports`, `no-restricted-globals` and `no-restricted-syntax` recipe, because flat config replaces a rule's options when a later block sets the same rule for the same files. A consumer's own `no-restricted-syntax` block over the pure files would silently drop a recipe's entries; it cannot drop these. The bans are syntactic. They keep a module from reaching for ambient state directly, and they do not follow an alias (`const { random } = Math`) or prove the module deterministic. A repository needing a different list writes its own `no-restricted-*` blocks.
 
 ## Filename patterns
 
@@ -850,13 +883,14 @@ pnpm build
 - [`src/rules/file-entry.ts`](src/rules/file-entry.ts) is the shared option handling for the per-file rules (`required-exports`, `required-imports`, `import-policy`, `filename-pattern`): `createEntryScope` widens a glob without a `/` to any depth on top of `createFileScope`, and the `read*` helpers validate entries and reject unknown keys.
 - [`src/rules/specifier-match.ts`](src/rules/specifier-match.ts) matches import specifiers against patterns for `required-imports` and `import-policy`, reusing the path matcher `createPathMatcher` in `file-scope.ts`.
 - [`src/import-policy.ts`](src/import-policy.ts) builds the `importPolicyConfig` block from the validated policies in [`src/rules/import-policy-options.ts`](src/rules/import-policy-options.ts), which the rule reads with the same reader.
+- [`src/pure-modules.ts`](src/pure-modules.ts) builds the `pureModulesConfig` block: `files` becomes the block's `files` and `ignores`, and the rule options are read by [`src/rules/pure-module-options.ts`](src/rules/pure-module-options.ts), which also holds the ban lists. [`src/rules/pure-module.ts`](src/rules/pure-module.ts) reuses `moduleReferenceOf` from `import-policy.ts` so every import syntax is recognised the same way.
 - [`src/rules/file-reference.ts`](src/rules/file-reference.ts) is the option shape for a rule that reads another file: `{ path, relativeTo? }`, resolved against the linted file's directory (`file`, the default) or the workspace root (`root`, found the way the workspace architecture rules find it).
   - `readReferencedJson` parses the target as JSONC through [`src/rules/jsonc.ts`](src/rules/jsonc.ts) (comments, trailing commas and a leading byte order mark), returning `undefined` for a missing file and throwing, naming the path, for one that does not parse.
 - [`src/turbo-config.ts`](src/turbo-config.ts) builds the turbo blocks (`buildTurboConfig` internally, `turboConfig` publicly) from the one shared options object in [`src/rules/turbo-options.ts`](src/rules/turbo-options.ts).
   - The pure decisions live in [`src/rules/turbo-checks.ts`](src/rules/turbo-checks.ts), independent of ESLint, so they are tested against plain maps; the rules are thin visitors over them. [`src/rules/turbo-json.ts`](src/rules/turbo-json.ts) reads the parts of a `turbo.json` the rules need and finds the root one, [`src/rules/turbo-workspace.ts`](src/rules/turbo-workspace.ts) lists the packages and their scripts, and [`src/rules/turbo-commands.ts`](src/rules/turbo-commands.ts) reads a script command for a delegation, the tasks it invokes, or a boundaries run.
   - Rules that read sibling and ancestor files take a `WorkspaceFs` through their factory, and their tests use [`src/rules/memory-fs.ts`](src/rules/memory-fs.ts), an in-memory implementation, rather than fixture trees on disk.
 - [`src/create-config.ts`](src/create-config.ts) is config assembly's single source of truth.
-  - `exadevConfig(options, ...userConfigs)` concatenates, in order: `buildGitignoreConfig`, `recommendedTypeChecked`, `jsdocAndTsdoc`, `jsonCanonicalConfig`, `stylisticCommentsConfig`, `buildReactConfig`, `buildNextjsConfig`, `buildPackageJsonKeyOrderConfig` (each tri-state builder fed its matching option), `buildWorkspaceArchitectureConfig` (only when `workspaceArchitecture` is given; there is no auto-detected default), `buildTurboConfig` (only when `turbo` is given, likewise), `buildImportPolicyConfig` (only when `importPolicies` is given, likewise), and any trailing user configs.
+  - `exadevConfig(options, ...userConfigs)` concatenates, in order: `buildGitignoreConfig`, `recommendedTypeChecked`, `jsdocAndTsdoc`, `jsonCanonicalConfig`, `stylisticCommentsConfig`, `buildReactConfig`, `buildNextjsConfig`, `buildPackageJsonKeyOrderConfig` (each tri-state builder fed its matching option), `buildWorkspaceArchitectureConfig` (only when `workspaceArchitecture` is given; there is no auto-detected default), `buildTurboConfig` (only when `turbo` is given, likewise), `buildImportPolicyConfig` (only when `importPolicies` is given, likewise), `buildPureModulesConfig` (only when `pureModules` is given, likewise), and any trailing user configs.
   - `defaultConfig` is `exadevConfig()` evaluated once, eagerly, at module load.
 - [`src/stylistic-comments.ts`](src/stylistic-comments.ts) builds `stylisticCommentsConfig`: the hand-picked `@stylistic/eslint-plugin` rules plus this package's own `exadev/prefer-doc-comment`, in two blocks (one scoped to every JS/TS file, one scoped to JSX files only for the three JSX-specific rules). See [Stylistic comment, class-member and JSX rules](#stylistic-comment-class-member-and-jsx-rules).
 - [`src/index.ts`](src/index.ts) is the entry point, still a pure re-export barrel:
@@ -864,8 +898,10 @@ pnpm build
   export { defaultConfig as default, exadevConfig } from './create-config';
   export { importPolicyConfig } from './import-policy';
   export { publicPlugin as plugin } from './plugin';
+  export { pureModulesConfig } from './pure-modules';
   export { turboConfig } from './turbo-config';
   export { workspaceArchitectureConfig } from './workspace-architecture';
+  export type { PureModulesOptions } from './pure-modules';
   export type { ImportConfine, ImportDeny, ImportExceptEdge, ImportPolicy } from './rules/import-policy-options';
   export type { FilenamePatternEntry } from './rules/filename-pattern';
   export type { RequiredExportsEntry } from './rules/required-exports';
