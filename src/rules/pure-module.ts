@@ -41,10 +41,20 @@ function propertyName(node: TSESTree.MemberExpression): string | undefined {
 }
 
 /**
+ * The name of the global an expression reads: an unshadowed identifier (`Date`), or a property of an unshadowed `globalThis` (`globalThis.Date`). `undefined` for anything else, including a shadowed name.
+ */
+function globalNameOf(sourceCode: Readonly<TSESLint.SourceCode>, expression: TSESTree.Node): string | undefined {
+  if (expression.type === AST_NODE_TYPES.Identifier) return isGlobalBinding(sourceCode, expression, expression.name) ? expression.name : undefined;
+  if (expression.type !== AST_NODE_TYPES.MemberExpression || expression.object.type !== AST_NODE_TYPES.Identifier || expression.object.name !== 'globalThis') return undefined;
+
+  return isGlobalBinding(sourceCode, expression, 'globalThis') ? propertyName(expression) : undefined;
+}
+
+/**
  * `Date()` and `new Date()` with no argument read the clock; `new Date(value)` converts a value the caller supplied and is pure.
  */
-function readsClock(node: TSESTree.CallExpression | TSESTree.NewExpression): boolean {
-  return node.callee.type === AST_NODE_TYPES.Identifier && node.callee.name === 'Date' && node.arguments.length === 0;
+function readsClock(sourceCode: Readonly<TSESLint.SourceCode>, node: TSESTree.CallExpression | TSESTree.NewExpression): boolean {
+  return node.arguments.length === 0 && globalNameOf(sourceCode, node.callee) === 'Date';
 }
 
 /**
@@ -87,7 +97,7 @@ const pureModule = createRule<[PureModuleOptions], MessageIds>({
     };
 
     const checkClock = (node: TSESTree.CallExpression | TSESTree.NewExpression): void => {
-      if (readsClock(node) && isGlobalBinding(sourceCode, node, 'Date')) context.report({ node, messageId: 'clockRead' });
+      if (readsClock(sourceCode, node)) context.report({ node, messageId: 'clockRead' });
     };
 
     // The bindings a default or namespace import of Node's crypto module creates, whose non-deterministic members are reported where they are read.
@@ -128,15 +138,15 @@ const pureModule = createRule<[PureModuleOptions], MessageIds>({
         }
       },
       MemberExpression(node) {
-        if (node.object.type !== AST_NODE_TYPES.Identifier) return;
-        const object = node.object.name;
         const property = propertyName(node);
-        if (property !== undefined && nodeCryptoNondeterministic.has(property) && isCryptoBinding(node.object)) {
+        if (property === undefined) return;
+        if (node.object.type === AST_NODE_TYPES.Identifier && nodeCryptoNondeterministic.has(property) && isCryptoBinding(node.object)) {
           context.report({ node, messageId: 'nondeterministicMember', data: { name: `crypto.${property}` } });
 
           return;
         }
-        if (property === undefined || !isGlobalBinding(sourceCode, node, object)) return;
+        const object = globalNameOf(sourceCode, node.object);
+        if (object === undefined) return;
         if (object === 'globalThis' && bannedGlobals.has(property)) {
           context.report({ node, messageId: 'ambientGlobal', data: { name: property } });
 

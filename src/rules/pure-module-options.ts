@@ -16,7 +16,7 @@ export interface PureModuleOptions {
 }
 
 /**
- * Node builtin modules that perform I/O or read ambient process state. A specifier is banned when one of these selects it, so `fs` covers `node:fs` and `fs/promises`. Kept to modules a functional core has no legitimate reason to load: `path`, `url`, `util` and `crypto` are absent because they hold pure functions, and `buffer` is a data type. The non-deterministic parts of `crypto` are reported separately: as reads of the Web Crypto global (`BANNED_MEMBERS`) and, for the Node module, as named imports and member reads of `NODE_CRYPTO_NONDETERMINISTIC`.
+ * Node builtin modules that perform I/O or read ambient process state (`sqlite` opens database files). A specifier is banned when one of these selects it, so `fs` covers `node:fs` and `fs/promises`. Kept to modules a functional core has no legitimate reason to load: `path`, `url`, `util` and `crypto` are absent because they hold pure functions, and `buffer` is a data type. The non-deterministic parts of `crypto` are reported separately: as reads of the Web Crypto global (`BANNED_MEMBERS`) and, for the Node module, as named imports and member reads of `NODE_CRYPTO_NONDETERMINISTIC`.
  */
 export const BANNED_MODULES: readonly string[] = [
   'child_process',
@@ -34,6 +34,7 @@ export const BANNED_MODULES: readonly string[] = [
   'process',
   'readline',
   'repl',
+  'sqlite',
   'stream',
   'timers',
   'tls',
@@ -42,15 +43,19 @@ export const BANNED_MODULES: readonly string[] = [
 ];
 
 /**
- * Globals that perform I/O, schedule work or read ambient state. Reported at every read of an unshadowed binding, and as a property of `globalThis`.
+ * Globals that perform I/O (`console` writes to the process's output), schedule work or read ambient state. Reported at every read of an unshadowed binding, and as a property of `globalThis`.
  */
 export const BANNED_GLOBALS: readonly string[] = [
   'EventSource',
+  'SharedWorker',
   'WebSocket',
+  'Worker',
   'XMLHttpRequest',
+  'cancelAnimationFrame',
   'clearImmediate',
   'clearInterval',
   'clearTimeout',
+  'console',
   'document',
   'fetch',
   'indexedDB',
@@ -59,6 +64,7 @@ export const BANNED_GLOBALS: readonly string[] = [
   'navigator',
   'process',
   'queueMicrotask',
+  'requestAnimationFrame',
   'sessionStorage',
   'setImmediate',
   'setInterval',
