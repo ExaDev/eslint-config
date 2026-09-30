@@ -2,6 +2,7 @@ import { AST_NODE_TYPES, ESLintUtils, type TSESTree } from '@typescript-eslint/u
 import { isRecord } from '../is-record';
 import { assertOnlyKeys, createEntryScope, entryFilesSchema, readEntryFiles, readEntryRecords, readRequiredString } from './file-entry';
 import type { FileScope } from './file-scope';
+import { unwrapTypeOnly } from './type-only-wrapper';
 
 type MessageIds = 'emptyFallback' | 'swallowedError';
 
@@ -26,17 +27,6 @@ export function readAllowedScopes(options: unknown): readonly FileScope[] {
 
     return createEntryScope(readEntryFiles(entry['files'], `${OPTION_NAME} allow files`));
   });
-}
-
-/**
- * The expression a type-only wrapper (`as`, `satisfies`, `<T>value`) stands for at runtime.
- */
-function unwrapTypeOnly(node: TSESTree.Node): TSESTree.Node {
-  if (node.type === AST_NODE_TYPES.TSAsExpression || node.type === AST_NODE_TYPES.TSSatisfiesExpression || node.type === AST_NODE_TYPES.TSTypeAssertion) {
-    return unwrapTypeOnly(node.expression);
-  }
-
-  return node;
 }
 
 /**

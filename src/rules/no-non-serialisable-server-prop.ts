@@ -2,6 +2,7 @@ import { AST_NODE_TYPES, ESLintUtils, type TSESLint, type TSESTree } from '@type
 import type { JSONSchema4 } from '@typescript-eslint/utils/json-schema';
 import { isRecord } from '../is-record';
 import { assertOnlyKeys, readRequiredStrings } from './file-entry';
+import { isTypeOnlyWrapper } from './type-only-wrapper';
 import { hasUseClientDirective } from './use-client-directive';
 
 const OPTION_NAME = 'no-non-serialisable-server-prop';
@@ -65,7 +66,7 @@ export function isSerialisableData(node: TSESTree.Node): boolean {
   if (node.type === AST_NODE_TYPES.ObjectExpression) {
     return node.properties.every((property) => property.type === AST_NODE_TYPES.Property && (!property.computed || isSerialisableData(property.key)) && isSerialisableData(property.value));
   }
-  if (node.type === AST_NODE_TYPES.TSAsExpression || node.type === AST_NODE_TYPES.TSSatisfiesExpression || node.type === AST_NODE_TYPES.TSNonNullExpression) return isSerialisableData(node.expression);
+  if (isTypeOnlyWrapper(node) || node.type === AST_NODE_TYPES.TSNonNullExpression) return isSerialisableData(node.expression);
 
   return false;
 }
