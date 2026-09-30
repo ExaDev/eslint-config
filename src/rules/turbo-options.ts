@@ -103,7 +103,7 @@ export const turboOptionsSchema = {
     exemptTasks: stringList,
     requireEmptyOutputs: { type: 'boolean' },
     fixFlags: { type: 'array', items: nonEmptyString, minItems: 1 },
-    toolConfigs: { type: 'object', additionalProperties: { type: 'array', items: nonEmptyString, uniqueItems: true } },
+    toolConfigs: { type: 'object', propertyNames: nonEmptyString, additionalProperties: { type: 'array', items: nonEmptyString, uniqueItems: true } },
     taskGraph: {
       type: 'array',
       items: {
@@ -222,6 +222,7 @@ function readToolConfigs(value: unknown): Readonly<Record<string, readonly strin
 
   return Object.fromEntries(
     Object.entries(value).map(([tool, globs]) => {
+      if (tool === '') fail('toolConfigs', 'must not name a tool with an empty command word.');
       const optionName = `toolConfigs.${tool}`;
       if (Array.isArray(globs) && globs.length === 0) return [tool, []];
       const list = readFileGlobs(globs, optionName);

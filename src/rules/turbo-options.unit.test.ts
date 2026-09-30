@@ -1,3 +1,4 @@
+import { Linter } from 'eslint';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_DELEGATE, DEFAULT_FIX_FLAGS, DEFAULT_SCHEMA_HOSTS, DEFAULT_TASK_PREFIX, DEFAULT_TOOL_CONFIGS, loadTurboOptions, readTurboOptions, resolveTurboOptions, turboOptionsSchema } from './turbo-options';
 
@@ -116,6 +117,7 @@ describe('readTurboOptions', () => {
     ['allowIgnore reason', { boundaries: { allowIgnore: [{ files: ['a'], reason: '' }] } }, 'boundaries.allowIgnore reason', 'must be a non-empty string.'],
     ['toolConfigs type', { toolConfigs: [] }, 'toolConfigs', 'must be an object mapping a tool command word to its config file globs.'],
     ['toolConfigs null', { toolConfigs: null }, 'toolConfigs', 'must be an object mapping a tool command word to its config file globs.'],
+    ['toolConfigs empty tool', { toolConfigs: { '': ['x'] } }, 'toolConfigs', 'must not name a tool with an empty command word.'],
     ['toolConfigs globs type', { toolConfigs: { eslint: 'eslint.config.*' } }, 'toolConfigs.eslint', 'must be an array of glob strings.'],
     ['toolConfigs duplicate', { toolConfigs: { eslint: ['a', 'a'] } }, 'toolConfigs.eslint', 'must not contain duplicate globs.'],
     ['toolConfigs path', { toolConfigs: { eslint: ['config/eslint.*'] } }, 'toolConfigs.eslint', 'must hold file name globs without "/"'],
@@ -216,5 +218,16 @@ describe('loadTurboOptions', () => {
     expect(loadTurboOptions({ prefix: '__' }).prefix).toBe('__');
     expect(loadTurboOptions(undefined).prefix).toBe('_');
     expect(() => loadTurboOptions({ nope: 1 })).toThrow(`${PREFIX}"turbo options" must be an object`);
+  });
+});
+
+describe('turboOptionsSchema', () => {
+  // ESLint validates a rule's options against its meta.schema before the rule runs.
+  const verifyWith = (options: unknown) =>
+    new Linter().verify('', [{ plugins: { t: { rules: { r: { meta: { schema: [turboOptionsSchema] }, create: () => ({}) } } } }, rules: { 't/r': ['error', options] } }]);
+
+  it('accepts a named tool and rejects one with an empty command word', () => {
+    expect(verifyWith({ toolConfigs: { eslint: ['eslint.config.*'] } })).toEqual([]);
+    expect(() => verifyWith({ toolConfigs: { '': ['x'] } })).toThrow(/property name '' is invalid/u);
   });
 });
