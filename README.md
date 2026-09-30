@@ -768,13 +768,15 @@ Off unless enabled (`'exadev/timeout-aborts-request': 'error'` with the plugin r
 
 A fallback on a value that really can be absent turns the absence into a plausible answer, and the wrong result surfaces far from the cause. `@typescript-eslint/no-unnecessary-condition` reports only the fallbacks the types already prove unnecessary; `exadev/no-defensive-fallback` reports the ones they do not, by shape alone:
 
-- a `??` or `||` (or `??=` / `||=`) whose right operand is an empty array, empty object, empty string (`''`, `""` or an empty template), `0`, `false` or `null`, including one behind `as`, `satisfies` or `<T>`;
-- a `catch` clause whose body is empty (a comment-only body included), or holds one `return` that gives back nothing or a fixed value: a literal, `undefined`, or an array or object built only from those;
-- a `.catch(handler)` whose handler does the same, as an expression-bodied arrow or a function body.
+- a `??` or `||` (or `??=` / `||=`) whose right operand is an empty array, empty object, empty string (`''`, `""` or an empty template), `0`, `0n`, `false` or `null`, including one behind `as`, `satisfies` or `<T>`;
+- a `catch` clause whose body is empty (a comment-only body included), or holds one `continue` or one `return` that gives back nothing or a fixed value: a literal, `undefined`, `void 0`, or an array or object built only from those;
+- a `.catch(handler)` or `.then(onFulfilled, handler)` whose rejection handler does the same, as an expression-bodied arrow or a function body.
 
 A catch that does anything else with the error (logs it, rethrows it, returns something computed from it) is not reported. The fix is to model absence as `T | undefined` and handle it where it is meaningful, or to let the failure reach the caller.
 
-It is opt-in: it is in neither `plugin.configs.recommended` nor the default export, because a configuration reader legitimately treats a missing optional field as empty, and that boundary differs per repository. `allow` lists the files where the fallback is at such a boundary, each with a `reason` (required, so the exemption explains itself where it is configured, since `noInlineConfig` leaves no comment to do so). `files` follows the [file glob dialect](#file-level-rules).
+It is opt-in: it is in neither `plugin.configs.recommended` nor the default export, because a configuration reader legitimately treats a missing optional field as empty, and that boundary differs per repository. `allow` lists the files where the fallback is at such a boundary, each with a `reason` (required, so the exemption explains itself where it is configured, since `noInlineConfig` leaves no comment to do so). `files` follows the [file glob dialect](#file-level-rules), so a glob without a `/` names a file at any depth.
+
+Two shapes are reported although they are sometimes right, and the fix for both is an `allow` entry. A predicate that turns a failure into `false` (`try { JSON.parse(text); return true; } catch { return false; }`) is reported as a catch that returns a fixed value. `.catch` is matched on any receiver, so a schema fallback such as Zod's `z.string().catch('')` is reported as a promise handler when it is written as a function returning a fixed value.
 
 ```ts
 export default defineConfig(...exadevConfig(), {
