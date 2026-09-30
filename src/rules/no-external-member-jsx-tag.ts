@@ -2,7 +2,7 @@ import { AST_NODE_TYPES, ASTUtils, ESLintUtils, TSESLint, type TSESTree } from '
 import type { JSONSchema4 } from '@typescript-eslint/utils/json-schema';
 import { isRecord } from '../is-record';
 import { assertOnlyKeys, readRequiredStrings } from './file-entry';
-import { createSpecifierMatcher, type SpecifierMatcher } from './specifier-match';
+import { createSpecifierMatcher, isRelativeSpecifier, type SpecifierMatcher } from './specifier-match';
 import { hasUseClientDirective } from './use-client-directive';
 
 const OPTION_NAME = 'no-external-member-jsx-tag';
@@ -66,10 +66,6 @@ function importSource(declaration: TSESTree.ImportDeclaration | TSESTree.TSImpor
   return reference.expression.value;
 }
 
-function isRelative(specifier: string): boolean {
-  return specifier.startsWith('.');
-}
-
 type MessageIds = 'externalMemberTag';
 
 const createRule = ESLintUtils.RuleCreator((name) => `https://github.com/ExaDev/eslint-config/blob/main/src/rules/${name}.ts`);
@@ -106,7 +102,7 @@ const noExternalMemberJsxTag = createRule<[unknown], MessageIds>({
         const definition = ASTUtils.findVariable(sourceCode.getScope(node), root.name)?.defs[0];
         if (definition?.type !== TSESLint.Scope.DefinitionType.ImportBinding) return;
         const source = importSource(definition.parent);
-        if (source === undefined || isRelative(source) || allowSource?.(source, context.filename, context.cwd) === true) return;
+        if (source === undefined || isRelativeSpecifier(source) || allowSource?.(source, context.filename, context.cwd) === true) return;
         context.report({ node: node.name, messageId: 'externalMemberTag', data: { tag, root: root.name, source } });
       },
     };
