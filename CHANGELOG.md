@@ -1,3 +1,24 @@
+# [2.25.0](https://github.com/ExaDev/eslint-config/compare/v2.24.0...v2.25.0) (2026-09-30)
+
+
+### Bug Fixes
+
+* accept eslint-plugin-turbo from the first release with a flat recommended config ([9037761](https://github.com/ExaDev/eslint-config/commit/90377614b216f0f2d02127ce23453854d3671f1c))
+* accept the local and versioned turbo $schema forms turbo documents ([58b7f01](https://github.com/ExaDev/eslint-config/commit/58b7f01932c8bb8d85ca2f3c797a19548c5e2a6a))
+* develop against an eslint-plugin-turbo release that passes the minimum release age ([f940ced](https://github.com/ExaDev/eslint-config/commit/f940cedd474a2b16242573eb4b0b71b0c51d821b))
+* name the excluding inputs glob when a tool config is dropped from a task cache key ([6e013b9](https://github.com/ExaDev/eslint-config/commit/6e013b9c1675c23c32e2dd28850861a5434834fe))
+* reject an empty tool name in the toolConfigs option ([cae7df3](https://github.com/ExaDev/eslint-config/commit/cae7df3027d64d74e96bc012d1beb95a34ce0d0a))
+
+
+### Features
+
+* add eslint-plugin-turbo as an optional turboEnv preset ([23dbb33](https://github.com/ExaDev/eslint-config/commit/23dbb3320c0baf04861d55915abd9fbb369c4de4))
+* add turbo-task-config-inputs and the toolConfigs, taskGraph and hygiene options ([2e75c88](https://github.com/ExaDev/eslint-config/commit/2e75c887c1562c984e4945416a807771d27dd49c))
+* add turbo-task-graph and turbo-json-hygiene and wire the new turbo rules ([cbeb81f](https://github.com/ExaDev/eslint-config/commit/cbeb81f467ecde9500edb2b184216407aeac0cb4))
+* export the taskGraph, hygiene and aggregate task option types ([1ece091](https://github.com/ExaDev/eslint-config/commit/1ece0919f26635d05bf60f75711137f94684c872))
+* read inputs, globalDependencies, $schema and pass-through env from turbo.json ([03c1bc0](https://github.com/ExaDev/eslint-config/commit/03c1bc01f7a233ad2a9a3f1173239c063f4f83f1))
+* report a taskGraph requirement that matches no task entry ([c4dcc52](https://github.com/ExaDev/eslint-config/commit/c4dcc527c28c800d1bd6ec238885dde9cffe418d))
+
 # [2.24.0](https://github.com/ExaDev/eslint-config/compare/v2.23.3...v2.24.0) (2026-09-30)
 
 
