@@ -9,11 +9,12 @@ const createRule = ESLintUtils.RuleCreator((name) => `https://github.com/ExaDev/
  */
 export type GuardEvidence = 'lowerBound' | 'catches' | 'passes';
 
+const ARRAY_FROM: ReadonlySet<string> = new Set(['from']);
 const NEGATING_MODIFIERS: ReadonlySet<string> = new Set(['not']);
 const PASSTHROUGH_MODIFIERS: ReadonlySet<string> = new Set(['resolves', 'rejects']);
 const EXPECT_VARIANTS: ReadonlySet<string> = new Set(['soft', 'poll']);
 
-// Callbacks of these array methods run once per element, so an assertion inside one never runs when the array is empty, which is the failure a guard exists to notice.
+// Callbacks of these array methods run once per element, so an assertion inside one never runs when the array is empty, which is the failure a guard exists to notice. `Array.from(items, callback)` maps in the same way and is handled beside them.
 const ITERATION_METHODS: ReadonlySet<string> = new Set(['every', 'filter', 'find', 'findIndex', 'findLast', 'findLastIndex', 'flatMap', 'forEach', 'map', 'reduce', 'reduceRight', 'some']);
 
 // Matchers that state the outcome of evaluating something. They say nothing about a pattern when the subject is a plain value, so each needs a subject that is a call (`re.test(line)`, `findViolations(line)`); `toMatch` states the outcome of a pattern by its own name and needs no such subject.
@@ -151,20 +152,20 @@ export function patternOutcome({ subject, matcher, negated, matcherArguments }: 
   return outcome === 'catches' ? 'passes' : 'catches';
 }
 
+function isMemberNamed(node: TSESTree.Node, names: ReadonlySet<string>): boolean {
+  return node.type === AST_NODE_TYPES.MemberExpression && !node.computed && node.property.type === AST_NODE_TYPES.Identifier && names.has(node.property.name);
+}
+
 function isIterationCallback(parent: TSESTree.CallExpression, child: TSESTree.Node): boolean {
   const { callee } = parent;
+  const [, mapper] = parent.arguments;
+  const isArrayFrom = callee.type === AST_NODE_TYPES.MemberExpression && callee.object.type === AST_NODE_TYPES.Identifier && callee.object.name === 'Array' && isMemberNamed(callee, ARRAY_FROM);
 
-  return (
-    parent.arguments.some((argument) => argument === child) &&
-    callee.type === AST_NODE_TYPES.MemberExpression &&
-    !callee.computed &&
-    callee.property.type === AST_NODE_TYPES.Identifier &&
-    ITERATION_METHODS.has(callee.property.name)
-  );
+  return (isMemberNamed(callee, ITERATION_METHODS) && parent.arguments.some((argument) => argument === child)) || (isArrayFrom && mapper === child);
 }
 
 /**
- * Whether `child`, a direct child of `parent`, may not run on an execution that reaches `parent`: a loop body, the branch of a condition, the right side of a short-circuit, a `switch` case, a `catch`, or a callback the array methods run once per element.
+ * Whether `child`, a direct child of `parent`, may not run on an execution that reaches `parent`: a loop body, the branch of a condition, the right side of a short-circuit, a `switch` case, a `catch`, or a callback the array methods and `Array.from` run once per element.
  */
 function mayBeSkipped(parent: TSESTree.Node, child: TSESTree.Node): boolean {
   if (
