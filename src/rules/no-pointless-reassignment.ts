@@ -115,7 +115,7 @@ export function isExportedAlias(declarationParentType: string, programBody: read
   if (declarationParentType === 'ExportNamedDeclaration') return true;
 
   return programBody.some((statement) => {
-    if (statement.type === 'ExportNamedDeclaration' && statement.source == null) {
+    if (statement.type === 'ExportNamedDeclaration' && (statement.source === undefined || statement.source === null)) {
       return (statement.specifiers ?? []).some((specifier) => specifier.local.type === 'Identifier' && specifier.local.name !== undefined && resolve(specifier.local.name) === aliasVariable);
     }
     const target = statement.type === 'ExportDefaultDeclaration' ? statement.declaration : undefined;

@@ -2,12 +2,14 @@ import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
 import { exadevConfig, importPolicyConfig, plugin, pureModulesConfig, workspaceArchitectureConfig } from './index';
 
+type DefinedConfig = ReturnType<typeof defineConfig>;
+
 // Not imported by index.ts (see tsdown.config.ts's own entry, only src/index.ts is bundled), so this file contributes nothing to the published package. Its only job is to be included in `tsc -p tsconfig.json` (see tsconfig.json's own `include`), so `pnpm typecheck` fails the moment any of README.md's own defineConfig() examples that reference the named `plugin` export stops compiling, the same regression-test role consumer-compatibility.ts already plays for the default export (see its own comment). Reproduces ExaDev/eslint-config#39/#42's own real failure: `plugin` (a plain object) satisfied @typescript-eslint/utils' own FlatConfig.Plugin type but not @eslint/core's Plugin type that defineConfig()'s own ConfigObject requires for its `plugins` field, under `exactOptionalPropertyTypes`.
 //
 // Each example is a function, called from its own unit test, rather than a top-level constant: tsc typechecks a function body exactly the same as a top-level statement, so this loses no typecheck coverage, but it moves defineConfig()'s own call (and any error a broken example would throw, such as an unresolvable extends target) into the test's own execution, where a mutation-testing run can attribute a resulting throw to that specific test. A top-level throw during this module's own import would reach vitest before any test ran, surfacing as a bare import failure with no per-test mutant coverage recorded against it.
 
 // README's "lighter option" section, the manual single-rule pattern.
-export function buildViaManualRules() {
+export function buildViaManualRules(): DefinedConfig {
   return defineConfig({
     files: ['src/**/*.ts'],
     ignores: ['src/index.ts'],
@@ -19,7 +21,7 @@ export function buildViaManualRules() {
 }
 
 // README's "lighter option" section, the string-`extends` bundled-config pattern.
-export function buildViaStringExtends() {
+export function buildViaStringExtends(): DefinedConfig {
   return defineConfig([
     {
       files: ['**/*.ts'],
@@ -32,7 +34,7 @@ export function buildViaStringExtends() {
 /**
  * README's "lighter option" section, the tseslint.config() pattern for a consumer who hasn't migrated to defineConfig() yet: tseslint.config() has no string `extends`, so the config value (plugin.configs.recommended, read by name off the named `plugin` export) is passed directly instead.
  */
-export function buildViaTseslintPluginConfigsRecommended() {
+export function buildViaTseslintPluginConfigsRecommended(): ReturnType<typeof tseslint.config> {
   return tseslint.config(
     {
       files: ['**/*.ts'],
@@ -46,7 +48,7 @@ export function buildViaTseslintPluginConfigsRecommended() {
 /**
  * README's "Optional features" section, the explicit-tier-selection pattern: `plugin.configs.react`/`.nextjs` read by name off the named `plugin` export, mirroring `plugin.configs.recommended`/`.barrel` above but for the optional React and Next.js rule blocks.
  */
-export function buildViaPluginConfigsReactAndNextjs() {
+export function buildViaPluginConfigsReactAndNextjs(): DefinedConfig {
   return defineConfig(
     {
       files: ['**/*.tsx'],
@@ -66,7 +68,7 @@ export function buildViaPluginConfigsReactAndNextjs() {
 /**
  * README's "Example: a group-ranked repo" workspace architecture section, spread straight into defineConfig() alongside exadevConfig() the way a consumer combining both would.
  */
-export function buildViaWorkspaceArchitecture() {
+export function buildViaWorkspaceArchitecture(): DefinedConfig {
   return defineConfig(
     ...workspaceArchitectureConfig({
       groups: [
@@ -85,7 +87,7 @@ export function buildViaWorkspaceArchitecture() {
 /**
  * README's "Import policy" section: the three policy shapes (deny, confine, an exact exception edge) spread into defineConfig() alongside exadevConfig().
  */
-export function buildViaImportPolicy() {
+export function buildViaImportPolicy(): DefinedConfig {
   return defineConfig(
     ...exadevConfig({ react: false, nextjs: false }),
     ...importPolicyConfig([
@@ -110,7 +112,7 @@ export function buildViaImportPolicy() {
 /**
  * README's "Pure modules" section: the standalone form, spread into defineConfig() alongside exadevConfig().
  */
-export function buildViaPureModules() {
+export function buildViaPureModules(): DefinedConfig {
   return defineConfig(
     ...exadevConfig({ react: false, nextjs: false }),
     ...pureModulesConfig({ files: ['src/core/**', '!src/core/**/*.gen.ts'], allowImports: ['node:stream'], noControlFlow: true }),
@@ -120,14 +122,14 @@ export function buildViaPureModules() {
 /**
  * README's "Pure modules" section: the same option passed through exadevConfig().
  */
-export function buildViaPureModulesOption() {
+export function buildViaPureModulesOption(): DefinedConfig {
   return defineConfig(exadevConfig({ react: false, nextjs: false, pureModules: { files: ['src/core/**'] } }));
 }
 
 /**
  * README's "A complexity ceiling for logic-free modules" section: a files-scoped block after the shared config.
  */
-export function buildViaScopedComplexity() {
+export function buildViaScopedComplexity(): DefinedConfig {
   return defineConfig(...exadevConfig({ react: false, nextjs: false }), {
     files: ['src/views/**/*.ts', 'src/main.ts'],
     rules: { complexity: ['error', { max: 2 }] },
@@ -137,7 +139,7 @@ export function buildViaScopedComplexity() {
 /**
  * README's "Guard and conformance test hygiene" section: every option, through exadevConfig().
  */
-export function buildViaTestHygiene() {
+export function buildViaTestHygiene(): DefinedConfig {
   return defineConfig(
     ...exadevConfig({
       react: false,
@@ -151,4 +153,14 @@ export function buildViaTestHygiene() {
     }),
     { rules: { 'exadev/test-file-kind': ['error', { kinds: ['unit', 'integration', 'e2e', 'guard', 'conformance'] }] } },
   );
+}
+
+/**
+ * README's "Robustness rules" section: a `files`-scoped override after the shared config for a loop that is sequential by design, the only way to exempt a file since `noInlineConfig` forbids a disable comment.
+ */
+export function buildViaSequentialAwaitOverride(): DefinedConfig {
+  return defineConfig(...exadevConfig({ react: false, nextjs: false }), {
+    files: ['src/migrations/**/*.ts'],
+    rules: { 'no-await-in-loop': 'off' },
+  });
 }
