@@ -49,7 +49,8 @@ function unwrap(node: TSESTree.Node): TSESTree.Node {
  */
 function walk(sourceCode: Readonly<TSESLint.SourceCode>, node: TSESTree.Node, visit: (node: TSESTree.Node) => void, skipFunctions: boolean): void {
   visit(node);
-  const keys = sourceCode.visitorKeys[node.type] ?? [];
+  const keys = sourceCode.visitorKeys[node.type];
+  if (keys === undefined) throw new Error(`Unreachable: the parser gave no visitor keys for a "${node.type}" node it produced.`);
   for (const key of keys) {
     const child: unknown = Reflect.get(node, key);
     for (const candidate of Array.isArray(child) ? child : [child]) {
