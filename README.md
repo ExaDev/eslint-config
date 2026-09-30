@@ -172,6 +172,7 @@ export default tseslint.config(
 | [Pure modules](#pure-modules) | Off unless given (only a repository can say which modules are a functional core) | `exadevConfig({ pureModules })` / `pureModulesConfig(options)` |
 | [Guard and conformance test hygiene](#guard-and-conformance-test-hygiene) | Off unless given (only a repository can say which tests are guards); needs the optional peer `@vitest/eslint-plugin` | `exadevConfig({ testHygiene })` / `testHygieneConfig(options)` |
 | [Turbo environment variable checking](#environment-variables-read-in-source) | Auto-detected: on if `eslint-plugin-turbo` is installed | `exadevConfig({ turboEnv })` |
+| [Required Markdown headings](#required-markdown-headings) | Off unless given (only a repository can say which documents need which headings); needs the optional peer `@eslint/markdown` | `exadevConfig({ markdownHeadings })` / `markdownHeadingsConfig(options)` |
 
 Every tri-state option above (`true`/`false`/`undefined`) is passed through the named `exadevConfig(options, ...userConfigs)` factory export:
 
@@ -344,6 +345,7 @@ Bundled into `exadevConfig()`'s default output the same way React/Next.js auto-d
 | `injected-test-hygiene` | | **A conformance kit's injected test functions get the same hygiene as imported ones:** no `.only`, no `.skip`, and an assertion in every test body, for the `describe` and `it` a kit receives as parameters, which `@vitest/eslint-plugin` skips. Wired by `testHygieneConfig`. See [Guard and conformance test hygiene](#guard-and-conformance-test-hygiene). |
 | `non-vacuous-guard` | | **A guard test must show it can fail:** an unconditional lower bound on what it discovered, and its pattern checked against an input it must catch and one it must not. Wired by `testHygieneConfig`. See [Guard and conformance test hygiene](#guard-and-conformance-test-hygiene). |
 | `no-multiline-template-literal` | ✓ | **An untagged template literal whose value spans several lines should be an array of lines joined with `\n`.** Autofixes only when the rewrite provably yields the same string. See [Multi-line template literals](#multi-line-template-literals). |
+| `markdown-required-heading` | | **A Markdown document must contain each configured heading:** a `{ depth, text }` per required heading, matched on the text as it renders. A Markdown-language rule (`@eslint/markdown`). Wired by `markdownHeadingsConfig`. See [Required Markdown headings](#required-markdown-headings). |
 
 ## Barrel policy
 
@@ -628,6 +630,34 @@ A tagged template is never reported. The tag receives the literal's pieces, so j
 ```
 
 The rule needs no type information and is not in `recommended`.
+
+## Required Markdown headings
+
+A documentation convention such as "every skill file has a `## Usage` heading" is otherwise enforced by a remark pipeline or by nothing. `@eslint/markdown` lets an ESLint rule visit the same heading nodes, so the check runs in the same lint as everything else. `markdownHeadingsConfig` (or `exadevConfig({ markdownHeadings })`) wires `exadev/markdown-required-heading` onto the Markdown files you name:
+
+```ts
+import { defineConfig } from 'eslint/config';
+import { exadevConfig, markdownHeadingsConfig } from '@exadev/eslint-config';
+
+export default defineConfig(
+  ...exadevConfig(),
+  ...markdownHeadingsConfig({
+    files: ['skills/**/SKILL.md'],
+    headings: [
+      { depth: 2, text: 'Usage' },
+      { depth: 2, text: 'Gotchas' },
+    ],
+  }),
+);
+```
+
+The preset needs `@eslint/markdown`, an optional peer (`pnpm add -D @eslint/markdown`), and throws with the install command when it cannot be resolved. It registers the plugin under `markdown` and sets the language to `markdown/gfm`. `files` follows the [file glob dialect](#file-level-rules) with a leading `!` excluding. Whether ESLint lints `**/*.md` at all is a repository-wide decision the preset cannot make: a `.gitignore`-derived or other `ignores` entry that hides those files still hides them.
+
+Each entry is a `depth` from 1 to 6 (`#` to `######`) and the `text` of the heading. A document is missing an entry unless some heading of that depth has that text once the heading is flattened from its inline children and read the way a renderer shows it: emphasis, strong, links and code spans contribute their text, an image its alternative text, a hard break a space, and raw inline HTML nothing. The text is trimmed and each run of whitespace collapses to one space, on both sides, so a two-line Setext heading equals its one-line spelling. Matching is otherwise exact, case included. A heading anywhere in the document counts, inside a blockquote or a list as well. Each missing entry is reported once, at the top of the file, after the whole document has been read.
+
+The entries are a list rather than a single `{ depth, text }` because flat config replaces a rule's options when a later block sets the same rule for the same files, so a second required heading could not be added by enabling the rule again.
+
+Frontmatter is parsed as a node of its own (`yaml` by default, or `frontmatter: 'toml'` or `'json'`). Without that, a leading `---` block is read as a thematic break followed by a Setext heading made of the block's first line, which could satisfy or spoil a check; the preset always sets it. A repository that wires the rule by hand sets `languageOptions: { frontmatter: 'yaml' }` on its own block for the same reason. The frontmatter is never treated as a heading, so `title: Usage` does not satisfy a required `Usage`.
 
 ## Workspace architecture
 
@@ -1017,28 +1047,32 @@ pnpm build
 - [`src/import-policy.ts`](src/import-policy.ts) builds the `importPolicyConfig` block from the validated policies in [`src/rules/import-policy-options.ts`](src/rules/import-policy-options.ts), which the rule reads with the same reader.
 - [`src/pure-modules.ts`](src/pure-modules.ts) builds the `pureModulesConfig` block: `files` becomes the block's `files` and `ignores`, and the rule options are read by [`src/rules/pure-module-options.ts`](src/rules/pure-module-options.ts), which also holds the ban lists. [`src/rules/pure-module.ts`](src/rules/pure-module.ts) reuses `moduleReferenceOf` from `import-policy.ts` so every import syntax is recognised the same way.
 - [`src/test-hygiene.ts`](src/test-hygiene.ts) builds the `testHygieneConfig` blocks: it resolves the optional `@vitest/eslint-plugin` through `tryRequire`, checks the three rules it relies on exist, and emits the vitest rules and `exadev/injected-test-hygiene` per list of globs, plus `exadev/non-vacuous-guard` for guard files. Tests supply a plugin through `assembleTestHygieneConfig`, so the public options carry no resolver seam. [`src/config-globs.ts`](src/config-globs.ts) turns a validated glob list into a block's `files` and `ignores`, shared with the pure-module builder.
+- [`src/markdown-headings.ts`](src/markdown-headings.ts) builds the `markdownHeadingsConfig` block. It resolves the optional `@eslint/markdown` through [`src/markdown-plugin.ts`](src/markdown-plugin.ts), which unwraps the ES module namespace `require()` returns the way `json-plugin.ts` does for `@eslint/json`, and fixes the language and the frontmatter option the rule depends on. [`src/rules/markdown-required-heading.ts`](src/rules/markdown-required-heading.ts) is typed against `@eslint/markdown`'s own rule definition, like the JSON rules.
 - [`src/rules/file-reference.ts`](src/rules/file-reference.ts) is the option shape for a rule that reads another file: `{ path, relativeTo? }`, resolved against the linted file's directory (`file`, the default) or the workspace root (`root`, found the way the workspace architecture rules find it).
   - `readReferencedJson` parses the target as JSONC through [`src/rules/jsonc.ts`](src/rules/jsonc.ts) (comments, trailing commas and a leading byte order mark), returning `undefined` for a missing file and throwing, naming the path, for one that does not parse.
 - [`src/turbo-config.ts`](src/turbo-config.ts) builds the turbo blocks (`buildTurboConfig` internally, `turboConfig` publicly) from the one shared options object in [`src/rules/turbo-options.ts`](src/rules/turbo-options.ts).
   - The pure decisions live in [`src/rules/turbo-checks.ts`](src/rules/turbo-checks.ts), independent of ESLint, so they are tested against plain maps; the rules are thin visitors over them. [`src/rules/turbo-json.ts`](src/rules/turbo-json.ts) reads the parts of a `turbo.json` the rules need and finds the root one, [`src/rules/turbo-workspace.ts`](src/rules/turbo-workspace.ts) lists the packages and their scripts, and [`src/rules/turbo-commands.ts`](src/rules/turbo-commands.ts) reads a script command for a delegation, the tasks it invokes, or a boundaries run.
   - Rules that read sibling and ancestor files take a `WorkspaceFs` through their factory, and their tests use [`src/rules/memory-fs.ts`](src/rules/memory-fs.ts), an in-memory implementation, rather than fixture trees on disk.
 - [`src/create-config.ts`](src/create-config.ts) is config assembly's single source of truth.
-  - `exadevConfig(options, ...userConfigs)` concatenates, in order: `buildGitignoreConfig`, `recommendedTypeChecked`, `jsdocAndTsdoc`, `jsonCanonicalConfig`, `stylisticCommentsConfig`, `buildReactConfig`, `buildNextjsConfig`, `buildPackageJsonKeyOrderConfig` (each tri-state builder fed its matching option), `buildWorkspaceArchitectureConfig` (only when `workspaceArchitecture` is given; there is no auto-detected default), `buildTurboConfig` (only when `turbo` is given, likewise), `buildImportPolicyConfig` (only when `importPolicies` is given, likewise), `buildPureModulesConfig` (only when `pureModules` is given, likewise), `buildTestHygieneConfig` (only when `testHygiene` is given, likewise), and any trailing user configs.
+  - `exadevConfig(options, ...userConfigs)` concatenates, in order: `buildGitignoreConfig`, `recommendedTypeChecked`, `jsdocAndTsdoc`, `jsonCanonicalConfig`, `stylisticCommentsConfig`, `buildReactConfig`, `buildNextjsConfig`, `buildPackageJsonKeyOrderConfig` (each tri-state builder fed its matching option), `buildWorkspaceArchitectureConfig` (only when `workspaceArchitecture` is given; there is no auto-detected default), `buildTurboConfig` (only when `turbo` is given, likewise), `buildImportPolicyConfig` (only when `importPolicies` is given, likewise), `buildPureModulesConfig` (only when `pureModules` is given, likewise), `buildTestHygieneConfig` (only when `testHygiene` is given, likewise), `buildMarkdownHeadingsConfig` (only when `markdownHeadings` is given, likewise), and any trailing user configs.
   - `defaultConfig` is `exadevConfig()` evaluated once, eagerly, at module load.
 - [`src/stylistic-comments.ts`](src/stylistic-comments.ts) builds `stylisticCommentsConfig`: the hand-picked `@stylistic/eslint-plugin` rules plus this package's own `exadev/prefer-doc-comment`, in two blocks (one scoped to every JS/TS file, one scoped to JSX files only for the three JSX-specific rules). See [Stylistic comment, class-member and JSX rules](#stylistic-comment-class-member-and-jsx-rules).
 - [`src/index.ts`](src/index.ts) is the entry point, still a pure re-export barrel:
   ```ts
   export { defaultConfig as default, exadevConfig } from './create-config';
   export { importPolicyConfig } from './import-policy';
+  export { markdownHeadingsConfig } from './markdown-headings';
   export { publicPlugin as plugin } from './plugin';
   export { pureModulesConfig } from './pure-modules';
   export { testHygieneConfig } from './test-hygiene';
   export { turboConfig } from './turbo-config';
   export { workspaceArchitectureConfig } from './workspace-architecture';
+  export type { MarkdownFrontmatter, MarkdownHeadingsOptions } from './markdown-headings';
   export type { PureModulesOptions } from './pure-modules';
   export type { TestHygieneOptions } from './test-hygiene';
   export type { ImportConfine, ImportDeny, ImportExceptEdge, ImportPolicy } from './rules/import-policy-options';
   export type { FilenamePatternEntry } from './rules/filename-pattern';
+  export type { RequiredHeading } from './rules/markdown-required-heading';
   export type { RequiredExportsEntry } from './rules/required-exports';
   export type { RequiredImportsEntry } from './rules/required-imports';
   export type { GroupSpec, NamingOptions, RankRule, RankSkipOptions, SliceSpec, WorkspaceArchitectureOptions } from './rules/workspace-options';

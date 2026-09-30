@@ -4,6 +4,7 @@ import { buildGitignoreConfig } from './gitignore';
 import { buildImportPolicyConfig } from './import-policy';
 import jsdocAndTsdoc from './jsdoc';
 import jsonCanonicalConfig from './json-canonical';
+import { buildMarkdownHeadingsConfig, type MarkdownHeadingsOptions } from './markdown-headings';
 import { buildNextjsConfig } from './nextjs';
 import { buildPackageJsonKeyOrderConfig } from './package-json-key-order';
 import { buildPureModulesConfig, type PureModulesOptions } from './pure-modules';
@@ -38,6 +39,8 @@ export interface ExadevConfigOptions {
   readonly pureModules?: PureModulesOptions;
   // Off unless given, like pureModules: which tests are guards and conformance suites is a per-repository decision. Giving it (an empty object enables the defaults) throws when the optional peer @vitest/eslint-plugin is not installed. See testHygieneConfig in src/test-hygiene.ts.
   readonly testHygiene?: TestHygieneOptions;
+  // Off unless given, like testHygiene: which Markdown files must contain which headings is a per-repository decision. Giving it throws when the optional peer @eslint/markdown is not installed. See markdownHeadingsConfig in src/markdown-headings.ts.
+  readonly markdownHeadings?: MarkdownHeadingsOptions;
 }
 
 /**
@@ -74,6 +77,7 @@ export function exadevConfig(options: ExadevConfigOptions = {}, ...userConfigs: 
     ...(options.importPolicies !== undefined ? buildImportPolicyConfig(options.importPolicies) : []),
     ...(options.pureModules !== undefined ? buildPureModulesConfig(options.pureModules) : []),
     ...(options.testHygiene !== undefined ? buildTestHygieneConfig(options.testHygiene) : []),
+    ...(options.markdownHeadings !== undefined ? buildMarkdownHeadingsConfig(options.markdownHeadings) : []),
     ...userConfigs,
   ];
 
