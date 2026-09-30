@@ -3,6 +3,7 @@ import type { JSONSchema4 } from '@typescript-eslint/utils/json-schema';
 import { isRecord } from '../is-record';
 import { assertOnlyKeys } from './file-entry';
 import { createFileScope, fileGlobsSchema, readFileGlobs, type FileScope } from './file-scope';
+import { isTypeOnlyWrapper } from './type-only-wrapper';
 
 const OPTION_NAME = 'no-multiline-template-literal';
 
@@ -172,7 +173,7 @@ function renderLine(line: readonly Part[]): string {
 function needsLiteralType(node: TSESTree.TemplateLiteral): boolean {
   let child: TSESTree.Node = node;
   for (let parent: TSESTree.Node | undefined = node.parent; parent !== undefined; child = parent, parent = parent.parent) {
-    if (parent.type === AST_NODE_TYPES.TSAsExpression || parent.type === AST_NODE_TYPES.TSSatisfiesExpression || parent.type === AST_NODE_TYPES.TSTypeAssertion) return true;
+    if (isTypeOnlyWrapper(parent)) return true;
     if (parent.type === AST_NODE_TYPES.TSEnumMember) return parent.initializer === child;
     if (parent.type === AST_NODE_TYPES.VariableDeclarator) return parent.init === child && parent.id.typeAnnotation !== undefined;
     if (parent.type === AST_NODE_TYPES.PropertyDefinition) return parent.value === child && parent.typeAnnotation !== undefined;
