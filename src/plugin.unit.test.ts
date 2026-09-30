@@ -25,6 +25,13 @@ describe('plugin.rules', () => {
       expect(config?.rules).not.toHaveProperty(`exadev/${name}`);
     }
   });
+
+  it('registers no-defensive-fallback without enabling it in the recommended bundle, since what counts as a boundary differs per repository', () => {
+    expect(plugin.rules).toHaveProperty('no-defensive-fallback');
+    const config = plugin.configs?.['recommended'];
+    if (Array.isArray(config)) throw new Error('Unreachable: the recommended config is a single object.');
+    expect(config?.rules).not.toHaveProperty('exadev/no-defensive-fallback');
+  });
 });
 
 describe('plugin.configs.recommended', () => {
