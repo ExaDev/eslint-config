@@ -84,6 +84,11 @@ describe('readImportPolicies', () => {
       expect(() => readImportPolicies(policy({ file: 'src/a?.ts', specifier: 'fs', reason: 'r' }))).toThrow(/"file" to be exact/u);
     });
 
+    it('rejects an edge into a specifier that a confine entry allows in that very file', () => {
+      expect(() => readImportPolicies(policy({ file: 'src/adapter.ts', specifier: 'sdk', reason: 'r' }))).toThrow(/not forbidden there/u);
+      expect(() => readImportPolicies(policy({ file: 'src/adapter.ts', specifier: 'fs', reason: 'r' }))).not.toThrow();
+    });
+
     it('stores the file in its normalised spelling, which the rule compares as a string', () => {
       const [read] = readImportPolicies(policy({ file: './src/../src/a.ts', specifier: 'fs', reason: 'r' }));
       expect(read?.exceptEdges).toEqual([{ file: 'src/a.ts', specifier: 'fs', reason: 'r' }]);
@@ -92,7 +97,7 @@ describe('readImportPolicies', () => {
     it('rejects an edge that could never apply', () => {
       expect(() => readImportPolicies(policy({ file: 'lib/a.ts', specifier: 'fs', reason: 'r' }))).toThrow(/names a file the policy's files do not select/u);
       expect(() => readImportPolicies(policy({ file: 'src/skip/a.ts', specifier: 'fs', reason: 'r' }))).toThrow(/names a file the policy's files do not select/u);
-      expect(() => readImportPolicies(policy({ file: 'src/a.ts', specifier: 'path', reason: 'r' }))).toThrow(/not selected by any deny or confine entry/u);
+      expect(() => readImportPolicies(policy({ file: 'src/a.ts', specifier: 'path', reason: 'r' }))).toThrow(/not forbidden there by any deny entry/u);
     });
   });
 });
