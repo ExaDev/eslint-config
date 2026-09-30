@@ -104,6 +104,9 @@ ruleTester.run('no-defensive-fallback', rule, {
     'function f() { try { return run(); } catch (error) { return `${error}`; } }',
     'function f() { try { return run(); } catch (error) { return -value; } }',
     'function f() { try { return run(); } catch (error) { return typeof error; } }',
+    'function f() { try { return run(); } catch { return typeof 1; } }',
+    // An accessor's value is a function, never a fixed value.
+    'function f() { try { return run(); } catch { return { get n() { return load(); } }; } }',
     // A try with only a finally has no catch clause.
     'try { run(); } finally { cleanup(); }',
     // A rejection handler that does real work, or that is not a function.
@@ -159,6 +162,10 @@ ruleTester.run('no-defensive-fallback', rule, {
     { code: 'function f() { try { return run(); } catch { return false; } }', errors: [swallowed('catch clause', 'returns a fixed value')] },
     { code: 'function f() { try { return run(); } catch { return -1; } }', errors: [swallowed('catch clause', 'returns a fixed value')] },
     { code: 'function f() { try { return run(); } catch { return !0; } }', errors: [swallowed('catch clause', 'returns a fixed value')] },
+    { code: 'function f() { try { return run(); } catch { return +1; } }', errors: [swallowed('catch clause', 'returns a fixed value')] },
+    // Unreachable statements after the return do not change what the handler does.
+    { code: 'function f() { try { return run(); } catch { return null; cleanup(); } }', errors: [swallowed('catch clause', 'returns a fixed value')] },
+    { code: 'function f() { try { return run(); } catch { return [,]; } }', errors: [swallowed('catch clause', 'returns a fixed value')] },
     { code: 'function f() { try { return run(); } catch { return "none"; } }', errors: [swallowed('catch clause', 'returns a fixed value')] },
     { code: 'function f() { try { return run(); } catch { return `none`; } }', errors: [swallowed('catch clause', 'returns a fixed value')] },
     { code: 'function f() { try { return run(); } catch { return []; } }', errors: [swallowed('catch clause', 'returns a fixed value')] },
