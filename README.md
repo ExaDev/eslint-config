@@ -168,6 +168,7 @@ export default tseslint.config(
 | [package.json key ordering](#optional-packagejson-key-ordering) | On, unless the project already has a syncpack config | `exadevConfig({ packageJsonKeyOrder })` |
 | [Workspace architecture rules](#workspace-architecture) | Off unless given (no sensible default for `groups`) | `exadevConfig({ workspaceArchitecture })` / `workspaceArchitectureConfig(options)` |
 | [Turbo rules](#turbo) | Off unless given (only a repository can say it uses turbo) | `exadevConfig({ turbo })` / `turboConfig(options)` |
+| [Import policy](#import-policy) | Off unless given (only a repository can say which imports it forbids) | `exadevConfig({ importPolicies })` / `importPolicyConfig(policies)` |
 | [Turbo environment variable checking](#environment-variables-read-in-source) | Auto-detected: on if `eslint-plugin-turbo` is installed | `exadevConfig({ turboEnv })` |
 
 Every tri-state option above (`true`/`false`/`undefined`) is passed through the named `exadevConfig(options, ...userConfigs)` factory export:
@@ -855,17 +856,33 @@ pnpm build
   - The pure decisions live in [`src/rules/turbo-checks.ts`](src/rules/turbo-checks.ts), independent of ESLint, so they are tested against plain maps; the rules are thin visitors over them. [`src/rules/turbo-json.ts`](src/rules/turbo-json.ts) reads the parts of a `turbo.json` the rules need and finds the root one, [`src/rules/turbo-workspace.ts`](src/rules/turbo-workspace.ts) lists the packages and their scripts, and [`src/rules/turbo-commands.ts`](src/rules/turbo-commands.ts) reads a script command for a delegation, the tasks it invokes, or a boundaries run.
   - Rules that read sibling and ancestor files take a `WorkspaceFs` through their factory, and their tests use [`src/rules/memory-fs.ts`](src/rules/memory-fs.ts), an in-memory implementation, rather than fixture trees on disk.
 - [`src/create-config.ts`](src/create-config.ts) is config assembly's single source of truth.
-  - `exadevConfig(options, ...userConfigs)` concatenates, in order: `buildGitignoreConfig`, `recommendedTypeChecked`, `jsdocAndTsdoc`, `jsonCanonicalConfig`, `stylisticCommentsConfig`, `buildReactConfig`, `buildNextjsConfig`, `buildPackageJsonKeyOrderConfig` (each tri-state builder fed its matching option), `buildWorkspaceArchitectureConfig` (only when `workspaceArchitecture` is given; there is no auto-detected default), `buildTurboConfig` (only when `turbo` is given, likewise), and any trailing user configs.
+  - `exadevConfig(options, ...userConfigs)` concatenates, in order: `buildGitignoreConfig`, `recommendedTypeChecked`, `jsdocAndTsdoc`, `jsonCanonicalConfig`, `stylisticCommentsConfig`, `buildReactConfig`, `buildNextjsConfig`, `buildPackageJsonKeyOrderConfig` (each tri-state builder fed its matching option), `buildWorkspaceArchitectureConfig` (only when `workspaceArchitecture` is given; there is no auto-detected default), `buildTurboConfig` (only when `turbo` is given, likewise), `buildImportPolicyConfig` (only when `importPolicies` is given, likewise), and any trailing user configs.
   - `defaultConfig` is `exadevConfig()` evaluated once, eagerly, at module load.
 - [`src/stylistic-comments.ts`](src/stylistic-comments.ts) builds `stylisticCommentsConfig`: the hand-picked `@stylistic/eslint-plugin` rules plus this package's own `exadev/prefer-doc-comment`, in two blocks (one scoped to every JS/TS file, one scoped to JSX files only for the three JSX-specific rules). See [Stylistic comment, class-member and JSX rules](#stylistic-comment-class-member-and-jsx-rules).
 - [`src/index.ts`](src/index.ts) is the entry point, still a pure re-export barrel:
   ```ts
   export { defaultConfig as default, exadevConfig } from './create-config';
+  export { importPolicyConfig } from './import-policy';
   export { publicPlugin as plugin } from './plugin';
   export { turboConfig } from './turbo-config';
   export { workspaceArchitectureConfig } from './workspace-architecture';
+  export type { ImportConfine, ImportDeny, ImportExceptEdge, ImportPolicy } from './rules/import-policy-options';
+  export type { FilenamePatternEntry } from './rules/filename-pattern';
+  export type { RequiredExportsEntry } from './rules/required-exports';
+  export type { RequiredImportsEntry } from './rules/required-imports';
   export type { GroupSpec, NamingOptions, RankRule, RankSkipOptions, SliceSpec, WorkspaceArchitectureOptions } from './rules/workspace-options';
-  export type { AllowedEdge, ExemptTargetGroup, PackageSelector, PackageSelectorFields, RequiredFiles, RequiredScripts, ScriptContent, ScriptRequirement } from './rules/workspace-constraint-options';
+  export type {
+    AllowedEdge,
+    ExemptTargetGroup,
+    PackageSelector,
+    PackageSelectorFields,
+    RequiredFiles,
+    RequiredScripts,
+    ScriptContent,
+    ScriptRequirement,
+  } from './rules/workspace-constraint-options';
+  export type { AggregateTaskOptions, AllowedBoundariesIgnore, BoundaryGroup, TaskGraphRequirement, TurboBoundariesOptions, TurboHygieneOptions, TurboOptions } from './rules/turbo-options';
+  export type { TurboDelegate } from './rules/turbo-commands';
   ```
   - The named export is `publicPlugin`, not `plugin`'s own internal default export: `plugin` (src/plugin.ts) is typed against `@typescript-eslint/utils`' `TSESLint.FlatConfig.Plugin` for full rule-option checking while this package assembles it, then cast once, at the very end of that same file, to `PublicPlugin` (see `src/to-public-plugin.ts`) before re-export, mirroring how `defaultConfig` is built against the internal `ConfigArrayValue` and cast to `PublicConfigArray` at `exadevConfig`'s own boundary.
   - Required by `no-side-effects-in-index`/`no-non-barrel-reexport`, both of which assume this file contains nothing but `export ... from ...`.
