@@ -1,3 +1,24 @@
+# [2.26.0](https://github.com/ExaDev/eslint-config/compare/v2.25.0...v2.26.0) (2026-09-30)
+
+
+### Bug Fixes
+
+* count constructions, non-null callees and tagged templates in required-imports call ([1880afe](https://github.com/ExaDev/eslint-config/commit/1880afef5be4bc3edf25c0f7b908eaccac20ae4f))
+* name the pattern field when a filename-pattern regex is invalid ([bead7a3](https://github.com/ExaDev/eslint-config/commit/bead7a384295b70a3730cc8fc20eb1f1a98db421))
+* normalise the file of an import-policy exception edge ([5c3970c](https://github.com/ExaDev/eslint-config/commit/5c3970cadd6e1a13a11ec7fb3f75d8a294c5b807))
+* reject an import-policy exception edge in a file a confine entry allows ([53152e3](https://github.com/ExaDev/eslint-config/commit/53152e3a31010e974e6cfe3c4e4af66bd5481c24))
+* reject duplicate and misspelt filename-pattern sibling templates ([25abb79](https://github.com/ExaDev/eslint-config/commit/25abb79c3f2d788f00b5b5e4e5d68233696200c5))
+
+
+### Features
+
+* add filename-pattern rule ([0ca0f2a](https://github.com/ExaDev/eslint-config/commit/0ca0f2a4d736b0084e93ea927f2a38a75bebc84a))
+* add import-policy rule and options ([dbca4dc](https://github.com/ExaDev/eslint-config/commit/dbca4dc7abb0d114fec84ef88551db4f31d731d1))
+* add required-exports rule ([95889a3](https://github.com/ExaDev/eslint-config/commit/95889a388c725cbdc149f0164c8a1fc926fe4e3d))
+* add required-imports rule ([c498316](https://github.com/ExaDev/eslint-config/commit/c49831646277a863981916b81edf1566790b3463))
+* add shared entry-option helpers and a specifier pattern matcher ([eedfb1f](https://github.com/ExaDev/eslint-config/commit/eedfb1f9f51aeccd4f6dc2136c5f2ed27a856769))
+* register the file-level rules and wire importPolicyConfig ([de7a614](https://github.com/ExaDev/eslint-config/commit/de7a614feccf4a4c3bfd88c08f6d93711eb118e8))
+
 # [2.25.0](https://github.com/ExaDev/eslint-config/compare/v2.24.0...v2.25.0) (2026-09-30)
 
 
