@@ -108,6 +108,11 @@ ruleTester.run('pure-module', rule, {
     "import crypto from 'node:crypto'; export const f = (crypto: { randomUUID: () => string }) => crypto.randomUUID();",
     // A namespace import from a module that is not Node's crypto.
     "import * as crypto from './crypto'; export const id = crypto.randomUUID();",
+    // A shadowed globalThis is not the global object.
+    'export const f = (globalThis: { Date: { now: () => number } }) => globalThis.Date.now();',
+    'export const g = (globalThis: { Date: new () => Date }) => new globalThis.Date();',
+    'export const h = (globalThis: { Date: new (value: number) => Date }) => new globalThis.Date(0);',
+    'export const stamp = new globalThis.Date(0);',
     // Every I/O module is allowed where it is listed.
     { code: "import { readFile } from 'node:fs/promises';", options: [{ allowImports: ['fs'] }] },
     { code: "import { readFile } from 'fs/promises';", options: [{ allowImports: ['node:fs'] }] },
@@ -159,10 +164,21 @@ ruleTester.run('pure-module', rule, {
     { code: "import * as nodeCrypto from 'crypto'; export const n = nodeCrypto.randomInt(10);", errors: [nondeterministicMember('crypto.randomInt')] },
     { code: "import crypto from 'node:crypto'; export const n = crypto['randomBytes'](8);", errors: [nondeterministicMember('crypto.randomBytes')] },
     ...NODE_CRYPTO_NONDETERMINISTIC.map((name) => ({ code: `import { ${name} } from 'node:crypto';`, errors: [nondeterministicMember(`crypto.${name}`)] })),
+    { code: 'export const t = globalThis.Date.now();', errors: [nondeterministicMember('Date.now')] },
+    { code: 'export const r = globalThis.Math.random();', errors: [nondeterministicMember('Math.random')] },
+    { code: "export const r = globalThis['Math']['random']();", errors: [nondeterministicMember('Math.random')] },
+    { code: 'export const id = globalThis.crypto.randomUUID();', errors: [nondeterministicMember('crypto.randomUUID')] },
     { code: 'export const t = performance.now();', errors: [nondeterministicMember('performance.now')] },
 
     { code: 'export const t = new Date();', errors: [{ messageId: 'clockRead' }] },
     { code: 'export const t = Date();', errors: [{ messageId: 'clockRead' }] },
+    { code: 'export const t = new globalThis.Date();', errors: [{ messageId: 'clockRead' }] },
+    { code: 'export const t = globalThis.Date();', errors: [{ messageId: 'clockRead' }] },
+    // Output and worker globals that the ban lists name individually.
+    { code: "export const log = (m: string) => console.log(m);", errors: [ambientGlobal('console')] },
+    { code: "export const worker = new Worker('w.js');", errors: [ambientGlobal('Worker')] },
+    { code: 'export const frame = (f: () => void) => requestAnimationFrame(f);', errors: [ambientGlobal('requestAnimationFrame')] },
+    { code: "import { DatabaseSync } from 'node:sqlite';", errors: [importedModule('node:sqlite')] },
 
     { code: 'export async function load(): Promise<number> { return 1; }', errors: [{ messageId: 'asyncFunction' }] },
     { code: 'export const load = async (): Promise<number> => 1;', errors: [{ messageId: 'asyncFunction' }] },
