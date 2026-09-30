@@ -91,7 +91,6 @@ export default defineConfig(
   - *Why:* a deliberately loose backstop against a genuinely excessive number of REQUIRED parameters, distinct from `exadev/prefer-options-object-param` above, which already offers a real fix for the more common shape (a run of 2+ trailing OPTIONAL parameters) this rule structurally cannot see until the total count crosses its own threshold.
 - **[`no-warning-comments`](https://eslint.org/docs/latest/rules/no-warning-comments)** — bans any comment containing `Stryker disable`.
   - *Why:* that's Stryker's own mutation-testing suppression directive, invisible to `noInlineConfig` above since it isn't an eslint-disable comment.
-
 - **[`explicit-module-boundary-types`](https://typescript-eslint.io/rules/explicit-module-boundary-types/)**: an exported function or class member writes out its parameter and return types.
   - *Why:* an inferred return type changes silently when the body does; `isolatedDeclarations` is the compiler-side alternative and is a tsconfig matter.
 - **[`switch-exhaustiveness-check`](https://typescript-eslint.io/rules/switch-exhaustiveness-check/)** set to `{ considerDefaultExhaustiveForUnions: false, requireDefaultForNonUnion: true }`.
