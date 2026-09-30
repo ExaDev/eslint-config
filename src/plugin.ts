@@ -22,6 +22,7 @@ import noMutableUnionArrayParam from './rules/no-mutable-union-array-param';
 import noNonBarrelIndex from './rules/no-non-barrel-index';
 import noNonBarrelReexport from './rules/no-non-barrel-reexport';
 import noObjectAssign from './rules/no-object-assign';
+import nonVacuousGuard from './rules/non-vacuous-guard';
 import noPointlessReassignment from './rules/no-pointless-reassignment';
 import noSetInstanceofMutation from './rules/no-set-instanceof-mutation';
 import noSideEffectsInIndex from './rules/no-side-effects-in-index';
@@ -87,6 +88,7 @@ const plugin: TSESLint.FlatConfig.Plugin = {
     'no-set-instanceof-mutation': noSetInstanceofMutation,
     'no-side-effects-in-index': noSideEffectsInIndex,
     'no-uphill-dependency': noUphillDependency,
+    'non-vacuous-guard': nonVacuousGuard,
     'package-has-files': packageHasFiles,
     'package-json-key-order': packageJsonKeyOrder,
     'package-name-mirrors-path': packageNameMirrorsPath,
