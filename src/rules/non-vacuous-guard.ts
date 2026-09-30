@@ -17,6 +17,9 @@ const EXPECT_VARIANTS: ReadonlySet<string> = new Set(['soft', 'poll']);
 // Callbacks of these array methods run once per element, so an assertion inside one never runs when the array is empty, which is the failure a guard exists to notice. `Array.from(items, callback)` maps in the same way and is handled beside them.
 const ITERATION_METHODS: ReadonlySet<string> = new Set(['every', 'filter', 'find', 'findIndex', 'findLast', 'findLastIndex', 'flatMap', 'forEach', 'map', 'reduce', 'reduceRight', 'some']);
 
+// `it.each(table)(name, callback)` and its `describe`, `for` and tagged-template forms run the callback once per table row.
+const TABLE_METHODS: ReadonlySet<string> = new Set(['each', 'for']);
+
 // Matchers that state the outcome of evaluating something. They say nothing about a pattern when the subject is a plain value, so each needs a subject that is a call (`re.test(line)`, `findViolations(line)`); `toMatch` states the outcome of a pattern by its own name and needs no such subject.
 const CATCH_MATCHERS: ReadonlySet<string> = new Set(['toBeDefined', 'toBeTruthy', 'toContain', 'toContainEqual']);
 const PASS_MATCHERS: ReadonlySet<string> = new Set(['toBeFalsy', 'toBeNull', 'toBeUndefined']);
@@ -165,7 +168,25 @@ function isIterationCallback(parent: TSESTree.CallExpression, child: TSESTree.No
 }
 
 /**
- * Whether `child`, a direct child of `parent`, may not run on an execution that reaches `parent`: a loop body, the branch of a condition, the right side of a short-circuit, a `switch` case, a `catch`, or a callback the array methods and `Array.from` run once per element.
+ * Whether a table literal certainly has a row: an array literal with an element and no spread, so a table built from what was discovered (`it.each(files)`, `it.each(files.map(...))`) is not one.
+ */
+function isNonEmptyTable(table: TSESTree.CallExpressionArgument | undefined): boolean {
+  return table?.type === AST_NODE_TYPES.ArrayExpression && table.elements.length > 0 && !table.elements.some((element) => element?.type === AST_NODE_TYPES.SpreadElement);
+}
+
+/**
+ * Whether `child` is the callback of `it.each(table)(name, callback)`, `describe.for(table)(...)` or the tagged-template form, and the table may have no rows: then the callback, and every test it declares, never runs.
+ */
+function isTableCallback(parent: TSESTree.CallExpression, child: TSESTree.Node): boolean {
+  const { callee } = parent;
+  if (!parent.arguments.some((argument) => argument === child)) return false;
+  if (callee.type === AST_NODE_TYPES.CallExpression) return isMemberNamed(callee.callee, TABLE_METHODS) && !isNonEmptyTable(callee.arguments[0]);
+
+  return callee.type === AST_NODE_TYPES.TaggedTemplateExpression && isMemberNamed(callee.tag, TABLE_METHODS) && callee.quasi.expressions.length === 0;
+}
+
+/**
+ * Whether `child`, a direct child of `parent`, may not run on an execution that reaches `parent`: a loop body, the branch of a condition, the right side of a short-circuit, a `switch` case, a `catch`, a callback the array methods and `Array.from` run once per element, or the callback of a `.each` table that may have no rows.
  */
 function mayBeSkipped(parent: TSESTree.Node, child: TSESTree.Node): boolean {
   if (
@@ -181,7 +202,7 @@ function mayBeSkipped(parent: TSESTree.Node, child: TSESTree.Node): boolean {
   if (parent.type === AST_NODE_TYPES.LogicalExpression) return child === parent.right;
   if (parent.type === AST_NODE_TYPES.SwitchCase || parent.type === AST_NODE_TYPES.CatchClause) return true;
 
-  return parent.type === AST_NODE_TYPES.CallExpression && isIterationCallback(parent, child);
+  return parent.type === AST_NODE_TYPES.CallExpression && (isIterationCallback(parent, child) || isTableCallback(parent, child));
 }
 
 /**

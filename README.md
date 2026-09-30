@@ -543,7 +543,7 @@ The vitest rules cannot catch the commonest way a guard goes quiet: a scan that 
 - a check that its pattern flags an input it must: `toMatch`, or on a call subject `toBe(true)`, `toBeTruthy()`, `not.toBeNull()`, `not.toEqual([])` and the like, as in `expect(pattern.test(violation)).toBe(true)`;
 - a check that it leaves alone an input it must not: `not.toMatch`, or on a call subject `toBe(false)`, `toBeFalsy()`, `toBeNull()`, `toEqual([])` and the like.
 
-Only assertions that run unconditionally count. One inside a loop, a `forEach`/`map`/`filter` callback, the mapper of `Array.from`, a branch, a `switch` case or a `catch` never runs when what it iterates is empty, so `for (const file of files) expect(read(file)).not.toMatch(pattern)` is the scan itself and satisfies none of the three. A helper function that asserts counts, since whether it is called is not visible.
+Only assertions that run unconditionally count. One inside a loop, a `forEach`/`map`/`filter` callback, the mapper of `Array.from`, the callback of an `it.each`, `describe.each` or `.for` table that may be empty (a table literal with a row always runs), a branch, a `switch` case or a `catch` never runs when what it iterates is empty, so `for (const file of files) expect(read(file)).not.toMatch(pattern)` is the scan itself and satisfies none of the three. A helper function that asserts counts, since whether it is called is not visible.
 
 The rule is syntactic. It shows the guard file states each of the three, not that the pattern checked is the one the scan uses or that the discovered count is the scan's; a table-driven check whose expected values are variables (`toBe(expected)`) is not recognised, so write the catch and the pass as separate assertions.
 
