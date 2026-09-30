@@ -19,6 +19,7 @@ import noEnumReverseLookupWidening from './rules/no-enum-reverse-lookup-widening
 import noFixInCachedTaskScript from './rules/no-fix-in-cached-task-script';
 import noIndexFiles from './rules/no-index-files';
 import noMapInstanceofMutation from './rules/no-map-instanceof-mutation';
+import noMultilineTemplateLiteral from './rules/no-multiline-template-literal';
 import noMutableUnionArrayParam from './rules/no-mutable-union-array-param';
 import noNonBarrelIndex from './rules/no-non-barrel-index';
 import noNonBarrelReexport from './rules/no-non-barrel-reexport';
@@ -82,6 +83,7 @@ const plugin: TSESLint.FlatConfig.Plugin = {
     'no-fix-in-cached-task-script': noFixInCachedTaskScript,
     'no-index-files': noIndexFiles,
     'no-map-instanceof-mutation': noMapInstanceofMutation,
+    'no-multiline-template-literal': noMultilineTemplateLiteral,
     'no-mutable-union-array-param': noMutableUnionArrayParam,
     'no-non-barrel-index': noNonBarrelIndex,
     'no-non-barrel-reexport': noNonBarrelReexport,

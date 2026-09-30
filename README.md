@@ -343,6 +343,7 @@ Bundled into `exadevConfig()`'s default output the same way React/Next.js auto-d
 | `scoped-first-parameter` | | **Every method of the configured repository-like interfaces takes a scope parameter first.** Checks the signature only, not that the scope is used or that tenants are isolated. Requires type information. Opt-in: needs its `interfaces` and `parameter` options. See [Scoped first parameter](#scoped-first-parameter). |
 | `injected-test-hygiene` | | **A conformance kit's injected test functions get the same hygiene as imported ones:** no `.only`, no `.skip`, and an assertion in every test body, for the `describe` and `it` a kit receives as parameters, which `@vitest/eslint-plugin` skips. Wired by `testHygieneConfig`. See [Guard and conformance test hygiene](#guard-and-conformance-test-hygiene). |
 | `non-vacuous-guard` | | **A guard test must show it can fail:** an unconditional lower bound on what it discovered, and its pattern checked against an input it must catch and one it must not. Wired by `testHygieneConfig`. See [Guard and conformance test hygiene](#guard-and-conformance-test-hygiene). |
+| `no-multiline-template-literal` | ✓ | **An untagged template literal whose value spans several lines should be an array of lines joined with `\n`.** Autofixes only when the rewrite provably yields the same string. See [Multi-line template literals](#multi-line-template-literals). |
 
 ## Barrel policy
 
@@ -600,6 +601,33 @@ An entry applies to files matching `files` (and, with `overLines`, to those with
 - `overLines` counts physical lines, ignoring the newline that ends the file. It is a naming requirement, so it does not replace ESLint's `max-lines`, which still reports the size; this rule requires that the parts an over-long file is split into follow the scheme. It does not check that the parts exist as a sequence.
 
 Why not a dependency: [`eslint-plugin-check-file`](https://github.com/dukeluo/eslint-plugin-check-file) (`filename-naming-convention`, `folder-match-with-fex`, `filename-blocklist`, `folder-naming-convention`, `no-index`) and [`unicorn/filename-case`](https://github.com/sindresorhus/eslint-plugin-unicorn/blob/main/docs/rules/filename-case.md) cover case styles and per-glob name patterns, and check-file also folder names and blocked names. Neither can express that another file must exist beside the linted one, or that a name depends on the file's line count, which are the two cases this rule exists for. The name-pattern case is the same as what check-file offers, so a project that already uses that plugin for case styles and folder layout can keep it alongside this rule.
+
+## Multi-line template literals
+
+`exadev/no-multiline-template-literal` reports an untagged template literal whose value contains a line feed, whether from a line break in the source or an `\n` escape, and rewrites it to an array of lines:
+
+```ts
+const prompt = `You are a reviewer.
+Reply in ${language}.`;
+
+// becomes
+const prompt = [
+  'You are a reviewer.',
+  `Reply in ${language}.`
+].join('\n');
+```
+
+A line with no substitution becomes a single-quoted string and a line with one stays a template literal on a single line. Substitutions are copied verbatim from the source, comments included, so their evaluation order and text do not change. The fix works on the template's raw source rather than its value: every escape carries over unchanged, since an escape means the same in a single-quoted string as in a template, and only an unescaped `'`, an escaped backtick and an escaped `$` are re-spelled for the literal that holds them. The array is indented one level deeper than the line the template starts on, using that line's own indentation style. Run the project's quote and trailing-comma rules afterwards if it prefers other styles.
+
+The rule reports without offering a fix when it cannot show that the pieces join back to exactly the same value: a line continuation (a backslash before a line break), a carriage return or Unicode line separator in the source, a `\x` or `\u` escape that spells a line feed, or an octal-looking escape. A final check compares the line breaks it found with the line feeds in the cooked value, so a case the scanner mis-reads is refused rather than rewritten.
+
+A tagged template is never reported. The tag receives the literal's pieces, so joining them would change what it is called with, and multi-line `sql`, `css` or `markdown` templates are the point of the syntax. There is therefore no option listing tags to ignore. `allowFiles` takes globs in the [file glob dialect](#file-level-rules) for files whose multi-line strings are intended (fixtures, prompts):
+
+```ts
+'exadev/no-multiline-template-literal': ['error', { allowFiles: ['src/prompts/**', 'test/fixtures/**'] }]
+```
+
+The rule needs no type information and is not in `recommended`.
 
 ## Workspace architecture
 
