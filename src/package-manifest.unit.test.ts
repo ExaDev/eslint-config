@@ -17,7 +17,7 @@ function field(name: string): Record<string, unknown> {
 }
 
 // Plugins this package resolves at runtime through tryRequire from its own dist/index.js location. Resolution walks up from there, so a package declared only as a devDependency here is never installed for a consumer and only resolves by accident of the consumer's own hoisting.
-const RUNTIME_RESOLVED_OPTIONAL_PEERS = ['@eslint/json', 'eslint-plugin-turbo'];
+const RUNTIME_RESOLVED_OPTIONAL_PEERS = ['@eslint/json', '@eslint/markdown', 'eslint-plugin-turbo'];
 
 describe('package.json optional peers resolved at runtime', () => {
   it.each(RUNTIME_RESOLVED_OPTIONAL_PEERS)('%s is declared as an optional peer dependency', (name) => {
