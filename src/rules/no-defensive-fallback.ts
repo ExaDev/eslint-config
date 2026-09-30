@@ -1,7 +1,7 @@
 import { AST_NODE_TYPES, ESLintUtils, type TSESTree } from '@typescript-eslint/utils';
 import { isRecord } from '../is-record';
-import { assertOnlyKeys, readEntryFiles, readEntryRecords, readRequiredString } from './file-entry';
-import { createFileScope, type FileScope } from './file-scope';
+import { assertOnlyKeys, createEntryScope, readEntryFiles, readEntryRecords, readRequiredString } from './file-entry';
+import type { FileScope } from './file-scope';
 
 type MessageIds = 'emptyFallback' | 'swallowedError';
 
@@ -12,7 +12,7 @@ const ALLOW_KEYS = ['files', 'reason'] as const;
 const createRule = ESLintUtils.RuleCreator((name) => `https://github.com/ExaDev/eslint-config/blob/main/src/rules/${name}.ts`);
 
 /**
- * Reads the `allow` option into one `FileScope` per entry. Each entry needs `files` (globs, relative to ESLint's working directory) and a `reason`, which is not used at lint time: it is required so every exemption explains itself where it is configured, as `noInlineConfig` leaves no comment to do so.
+ * Reads the `allow` option into one `FileScope` per entry. Each entry needs `files` (globs, relative to ESLint's working directory; a glob without a `/` names a file at any depth) and a `reason`, which is not used at lint time: it is required so every exemption explains itself where it is configured, as `noInlineConfig` leaves no comment to do so.
  */
 export function readAllowedScopes(options: unknown): readonly FileScope[] {
   if (!isRecord(options)) throw new Error(`@exadev/eslint-config: "${OPTION_NAME}" options must be an object.`);
@@ -24,7 +24,7 @@ export function readAllowedScopes(options: unknown): readonly FileScope[] {
     assertOnlyKeys(entry, ALLOW_KEYS, `${OPTION_NAME} allow entry`);
     readRequiredString(entry, 'reason', `${OPTION_NAME} allow entry`);
 
-    return createFileScope(readEntryFiles(entry['files'], `${OPTION_NAME} allow files`));
+    return createEntryScope(readEntryFiles(entry['files'], `${OPTION_NAME} allow files`));
   });
 }
 
