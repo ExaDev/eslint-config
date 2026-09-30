@@ -198,6 +198,8 @@ describe('runsUnconditionally', () => {
     expect(runs("it('a', () => { expect(n).toBe(1); });")).toBe(true);
     expect(runs("it('a', () => { const check = (x) => { expect(x).toBe(1); }; check(1); });")).toBe(true);
     expect(runs("it.each([1])('a', (n) => { expect(n).toBe(1); });")).toBe(true);
+    expect(runs("describe.each([['a'], ['b']])('g', (n) => { it('x', () => { expect(n).toBe(1); }); });")).toBe(true);
+    expect(runs("it.each`a\n${1}`('a', (n) => { expect(n).toBe(1); });")).toBe(true);
     expect(runs("it('a', () => { for (const x of [expect(n).toBe(1)]) {} });")).toBe(true);
   });
 
@@ -223,6 +225,15 @@ describe('runsUnconditionally', () => {
     expect(runs("it('a', () => { Array.of(files, (f) => { expect(f).toBe(1); }); });")).toBe(true);
     expect(runs("it('a', () => { List.from(files, (f) => { expect(f).toBe(1); }); });")).toBe(true);
     expect(runs("it('a', () => { Array.from(() => { expect(1).toBe(1); }); });")).toBe(true);
+  });
+
+  it('is false inside a .each or .for table callback whose table may be empty', () => {
+    expect(runs("describe.each([])('g', () => { it('x', () => { expect(1).toBe(1); }); });")).toBe(false);
+    expect(runs("describe.each(files)('g', () => { it('x', () => { expect(1).toBe(1); }); });")).toBe(false);
+    expect(runs("it.each(files.map(read))('a', (n) => { expect(n).toBe(1); });")).toBe(false);
+    expect(runs("it.each([...files])('a', (n) => { expect(n).toBe(1); });")).toBe(false);
+    expect(runs("it.for(files)('a', (n) => { expect(n).toBe(1); });")).toBe(false);
+    expect(runs("it.each`a`('a', (n) => { expect(n).toBe(1); });")).toBe(false);
   });
 
   it('is false inside a branch, a short-circuit right side, a switch case or a catch', () => {
@@ -257,6 +268,8 @@ const passes = "expect(PATTERN.test('logger.info(1)')).toBe(false);";
 
 ruleTester.run('non-vacuous-guard', rule, {
   valid: [
+    // A literal table with a row always runs.
+    `it.each([['console.log(1)', true], ['logger.info(1)', false]])('flags %s', (line, expected) => { ${lowerBound} expect(PATTERN.test(line)).toBe(expected); ${catches} ${passes} });`,
     // A guard that shows all three.
     `import { expect, it } from 'vitest';\nit('scans', () => { const files = find(); ${lowerBound} for (const f of files) expect(read(f)).not.toMatch(PATTERN); });\nit('pattern', () => { ${catches} ${passes} });`,
     // The three may sit in one test.
@@ -273,6 +286,8 @@ ruleTester.run('non-vacuous-guard', rule, {
   invalid: [
     // A callback that runs once per element of what was discovered.
     { code: `it('g', () => { ${lowerBound} Array.from(files, (f) => { expect(scan(f)).toBe(true); expect(scan(f)).toBe(false); }); });`, errors: [{ messageId: 'missingMustCatch' }, { messageId: 'missingMustNotCatch' }] },
+    { code: `describe.each([])('g', () => { it('x', () => { ${lowerBound} ${catches} ${passes} }); });`, errors: [{ messageId: 'missingLowerBound' }, { messageId: 'missingMustCatch' }, { messageId: 'missingMustNotCatch' }] },
+    { code: `it.each(files)('g', () => { ${lowerBound} ${catches} ${passes} });`, errors: [{ messageId: 'missingLowerBound' }, { messageId: 'missingMustCatch' }, { messageId: 'missingMustNotCatch' }] },
     { code: 'export const x = 1;', errors: [{ messageId: 'missingLowerBound' }, { messageId: 'missingMustCatch' }, { messageId: 'missingMustNotCatch' }] },
     { code: `it('a', () => { ${catches} ${passes} });`, errors: [{ messageId: 'missingLowerBound' }] },
     { code: `it('a', () => { ${lowerBound} ${passes} });`, errors: [{ messageId: 'missingMustCatch' }] },
