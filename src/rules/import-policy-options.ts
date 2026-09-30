@@ -150,21 +150,24 @@ function readExceptEdge(entry: Readonly<Record<string, unknown>>, name: string):
   return { file: relativeToCwd(`/${file}`, '/'), specifier, reason: readRequiredString(entry, 'reason', name) };
 }
 
-// A stale exception is a defect the reader can see without a filesystem: an edge naming a file outside the policy's scope, or a specifier no restriction selects, can never suppress anything.
+// A stale exception is a defect the reader can see without a filesystem: an edge naming a file outside the policy's scope, or a specifier no restriction forbids in that file, can never suppress anything.
 function assertEdgeIsLive(edge: ImportExceptEdge, policy: Pick<ImportPolicy, 'files' | 'ignores' | 'deny' | 'confine'>): void {
   const root = '/';
   const inScope = createFileScope([...policy.files, ...(policy.ignores ?? []).map((glob) => `!${glob}`)]);
   if (!inScope(`${root}${edge.file}`, root)) {
     throw new Error(`@exadev/eslint-config: "${OPTION_NAME}" exception for "${edge.file}" names a file the policy's files do not select, so it can never apply.`);
   }
-  const restrictions = [...(policy.deny ?? []), ...(policy.confine ?? [])];
-  if (!restrictions.some((restriction) => createSpecifierMatcher(restriction.specifiers)(edge.specifier, `${root}${edge.file}`, root))) {
-    throw new Error(`@exadev/eslint-config: "${OPTION_NAME}" exception "${edge.specifier}" in "${edge.file}" is not selected by any deny or confine entry of its policy, so it can never apply.`);
+  const file = `${root}${edge.file}`;
+  const forbidden =
+    (policy.deny ?? []).some((deny) => createSpecifierMatcher(deny.specifiers)(edge.specifier, file, root)) ||
+    (policy.confine ?? []).some((confine) => createSpecifierMatcher(confine.specifiers)(edge.specifier, file, root) && !createFileScope(confine.onlyIn)(file, root));
+  if (!forbidden) {
+    throw new Error(`@exadev/eslint-config: "${OPTION_NAME}" exception "${edge.specifier}" in "${edge.file}" is not forbidden there by any deny entry or by any confine entry whose onlyIn excludes the file, so it can never apply.`);
   }
 }
 
 /**
- * Validates and normalises an import-policy option value at runtime, for the rule and for `importPolicyConfig` alike. Beyond the schema it requires: at least one include glob in `files`; at least one of `deny` and `confine` per policy; no unknown key; and that every exception edge names a file the policy selects and a specifier one of its restrictions selects. Throws naming the offending field.
+ * Validates and normalises an import-policy option value at runtime, for the rule and for `importPolicyConfig` alike. Beyond the schema it requires: at least one include glob in `files`; at least one of `deny` and `confine` per policy; no unknown key; and that every exception edge names a file the policy selects and a specifier one of its restrictions forbids in that file (a confine entry forbids nothing in the files of its `onlyIn`). The edge's `file` is stored in its normalised, forward-slash form. Throws naming the offending field.
  */
 export function readImportPolicies(value: unknown): readonly ImportPolicy[] {
   return readEntryRecords(value, OPTION_NAME).map((entry) => {
