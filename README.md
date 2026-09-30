@@ -92,11 +92,11 @@ export default defineConfig(
 - **[`no-warning-comments`](https://eslint.org/docs/latest/rules/no-warning-comments)** — bans any comment containing `Stryker disable`.
   - *Why:* that's Stryker's own mutation-testing suppression directive, invisible to `noInlineConfig` above since it isn't an eslint-disable comment.
 
-- **[`explicit-module-boundary-types`](https://typescript-eslint.io/rules/explicit-module-boundary-types/)** — an exported function or class member writes out its parameter and return types.
+- **[`explicit-module-boundary-types`](https://typescript-eslint.io/rules/explicit-module-boundary-types/)**: an exported function or class member writes out its parameter and return types.
   - *Why:* an inferred return type changes silently when the body does; `isolatedDeclarations` is the compiler-side alternative and is a tsconfig matter.
 - **[`switch-exhaustiveness-check`](https://typescript-eslint.io/rules/switch-exhaustiveness-check/)** set to `{ considerDefaultExhaustiveForUnions: false, requireDefaultForNonUnion: true }`.
   - *Why:* a `default` branch cannot stand in for handling a newly added union member, and a switch over a non-union needs a `default` because the checker cannot prove its cases complete.
-- **Core robustness rules** — `eqeqeq`, `no-implicit-coercion`, `no-param-reassign`, `no-await-in-loop`, `require-atomic-updates`, `default-case-last`, `no-return-assign` and `max-depth`. See [Robustness rules](#robustness-rules).
+- **Core robustness rules**: `eqeqeq`, `no-implicit-coercion`, `no-param-reassign`, `no-await-in-loop`, `require-atomic-updates`, `default-case-last`, `no-return-assign` and `max-depth`. See [Robustness rules](#robustness-rules).
 
 **Test files** (`**/*.{test,spec}.{ts,tsx,mts,cts,js,jsx,mjs,cjs}`) get two narrow relaxations of this package's own additions, and only these two:
 
