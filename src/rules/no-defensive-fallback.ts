@@ -88,10 +88,21 @@ function rejectionHandlerOutcome(handler: TSESTree.ArrowFunctionExpression | TSE
   return isConstantValue(handler.body) ? 'returns a fixed value' : undefined;
 }
 
-function isPromiseCatchCall(node: TSESTree.CallExpression): boolean {
+function isMethodCall(node: TSESTree.CallExpression, name: string): boolean {
   const { callee } = node;
 
-  return callee.type === AST_NODE_TYPES.MemberExpression && callee.property.type === AST_NODE_TYPES.Identifier && callee.property.name === 'catch';
+  return callee.type === AST_NODE_TYPES.MemberExpression && callee.property.type === AST_NODE_TYPES.Identifier && callee.property.name === name;
+}
+
+/**
+ * The rejection handler of a promise call and what to call it in a report: the only argument of `.catch(handler)`, or the second of `.then(onFulfilled, handler)`. `undefined` for any other call, or when the argument list is not exactly that shape.
+ */
+function rejectionHandlerOf(node: TSESTree.CallExpression): { readonly handler: TSESTree.CallExpressionArgument; readonly construct: string } | undefined {
+  const [first, second, ...rest] = node.arguments;
+  if (isMethodCall(node, 'catch') && first !== undefined && second === undefined) return { handler: first, construct: '.catch() handler' };
+  if (isMethodCall(node, 'then') && second !== undefined && rest.length === 0) return { handler: second, construct: '.then() rejection handler' };
+
+  return undefined;
 }
 
 const noDefensiveFallback = createRule<[unknown], MessageIds>({
@@ -148,10 +159,10 @@ const noDefensiveFallback = createRule<[unknown], MessageIds>({
         if (outcome !== undefined) context.report({ node, messageId: 'swallowedError', data: { construct: 'catch clause', outcome } });
       },
       CallExpression(node) {
-        const [handler, ...others] = node.arguments;
-        if (!isPromiseCatchCall(node) || handler === undefined || others.length > 0 || !isHandlerFunction(handler)) return;
-        const outcome = rejectionHandlerOutcome(handler);
-        if (outcome !== undefined) context.report({ node: handler, messageId: 'swallowedError', data: { construct: '.catch() handler', outcome } });
+        const rejection = rejectionHandlerOf(node);
+        if (rejection === undefined || !isHandlerFunction(rejection.handler)) return;
+        const outcome = rejectionHandlerOutcome(rejection.handler);
+        if (outcome !== undefined) context.report({ node: rejection.handler, messageId: 'swallowedError', data: { construct: rejection.construct, outcome } });
       },
     };
   },
