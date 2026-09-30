@@ -73,7 +73,7 @@ describe('plugin.configs.nextjs', () => {
     const config = plugin.configs?.['nextjs'];
     expect(Array.isArray(config)).toBe(true);
     if (Array.isArray(config)) {
-      expect(config).toHaveLength(1);
+      expect(config).toHaveLength(2);
     }
   });
 });
@@ -96,7 +96,7 @@ describe('plugin.configs.react/.nextjs options forwarding', () => {
     vi.doMock('./nextjs', () => ({ buildNextjsConfig }));
     const freshPlugin = (await import('./plugin')).default;
     void freshPlugin.configs?.['nextjs'];
-    expect(buildNextjsConfig).toHaveBeenCalledWith({ enabled: true });
+    expect(buildNextjsConfig).toHaveBeenCalledWith({ enabled: true, plugin: freshPlugin });
     vi.doUnmock('./nextjs');
     vi.resetModules();
   });

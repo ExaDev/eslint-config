@@ -17,7 +17,8 @@ describe('exadevConfig', () => {
     // This repo's package.json installs eslint-plugin-react, eslint-plugin-react-hooks, eslint-plugin-jsx-a11y, and @next/eslint-plugin-next as real devDependencies specifically so this integration check runs against genuinely resolvable packages, not a simulated environment. It also has no syncpack config of its own, so packageJsonKeyOrder's own auto-detect activates for real too, resolving @eslint/json (also a real devDependency here). It does have a real .gitignore (this very repo's own), so gitignore's own auto-detect activates for real too.
     // react, jsx-runtime, react-hooks, jsx-a11y
     const REACT_FAMILY_BLOCK_COUNT = 4;
-    const NEXTJS_BLOCK_COUNT = 1;
+    // the upstream config, then this package's own server component boundary rules
+    const NEXTJS_BLOCK_COUNT = 2;
     const PACKAGE_JSON_KEY_ORDER_BLOCK_COUNT = 1;
     const GITIGNORE_BLOCK_COUNT = 1;
     const TURBO_ENV_BLOCK_COUNT = 1;
