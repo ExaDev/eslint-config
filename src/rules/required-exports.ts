@@ -76,7 +76,7 @@ function collectDeclarationNames(declaration: TSESTree.NamedExportDeclarations, 
 }
 
 /**
- * The names a module exports, read from its top-level export statements without type information: `export const`, function, class, enum, interface, type and namespace declarations (destructuring included), `export { a, b as c }` with or without a `from`, `export * as ns from`, and `export default` as `default`. A bare `export * from` contributes nothing, because the names it forwards live in another file this rule does not read.
+ * The names a module exports, read from its top-level export statements without type information: `export const`, function, class, enum, interface, type and namespace declarations (destructuring included), `export { a, b as c }` with or without a `from`, `export * as ns from`, and `export default` as `default`. A bare `export * from` contributes nothing, because the names it forwards live in another file this rule does not read. `export = x` contributes nothing either, since it exports the value rather than a name.
  */
 export function collectExportedNames(program: TSESTree.Program): ReadonlySet<string> {
   const names = new Set<string>();
