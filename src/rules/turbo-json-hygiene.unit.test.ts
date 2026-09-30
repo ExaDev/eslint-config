@@ -30,7 +30,7 @@ describe('turbo-json-hygiene meta', () => {
     expect(meta.docs?.url).toBe('https://github.com/ExaDev/eslint-config/blob/main/src/rules/turbo-json-hygiene.ts');
     expect(meta.messages).toEqual({
       missingSchema: 'turbo.json has no "$schema", so editors cannot validate it. Add "$schema": "https://<host>/schema.json" with one of the hosts {{hosts}}.',
-      unknownSchema: '"$schema" is "{{schema}}", which is not "https://<host>/schema.json" for one of the hosts {{hosts}}.',
+      unknownSchema: '"$schema" is "{{schema}}", which is neither "https://<host>/schema.json" for one of the hosts {{hosts}} nor a relative path to "node_modules/turbo/schema.json".',
       missingCiPassThrough: 'turbo.json does not list "CI" in "globalPassThroughEnv", so a task that reads it either cannot see it or has it in its cache key. Add it.',
       missingAggregateTask: 'turbo.json has no task "{{task}}", the aggregate that runs {{includes}}. Add it with those tasks in its "dependsOn".',
       aggregateMissingDependency: 'Aggregate task "{{task}}" must list "{{dependency}}" in its "dependsOn", so running the aggregate runs it.',
@@ -48,6 +48,10 @@ ruleTester.run('turbo-json-hygiene', rule, {
     { code: turbo({ $schema: 'https://turborepo.com/schema.json' }), filename: ROOT },
     { code: turbo({ $schema: 'https://turborepo.dev/schema.json' }), filename: ROOT },
     { code: turbo({ $schema: 'https://turbo.build/schema.json' }), filename: ROOT },
+    // The versioned subdomain and the schema the turbo package ships, the latter whatever hosts are given.
+    { code: turbo({ $schema: 'https://v2-10-8.turborepo.dev/schema.json' }), filename: ROOT },
+    { code: turbo({ $schema: './node_modules/turbo/schema.json' }), filename: ROOT },
+    { code: turbo({ $schema: '../../node_modules/turbo/schema.json', extends: ['//'] }), filename: WEB, options: [{ hygiene: { schemaHosts: ['turborepo.dev'] } }] },
     // A package configuration needs the schema too, but neither opt-in check.
     { code: turbo({ $schema: SCHEMA, extends: ['//'] }), filename: WEB, options: [{ hygiene: { requireCiPassThrough: true, aggregateTask: AGGREGATE } }] },
     // A canonical host given as the only one.
@@ -69,12 +73,16 @@ ruleTester.run('turbo-json-hygiene', rule, {
     {
       code: turbo({ tasks: {}, $schema: 'https://example.com/schema.json' }),
       filename: ROOT,
-      errors: [{ message: `"$schema" is "https://example.com/schema.json", which is not "https://<host>/schema.json" for one of the hosts ${HOSTS}.`, line: 3 }],
+      errors: [{ message: `"$schema" is "https://example.com/schema.json", which is neither "https://<host>/schema.json" for one of the hosts ${HOSTS} nor a relative path to "node_modules/turbo/schema.json".`, line: 3 }],
     },
     // Not the schema path, or not https.
     { code: turbo({ $schema: 'https://turborepo.com/other.json' }), filename: ROOT, errors: [{ messageId: 'unknownSchema', line: 2 }] },
     { code: turbo({ $schema: 'http://turborepo.com/schema.json' }), filename: ROOT, errors: [{ messageId: 'unknownSchema' }] },
     { code: turbo({ $schema: 'https://turborepo.com/schema.json?x' }), filename: ROOT, errors: [{ messageId: 'unknownSchema' }] },
+    // A versioned subdomain of a host that is not listed.
+    { code: turbo({ $schema: 'https://v2-10-8.turborepo.com/schema.json' }), filename: ROOT, options: [{ hygiene: { schemaHosts: ['turborepo.dev'] } }], errors: [{ messageId: 'unknownSchema' }] },
+    // A local path to some other package's schema.
+    { code: turbo({ $schema: './node_modules/other/schema.json' }), filename: ROOT, errors: [{ messageId: 'unknownSchema' }] },
     // A canonical host reports the others.
     {
       code: turbo({ $schema: 'https://turbo.build/schema.json' }),

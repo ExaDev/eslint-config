@@ -450,7 +450,16 @@ describe('isKnownSchema', () => {
     expect(isKnownSchema('https://turbo.build/schema.json', hosts)).toBe(true);
   });
 
-  it.each([['https://turborepo.dev/schema.json'], ['http://turborepo.com/schema.json'], ['https://turborepo.com/schema.json '], ['https://turborepo.com/schema.jsonx'], ['x https://turborepo.com/schema.json'], [undefined]])(
+  it.each([['./node_modules/turbo/schema.json'], ['../../node_modules/turbo/schema.json'], ['../../../apps/web/node_modules/turbo/schema.json'], ['https://v2-10-8.turbo.build/schema.json'], ['https://v2-5-8-canary-1.turborepo.com/schema.json']])('accepts %j', (schema) => {
+    expect(isKnownSchema(schema, hosts)).toBe(true);
+  });
+
+  it('accepts a versioned subdomain only of a listed host', () => {
+    expect(isKnownSchema('https://v2-10-8.turborepo.dev/schema.json', hosts)).toBe(false);
+    expect(isKnownSchema('https://v2-10-8.turborepo.dev/schema.json', ['turborepo.dev'])).toBe(true);
+  });
+
+  it.each([['node_modules/turbo/schema.json'], ['/node_modules/turbo/schema.json'], ['./node_modules/turbo/schema.jsonx'], ['./node_modules/other/schema.json'], ['./x/node_modules/turbo/schema.json/y'], ['https://latest.turborepo.com/schema.json'], ['https://v2.turborepo.com/schema.json'], ['https://a.v2-10-8.turborepo.com/schema.json'], ['http://v2-10-8.turborepo.com/schema.json'], ['https://turborepo.dev/schema.json'], ['http://turborepo.com/schema.json'], ['https://turborepo.com/schema.json '], ['https://turborepo.com/schema.jsonx'], ['x https://turborepo.com/schema.json'], [undefined]])(
     'rejects %j',
     (schema) => {
       expect(isKnownSchema(schema, hosts)).toBe(false);
