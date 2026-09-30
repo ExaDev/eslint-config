@@ -119,7 +119,7 @@ describe('README defineConfig examples', () => {
   it('the test hygiene example wires every list it names, and the kinds override accepts the guard and conformance kinds', () => {
     const blocks = buildViaTestHygiene();
     const filesOf = (rule: string) => blocks.filter((entry) => entry.rules?.[rule] !== undefined).map((entry) => entry.files);
-    expect(filesOf('exadev/non-vacuous-guard')).toContainEqual(['**/*.guard.test.ts']);
+    expect(filesOf('exadev/non-vacuous-guard')).toStrictEqual([['**/*.guard.test.ts']]);
     expect(filesOf('vitest/expect-expect')).toContainEqual(['**/*conformance*.test.ts', 'packages/*/src/conformance.ts']);
     const kindsBlock = blocks.find((entry) => entry.rules?.['exadev/test-file-kind'] !== undefined && entry.files === undefined);
     expect(kindsBlock?.rules?.['exadev/test-file-kind']).toStrictEqual(['error', { kinds: ['unit', 'integration', 'e2e', 'guard', 'conformance'] }]);
