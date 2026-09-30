@@ -77,6 +77,7 @@ ruleTester.run('no-defensive-fallback', rule, {
     'const a = value ?? { key: 1 };',
     'const a = value ?? other;',
     'const a = value ?? true;',
+    'const a = value ?? 1n;',
     // Only the right operand is a fallback; an empty literal on the left, or under &&, is not.
     'const a = [] ?? value;',
     'const a = value && [];',
@@ -107,6 +108,9 @@ ruleTester.run('no-defensive-fallback', rule, {
     'function f() { try { return run(); } catch { return typeof 1; } }',
     // An accessor's value is a function, never a fixed value.
     'function f() { try { return run(); } catch { return { get n() { return load(); } }; } }',
+    // A continue that comes after other work is not a swallow.
+    'for (const item of items) { try { run(item); } catch (error) { report(error); continue; } }',
+    'try { run(); } catch { break; }',
     // A try with only a finally has no catch clause.
     'try { run(); } finally { cleanup(); }',
     // A rejection handler that does real work, or that is not a function.
@@ -132,6 +136,7 @@ ruleTester.run('no-defensive-fallback', rule, {
     { code: 'const a = value ?? "";', errors: [fallback('??', '""')] },
     { code: 'const a = value ?? ``;', errors: [fallback('??', '``')] },
     { code: 'const a = value ?? 0;', errors: [fallback('??', '0')] },
+    { code: 'const a = value ?? 0n;', errors: [fallback('??', '0n')] },
     { code: 'const a = value ?? false;', errors: [fallback('??', 'false')] },
     { code: 'const a = value ?? null;', errors: [fallback('??', 'null')] },
     { code: 'const a = value || [];', errors: [fallback('||', '[]')] },
@@ -155,6 +160,9 @@ ruleTester.run('no-defensive-fallback', rule, {
     { code: 'try { run(); } catch {}', errors: [swallowed('catch clause', 'does nothing')] },
     { code: 'try { run(); } catch (error) {}', errors: [swallowed('catch clause', 'does nothing')] },
     { code: 'try { run(); } catch {\n  // ignored\n}', errors: [swallowed('catch clause', 'does nothing')] },
+    // A catch clause that only moves on to the next iteration.
+    { code: 'for (const item of items) { try { run(item); } catch { continue; } }', errors: [swallowed('catch clause', 'skips to the next iteration')] },
+    { code: 'for (const item of items) { try { run(item); } catch { continue outer; } }', errors: [swallowed('catch clause', 'skips to the next iteration')] },
     // A catch clause that returns nothing, or a fixed value.
     { code: 'function f() { try { return run(); } catch { return; } }', errors: [swallowed('catch clause', 'returns nothing')] },
     { code: 'function f() { try { return run(); } catch (error) { return undefined; } }', errors: [swallowed('catch clause', 'returns a fixed value')] },
@@ -162,6 +170,7 @@ ruleTester.run('no-defensive-fallback', rule, {
     { code: 'function f() { try { return run(); } catch { return false; } }', errors: [swallowed('catch clause', 'returns a fixed value')] },
     { code: 'function f() { try { return run(); } catch { return -1; } }', errors: [swallowed('catch clause', 'returns a fixed value')] },
     { code: 'function f() { try { return run(); } catch { return !0; } }', errors: [swallowed('catch clause', 'returns a fixed value')] },
+    { code: 'function f() { try { return run(); } catch { return void 0; } }', errors: [swallowed('catch clause', 'returns a fixed value')] },
     { code: 'function f() { try { return run(); } catch { return +1; } }', errors: [swallowed('catch clause', 'returns a fixed value')] },
     // Unreachable statements after the return do not change what the handler does.
     { code: 'function f() { try { return run(); } catch { return null; cleanup(); } }', errors: [swallowed('catch clause', 'returns a fixed value')] },
