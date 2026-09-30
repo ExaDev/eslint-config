@@ -165,7 +165,7 @@ export function checkConfigInputs(
     const dirs = { root: rootDir, pkg: resolve(rootDir, pkg.dir) };
     for (const missing of missingConfigs({ fs, config, task, pkg, command, dirs, toolConfigs })) {
       const identity = `${missing.kind}\0${missing.tool}\0${missing.file}\0${missing.excludedBy ?? ''}`;
-      grouped.set(identity, { ...missing, packages: [...(grouped.get(identity)?.packages ?? []), pkg.dir === '' ? ROOT_PACKAGE_QUALIFIER : (pkg.name ?? pkg.dir)] });
+      grouped.set(identity, { ...missing, packages: [...(grouped.get(identity)?.packages ?? []), qualifier ?? pkg.dir] });
     }
   }
 
