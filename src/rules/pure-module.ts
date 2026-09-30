@@ -1,6 +1,6 @@
 import { AST_NODE_TYPES, ESLintUtils, type TSESLint, type TSESTree } from '@typescript-eslint/utils';
 import { moduleReferenceOf } from './import-policy';
-import { BANNED_GLOBALS, BANNED_MEMBERS, BANNED_MODULES, pureModuleSchema, readPureModuleOptions, type PureModuleOptions } from './pure-module-options';
+import { BANNED_GLOBALS, BANNED_MEMBERS, BANNED_MODULES, NODE_CRYPTO_NONDETERMINISTIC, pureModuleSchema, readPureModuleOptions, type PureModuleOptions } from './pure-module-options';
 import { createSpecifierMatcher } from './specifier-match';
 
 type MessageIds = 'importedModule' | 'ambientGlobal' | 'nondeterministicMember' | 'clockRead' | 'asyncFunction' | 'awaitExpression' | 'forAwait';
@@ -9,6 +9,8 @@ const createRule = ESLintUtils.RuleCreator((name) => `https://github.com/ExaDev/
 
 const bannedModule = createSpecifierMatcher(BANNED_MODULES);
 const bannedGlobals: ReadonlySet<string> = new Set(BANNED_GLOBALS);
+const nodeCrypto = createSpecifierMatcher(['crypto']);
+const nodeCryptoNondeterministic: ReadonlySet<string> = new Set(NODE_CRYPTO_NONDETERMINISTIC);
 
 /**
  * Whether `name` at `node` resolves to no declaration in the file: a global the environment provides (or one nothing declares at all), as opposed to a local binding, an import or a parameter of the same name. A binding the linter adds for a configured global has no definitions, so it still counts as global.
@@ -88,8 +90,34 @@ const pureModule = createRule<[PureModuleOptions], MessageIds>({
       if (readsClock(node) && isGlobalBinding(sourceCode, node, 'Date')) context.report({ node, messageId: 'clockRead' });
     };
 
+    // The bindings a default or namespace import of Node's crypto module creates, whose non-deterministic members are reported where they are read.
+    const cryptoBindings = new Set<TSESLint.Scope.Variable>();
+
+    const checkCryptoImport = (node: TSESTree.ImportDeclaration): void => {
+      if (node.importKind === 'type' || !nodeCrypto(node.source.value, context.filename, context.cwd)) return;
+      for (const specifier of node.specifiers) {
+        if (specifier.type !== AST_NODE_TYPES.ImportSpecifier) {
+          for (const variable of sourceCode.getDeclaredVariables(specifier)) cryptoBindings.add(variable);
+        } else if (specifier.importKind !== 'type' && specifier.imported.type === AST_NODE_TYPES.Identifier && nodeCryptoNondeterministic.has(specifier.imported.name)) {
+          context.report({ node: specifier, messageId: 'nondeterministicMember', data: { name: `crypto.${specifier.imported.name}` } });
+        }
+      }
+    };
+
+    const isCryptoBinding = (node: TSESTree.Identifier): boolean => {
+      for (let scope: TSESLint.Scope.Scope | null = sourceCode.getScope(node); scope !== null; scope = scope.upper) {
+        const variable = scope.set.get(node.name);
+        if (variable !== undefined) return cryptoBindings.has(variable);
+      }
+
+      return false;
+    };
+
     return {
       Program(node) {
+        for (const statement of node.body) {
+          if (statement.type === AST_NODE_TYPES.ImportDeclaration) checkCryptoImport(statement);
+        }
         // A global the environment declares is a variable with no definitions and carries its references; one nothing declares has no variable at all and is left in `through`.
         const globalScope = sourceCode.getScope(node);
         const references = [...globalScope.variables.filter((variable) => variable.defs.length === 0).flatMap((variable) => variable.references), ...globalScope.through];
@@ -103,6 +131,11 @@ const pureModule = createRule<[PureModuleOptions], MessageIds>({
         if (node.object.type !== AST_NODE_TYPES.Identifier) return;
         const object = node.object.name;
         const property = propertyName(node);
+        if (property !== undefined && nodeCryptoNondeterministic.has(property) && isCryptoBinding(node.object)) {
+          context.report({ node, messageId: 'nondeterministicMember', data: { name: `crypto.${property}` } });
+
+          return;
+        }
         if (property === undefined || !isGlobalBinding(sourceCode, node, object)) return;
         if (object === 'globalThis' && bannedGlobals.has(property)) {
           context.report({ node, messageId: 'ambientGlobal', data: { name: property } });

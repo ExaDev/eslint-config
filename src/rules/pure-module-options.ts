@@ -16,7 +16,7 @@ export interface PureModuleOptions {
 }
 
 /**
- * Node builtin modules that perform I/O or read ambient process state. A specifier is banned when one of these selects it, so `fs` covers `node:fs` and `fs/promises`. Kept to modules a functional core has no legitimate reason to load: `path`, `url`, `util` and `crypto` are absent because they hold pure functions (the non-deterministic parts of `crypto` are caught as member reads instead), and `buffer` is a data type.
+ * Node builtin modules that perform I/O or read ambient process state. A specifier is banned when one of these selects it, so `fs` covers `node:fs` and `fs/promises`. Kept to modules a functional core has no legitimate reason to load: `path`, `url`, `util` and `crypto` are absent because they hold pure functions, and `buffer` is a data type. The non-deterministic parts of `crypto` are reported separately: as reads of the Web Crypto global (`BANNED_MEMBERS`) and, for the Node module, as named imports and member reads of `NODE_CRYPTO_NONDETERMINISTIC`.
  */
 export const BANNED_MODULES: readonly string[] = [
   'child_process',
@@ -81,6 +81,25 @@ export const BANNED_MEMBERS: readonly BannedMember[] = [
   { object: 'crypto', property: 'randomUUID' },
   { object: 'performance', property: 'now' },
   { object: 'performance', property: 'timeOrigin' },
+];
+
+/**
+ * The exports of Node's `crypto` module whose results differ between calls: sources of randomness and key generation. `crypto` is not a banned module, since hashing and the like are pure, so these are reported as named imports from it and as members of a default or namespace import of it. `webcrypto` is the Web Crypto object, whose `getRandomValues` is the same source under another path.
+ */
+export const NODE_CRYPTO_NONDETERMINISTIC: readonly string[] = [
+  'generateKey',
+  'generateKeyPair',
+  'generateKeyPairSync',
+  'generateKeySync',
+  'generatePrime',
+  'generatePrimeSync',
+  'getRandomValues',
+  'randomBytes',
+  'randomFill',
+  'randomFillSync',
+  'randomInt',
+  'randomUUID',
+  'webcrypto',
 ];
 
 /**
