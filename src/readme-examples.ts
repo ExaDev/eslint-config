@@ -1,6 +1,6 @@
 import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
-import { exadevConfig, plugin, workspaceArchitectureConfig } from './index';
+import { exadevConfig, importPolicyConfig, plugin, workspaceArchitectureConfig } from './index';
 
 // Not imported by index.ts (see tsdown.config.ts's own entry, only src/index.ts is bundled), so this file contributes nothing to the published package. Its only job is to be included in `tsc -p tsconfig.json` (see tsconfig.json's own `include`), so `pnpm typecheck` fails the moment any of README.md's own defineConfig() examples that reference the named `plugin` export stops compiling, the same regression-test role consumer-compatibility.ts already plays for the default export (see its own comment). Reproduces ExaDev/eslint-config#39/#42's own real failure: `plugin` (a plain object) satisfied @typescript-eslint/utils' own FlatConfig.Plugin type but not @eslint/core's Plugin type that defineConfig()'s own ConfigObject requires for its `plugins` field, under `exactOptionalPropertyTypes`.
 //
@@ -79,5 +79,30 @@ export function buildViaWorkspaceArchitecture() {
       naming: { scope: '@novus' },
     }),
     ...exadevConfig({ react: false, nextjs: false }),
+  );
+}
+
+/**
+ * README's "Import policy" section: the three policy shapes (deny, confine, an exact exception edge) spread into defineConfig() alongside exadevConfig().
+ */
+export function buildViaImportPolicy() {
+  return defineConfig(
+    ...exadevConfig({ react: false, nextjs: false }),
+    ...importPolicyConfig([
+      {
+        files: ['src/worker/**'],
+        deny: [{ specifiers: ['fs', 'path', 'child_process'], message: 'worker code runs where Node builtins do not exist' }],
+      },
+      {
+        files: ['src/**'],
+        ignores: ['src/**/*.test.ts'],
+        confine: [{ specifiers: ['@anthropic-ai/sdk'], onlyIn: ['src/agent/adapter.ts'], allowTypeImports: true }],
+      },
+      {
+        files: ['src/routes/**'],
+        deny: [{ specifiers: ['src/db'], message: 'routes reach data through the service layer' }],
+        exceptEdges: [{ file: 'src/routes/legacy.ts', specifier: '../db/client', reason: 'predates the service layer' }],
+      },
+    ]),
   );
 }
