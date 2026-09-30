@@ -1,6 +1,6 @@
 import { AST_NODE_TYPES, ESLintUtils, type TSESTree } from '@typescript-eslint/utils';
 import { isRecord } from '../is-record';
-import { assertOnlyKeys, createEntryScope, readEntryFiles, readEntryRecords, readRequiredString } from './file-entry';
+import { assertOnlyKeys, createEntryScope, entryFilesSchema, readEntryFiles, readEntryRecords, readRequiredString } from './file-entry';
 import type { FileScope } from './file-scope';
 
 type MessageIds = 'emptyFallback' | 'swallowedError';
@@ -119,7 +119,7 @@ const noDefensiveFallback = createRule<[unknown], MessageIds>({
             items: {
               type: 'object',
               properties: {
-                files: { anyOf: [{ type: 'string', minLength: 1 }, { type: 'array', items: { type: 'string', minLength: 1 }, minItems: 1, uniqueItems: true }] },
+                files: entryFilesSchema,
                 reason: { type: 'string', minLength: 1 },
               },
               required: ['files', 'reason'],
