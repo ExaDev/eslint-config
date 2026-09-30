@@ -51,11 +51,11 @@ function isConstantValue(node: TSESTree.Node): boolean {
   if (target.type === AST_NODE_TYPES.TemplateLiteral) return target.expressions.length === 0;
   if (target.type === AST_NODE_TYPES.UnaryExpression) return (target.operator === '-' || target.operator === '+' || target.operator === '!') && isConstantValue(target.argument);
   if (target.type === AST_NODE_TYPES.ArrayExpression) {
-    return target.elements.every((element) => element !== null && element.type !== AST_NODE_TYPES.SpreadElement && isConstantValue(element));
+    return target.elements.every((element) => element === null || (element.type !== AST_NODE_TYPES.SpreadElement && isConstantValue(element)));
   }
   if (target.type === AST_NODE_TYPES.ObjectExpression) {
     return target.properties.every(
-      (property) => property.type === AST_NODE_TYPES.Property && !property.computed && !property.method && property.kind === 'init' && isConstantValue(property.value),
+      (property) => property.type === AST_NODE_TYPES.Property && !property.computed && !property.method && isConstantValue(property.value),
     );
   }
 
@@ -66,9 +66,9 @@ function isConstantValue(node: TSESTree.Node): boolean {
  * How a block that stands in for error handling ends without handling anything, or `undefined` when it does something else. A block is swallowing when it is empty (a comment-only block included) or holds exactly one `return` that gives back nothing or a constant value.
  */
 function swallowOutcome(body: readonly TSESTree.Statement[]): string | undefined {
-  const [only, ...rest] = body;
+  const [only] = body;
   if (only === undefined) return 'does nothing';
-  if (rest.length > 0 || only.type !== AST_NODE_TYPES.ReturnStatement) return undefined;
+  if (only.type !== AST_NODE_TYPES.ReturnStatement) return undefined;
   if (only.argument === null) return 'returns nothing';
 
   return isConstantValue(only.argument) ? 'returns a fixed value' : undefined;
@@ -90,7 +90,7 @@ function rejectionHandlerOutcome(handler: TSESTree.ArrowFunctionExpression | TSE
 function isPromiseCatchCall(node: TSESTree.CallExpression): boolean {
   const { callee } = node;
 
-  return callee.type === AST_NODE_TYPES.MemberExpression && !callee.computed && callee.property.type === AST_NODE_TYPES.Identifier && callee.property.name === 'catch';
+  return callee.type === AST_NODE_TYPES.MemberExpression && callee.property.type === AST_NODE_TYPES.Identifier && callee.property.name === 'catch';
 }
 
 const noDefensiveFallback = createRule<[unknown], MessageIds>({
