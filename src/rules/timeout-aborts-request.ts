@@ -241,20 +241,26 @@ const timeoutAbortsRequest = createRule<[], MessageIds>({
     ];
 
     /**
-     * Whether a handler returns early on `controller.signal.aborted`: an `if` testing that property whose consequent returns.
+     * Whether `test` can only be true once the controller has aborted: `controller.signal.aborted` itself (non-null assertions aside) or an `&&` with that as one operand. A negation or an `||` is true without an abort, so it does not count.
+     */
+    const impliesAborted = (test: TSESTree.Node, controller: Variable): boolean => {
+      const node = unwrap(test);
+      if (node.type === AST_NODE_TYPES.LogicalExpression) return node.operator === '&&' && (impliesAborted(node.left, controller) || impliesAborted(node.right, controller));
+      if (!isMemberNamed('aborted')(node)) return false;
+      const signal = unwrap(node.object);
+      if (signal.type !== AST_NODE_TYPES.MemberExpression || !isMemberNamed('signal')(signal)) return false;
+      const receiver = unwrap(signal.object);
+
+      return receiver.type === AST_NODE_TYPES.Identifier && ASTUtils.findVariable(sourceCode.getScope(receiver), receiver.name) === controller;
+    };
+
+    /**
+     * Whether a handler returns early on `controller.signal.aborted`: an `if` whose test implies the abort and whose consequent returns.
      */
     const returnsOnAbort = (handler: TSESTree.Node, controller: Variable): boolean =>
-      collect(sourceCode, handler, (node): node is TSESTree.IfStatement => node.type === AST_NODE_TYPES.IfStatement, true).some((statement) => {
-        const testsAborted = collect(sourceCode, statement.test, isMemberNamed('aborted'), true).some((aborted) => {
-          const signal = unwrap(aborted.object);
-          if (signal.type !== AST_NODE_TYPES.MemberExpression || !isMemberNamed('signal')(signal)) return false;
-          const receiver = unwrap(signal.object);
-
-          return receiver.type === AST_NODE_TYPES.Identifier && ASTUtils.findVariable(sourceCode.getScope(receiver), receiver.name) === controller;
-        });
-
-        return testsAborted && collect(sourceCode, statement.consequent, (node): node is TSESTree.ReturnStatement => node.type === AST_NODE_TYPES.ReturnStatement, true).length > 0;
-      });
+      collect(sourceCode, handler, (node): node is TSESTree.IfStatement => node.type === AST_NODE_TYPES.IfStatement, true).some(
+        (statement) => impliesAborted(statement.test, controller) && collect(sourceCode, statement.consequent, (node): node is TSESTree.ReturnStatement => node.type === AST_NODE_TYPES.ReturnStatement, true).length > 0,
+      );
 
     return {
       CallExpression(race) {

@@ -42,6 +42,8 @@ ruleTester.run('timeout-aborts-request', rule, {
     shape({ callback: '() => { controller!.abort(); reject(new Error("timeout")); }' }),
     // The abort may sit anywhere in the callback, including a nested call.
     shape({ callback: '() => { reject(new Error("timeout")); queueMicrotask(() => controller.abort()); }' }),
+    // The test may also be the signal read through a non-null assertion.
+    shape({ catchClause: ' catch (error) {\n    if (controller!.signal!.aborted) return undefined;\n    throw error;\n  }' }),
     // The catch may test the signal through a compound condition.
     shape({ catchClause: ' catch (error) {\n    if (error instanceof Error && controller.signal.aborted) { log(error); return undefined; }\n    throw error;\n  }' }),
     // The timer id may be declared in the function and assigned in the executor, or the arm named first.
@@ -222,6 +224,15 @@ ruleTester.run('timeout-aborts-request', rule, {
     },
     {
       code: shape({ catchClause: ' catch (error) {\n    if (other.signal.aborted) return undefined;\n    throw error;\n  }' }),
+      errors: [{ messageId: 'catchDoesNotCheckAbort' }],
+    },
+    // A test that is true without an abort does not make the return an abort handler.
+    {
+      code: shape({ catchClause: ' catch (error) {\n    if (!controller.signal.aborted) return undefined;\n    throw error;\n  }' }),
+      errors: [{ messageId: 'catchDoesNotCheckAbort' }],
+    },
+    {
+      code: shape({ catchClause: ' catch (error) {\n    if (error instanceof Error || controller.signal.aborted) return undefined;\n    throw error;\n  }' }),
       errors: [{ messageId: 'catchDoesNotCheckAbort' }],
     },
     // A return inside a nested function is not an early return of the handler.
