@@ -50,7 +50,6 @@ type Part =
 
 const HEX_ESCAPE = /^x[0-9a-fA-F]{2}/u;
 const UNICODE_ESCAPE = /^u(?:[0-9a-fA-F]{4}|\{[0-9a-fA-F]+\})/u;
-const LINE_FEED = 0x0a;
 
 /**
  * Characters that end a line in a template's raw source other than the line feed: a carriage return (so a CRLF file is never rewritten, since the cooked value normalises it), and the two Unicode separators. A fix that could not show it leaves the string unchanged declines rather than guess at these.
@@ -59,13 +58,6 @@ const UNSUPPORTED_LINE_ENDINGS: ReadonlySet<string> = new Set(['\r', ' ', ' 
 
 function isDecimalDigit(character: string): boolean {
   return character >= '0' && character <= '9';
-}
-
-/**
- * The code point a `\x` or `\u` escape denotes, given the escape's text after the backslash (`x0A`, `u000A`, `u{A}`).
- */
-function escapedCodePoint(escape: string): number {
-  return Number.parseInt(escape.slice(1).replace(/[{}]/gu, ''), 16);
 }
 
 /**
@@ -83,7 +75,7 @@ interface Lines {
 }
 
 /**
- * Splits a template literal into the lines its cooked value has, or returns `undefined` when it cannot show that the pieces join back to exactly that value. A line ends at a real line feed and at an `\n` escape. Every other escape is carried over unchanged, which is sound because a backslash escape means the same in a single-quoted string as in a template; the exceptions are refused: a line continuation, a carriage return or Unicode separator in the source, a `\x` or `\u` escape that spells a line feed, and an octal-looking escape. A final count check compares the breaks found with the line feeds in the cooked value, so an escape this scanner mis-reads cannot slip through.
+ * Splits a template literal into the lines its cooked value has, or returns `undefined` when it cannot show that the pieces join back to exactly that value. A line ends at a real line feed and at an `\n` escape. Every other escape is carried over unchanged, which is sound because a backslash escape means the same in a single-quoted string as in a template; the exceptions are refused: a line continuation, a carriage return or Unicode separator in the source, and an octal-looking escape. A final count check compares the breaks found with the line feeds in the cooked value; it is what refuses a `\x` or `\u` escape that spells a line feed, which is carried over as text and so leaves the cooked value with a line feed the scanner did not count, and it stops any other escape this scanner mis-reads.
  */
 function splitTemplate(sourceCode: Readonly<TSESLint.SourceCode>, node: TSESTree.TemplateLiteral): Lines | undefined {
   const lines: Part[][] = [[]];
@@ -125,7 +117,7 @@ function splitTemplate(sourceCode: Readonly<TSESLint.SourceCode>, node: TSESTree
         index += 2;
       } else if (next === 'x' || next === 'u') {
         const match = (next === 'x' ? HEX_ESCAPE : UNICODE_ESCAPE).exec(rest);
-        if (match === null || escapedCodePoint(match[0]) === LINE_FEED) return undefined;
+        if (match === null) return undefined;
         emit({ kind: 'text', value: `\\${match[0]}` });
         index += 1 + match[0].length;
       } else if (isDecimalDigit(next)) {
