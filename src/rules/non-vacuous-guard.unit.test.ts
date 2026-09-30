@@ -213,6 +213,18 @@ describe('runsUnconditionally', () => {
     expect(runs("it('a', () => { files.reduce((a, f) => expect(f).toBe(1), 0); });")).toBe(false);
   });
 
+  it('is false inside the mapper of Array.from, which runs once per element', () => {
+    expect(runs("it('a', () => { Array.from(files, (f) => { expect(f).toBe(1); }); });")).toBe(false);
+    expect(runs("it('a', () => { Array.from(files, (f) => expect(f).toBe(1)); });")).toBe(false);
+  });
+
+  it('is true for other members of Array, and for Array.from with no mapper around the assertion', () => {
+    expect(runs("it('a', () => { Array.from(files); expect(1).toBe(1); });")).toBe(true);
+    expect(runs("it('a', () => { Array.of(files, (f) => { expect(f).toBe(1); }); });")).toBe(true);
+    expect(runs("it('a', () => { List.from(files, (f) => { expect(f).toBe(1); }); });")).toBe(true);
+    expect(runs("it('a', () => { Array.from(() => { expect(1).toBe(1); }); });")).toBe(true);
+  });
+
   it('is false inside a branch, a short-circuit right side, a switch case or a catch', () => {
     expect(runs("it('a', () => { if (c) { expect(1).toBe(1); } });")).toBe(false);
     expect(runs("it('a', () => { if (c) {} else { expect(1).toBe(1); } });")).toBe(false);
@@ -259,6 +271,8 @@ ruleTester.run('non-vacuous-guard', rule, {
     `const check = (line, expected) => { expect(PATTERN.test(line)).toBe(expected); expect(find()).not.toHaveLength(0); };\nit('a', () => { check('x', true); expect(PATTERN.test('y')).toBe(true); expect(PATTERN.test('z')).toBe(false); });`,
   ],
   invalid: [
+    // A callback that runs once per element of what was discovered.
+    { code: `it('g', () => { ${lowerBound} Array.from(files, (f) => { expect(scan(f)).toBe(true); expect(scan(f)).toBe(false); }); });`, errors: [{ messageId: 'missingMustCatch' }, { messageId: 'missingMustNotCatch' }] },
     { code: 'export const x = 1;', errors: [{ messageId: 'missingLowerBound' }, { messageId: 'missingMustCatch' }, { messageId: 'missingMustNotCatch' }] },
     { code: `it('a', () => { ${catches} ${passes} });`, errors: [{ messageId: 'missingLowerBound' }] },
     { code: `it('a', () => { ${lowerBound} ${passes} });`, errors: [{ messageId: 'missingMustCatch' }] },
