@@ -13,7 +13,10 @@ function stripNodePrefix(specifier: string): string {
   return specifier.startsWith(NODE_PREFIX) ? specifier.slice(NODE_PREFIX.length) : specifier;
 }
 
-function isRelativeSpecifier(specifier: string): boolean {
+/**
+ * Whether a module specifier names a file relative to the importing one: `.`, `..`, or a path starting `./` or `../`. A bare specifier that merely begins with a dot (`.hidden`) is a package name, not a relative path.
+ */
+export function isRelativeSpecifier(specifier: string): boolean {
   return specifier === '.' || specifier === '..' || specifier.startsWith('./') || specifier.startsWith('../');
 }
 

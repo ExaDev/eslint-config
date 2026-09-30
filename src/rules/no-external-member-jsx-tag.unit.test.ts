@@ -49,7 +49,9 @@ ruleTester.run('no-external-member-jsx-tag', rule, {
     'import Lib from "lib";\nconst a = <div><Lib /></div>;',
     // A relative import is the project's own code.
     'import * as Ui from "./ui";\nconst a = <Ui.Icon />;',
+    'import * as Ui from "..";\nconst a = <Ui.Icon />;',
     'import * as Ui from "../ui";\nconst a = <Ui.Icon />;',
+    'import * as Ui from ".";\nconst a = <Ui.Icon />;',
     'import Ui from ".";\nconst a = <Ui.Icon />;',
     // A root that is not an import.
     'const Ctx = createContext(null);\nconst a = <Ctx.Provider value={1} />;',
@@ -77,6 +79,8 @@ ruleTester.run('no-external-member-jsx-tag', rule, {
     { code: 'import * as Ui from "@/ui";\nconst a = <Ui.Icon />;', errors: [report('Ui.Icon', 'Ui', '@/ui')] },
     { code: 'import * as Ui from "@/ui";\nconst a = <Ui.Icon />;', options: [{ allowSources: ['@/other'] }], errors: [report('Ui.Icon', 'Ui', '@/ui')] },
     { code: 'import * as Lib from "lib";\nconst a = <Lib.Icon />;', options: [{ allowTags: ['Lib.Other'] }], errors: [report('Lib.Icon', 'Lib', 'lib')] },
+    // A bare specifier that begins with a dot is a package name, not a relative path.
+    { code: 'import * as Lib from ".hidden";\nconst a = <Lib.Icon />;', errors: [report('Lib.Icon', 'Lib', '.hidden')] },
     // A directive that is not in the prologue marks nothing.
     { code: 'import * as Lib from "lib";\n"use client";\nconst a = <Lib.Icon />;', errors: [report('Lib.Icon', 'Lib', 'lib')] },
     // An element with children is reported once, on the opening tag.
