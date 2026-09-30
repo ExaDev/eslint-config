@@ -36,26 +36,29 @@ ruleTester.run('timeout-aborts-request', rule, {
     shape({ catchClause: '' }),
     // The timer callback may be a named function or a function expression.
     shape({ callback: 'function () { controller.abort(); reject(new Error("timeout")); }' }),
-    'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  const onTimeout = () => { controller.abort(); };\n  try {\n    return await Promise.race([fetch(url), new Promise((_, reject) => { timer = setTimeout(onTimeout, 1); })]);\n  } finally {\n    clearTimeout(timer);\n  }\n}',
-    'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  function onTimeout() { controller.abort(); }\n  try {\n    return await Promise.race([fetch(url), new Promise((_, reject) => { timer = setTimeout(onTimeout, 1); })]);\n  } finally {\n    clearTimeout(timer);\n  }\n}',
+    'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  const onTimeout = () => { controller.abort(); };\n  try {\n    return await Promise.race([fetch(url, { signal: controller.signal }), new Promise((_, reject) => { timer = setTimeout(onTimeout, 1); })]);\n  } finally {\n    clearTimeout(timer);\n  }\n}',
+    'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  function onTimeout() { controller.abort(); }\n  try {\n    return await Promise.race([fetch(url, { signal: controller.signal }), new Promise((_, reject) => { timer = setTimeout(onTimeout, 1); })]);\n  } finally {\n    clearTimeout(timer);\n  }\n}',
     // A non-null assertion changes no value.
     shape({ callback: '() => { controller!.abort(); reject(new Error("timeout")); }' }),
     // The abort may sit anywhere in the callback, including a nested call.
     shape({ callback: '() => { reject(new Error("timeout")); queueMicrotask(() => controller.abort()); }' }),
     // The test may also be the signal read through a non-null assertion.
     shape({ catchClause: ' catch (error) {\n    if (controller!.signal!.aborted) return undefined;\n    throw error;\n  }' }),
+    // The request may receive the controller through a const it was started in, or the controller itself.
+    'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  const request = fetch(url, { signal: controller.signal });\n  try {\n    return await Promise.race([request, new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 1); })]);\n  } finally {\n    clearTimeout(timer);\n  }\n}',
+    'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  try {\n    return await Promise.race([start(url, controller), new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 1); })]);\n  } finally {\n    clearTimeout(timer);\n  }\n}',
     // The catch may test the signal through a compound condition.
     shape({ catchClause: ' catch (error) {\n    if (error instanceof Error && controller.signal.aborted) { log(error); return undefined; }\n    throw error;\n  }' }),
     // The timer id may be declared in the function and assigned in the executor, or the arm named first.
-    'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  const timeout = new Promise((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error("t")); }, 1); });\n  try {\n    return await Promise.race([fetch(url), timeout]);\n  } finally {\n    clearTimeout(timer);\n  }\n}',
+    'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  const timeout = new Promise((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error("t")); }, 1); });\n  try {\n    return await Promise.race([fetch(url, { signal: controller.signal }), timeout]);\n  } finally {\n    clearTimeout(timer);\n  }\n}',
     // The race may be awaited through a type assertion, a chained then, or a const it is stored in.
     shape({ race: 'await (Promise.race([fetch(url, { signal: controller.signal }), new Promise((_, reject) => {\n      TIMER\n    })]) as Promise<unknown>)' }),
     shape({ race: 'await Promise.race([fetch(url, { signal: controller.signal }), new Promise((_, reject) => {\n      TIMER\n    })]).then((value) => value)' }),
     'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  try {\n    const pending = Promise.race([fetch(url, { signal: controller.signal }), new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 5); })]);\n    return await pending;\n  } finally {\n    clearTimeout(timer);\n  }\n}',
     // Chained handlers are followed.
-    'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  return Promise.race([fetch(url), new Promise((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error("t")); }, 1); })])\n    .catch((error) => { if (controller.signal.aborted) return undefined; throw error; })\n    .finally(() => { clearTimeout(timer); });\n}',
+    'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  return Promise.race([fetch(url, { signal: controller.signal }), new Promise((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error("t")); }, 1); })])\n    .catch((error) => { if (controller.signal.aborted) return undefined; throw error; })\n    .finally(() => { clearTimeout(timer); });\n}',
     // A race in a catch clause is still followed by the try statement's finally, but is not covered by that same catch clause.
-    'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  try {\n    setup();\n  } catch (error) {\n    return await Promise.race([fetch(url), new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 1); })]);\n  } finally {\n    clearTimeout(timer);\n  }\n}',
+    'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  try {\n    setup();\n  } catch (error) {\n    return await Promise.race([fetch(url, { signal: controller.signal }), new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 1); })]);\n  } finally {\n    clearTimeout(timer);\n  }\n}',
     // A race with no timer arm is outside the rule.
     'async function f(a, b) { return Promise.race([a, b]); }',
     'async function f(arms) { return Promise.race(arms); }',
@@ -103,7 +106,7 @@ ruleTester.run('timeout-aborts-request', rule, {
     },
     // The controller is created outside the function that holds the race.
     {
-      code: 'const controller = new AbortController();\nasync function f(url) {\n  let timer;\n  try {\n    return await Promise.race([fetch(url), new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 1); })]);\n  } finally {\n    clearTimeout(timer);\n  }\n}',
+      code: 'const controller = new AbortController();\nasync function f(url) {\n  let timer;\n  try {\n    return await Promise.race([fetch(url, { signal: controller.signal }), new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 1); })]);\n  } finally {\n    clearTimeout(timer);\n  }\n}',
       errors: [{ messageId: 'controllerNotLocal' }],
     },
     // The controller is a parameter.
@@ -113,7 +116,7 @@ ruleTester.run('timeout-aborts-request', rule, {
     },
     // The controller belongs to an outer function.
     {
-      code: 'function outer() {\n  const controller = new AbortController();\n  return async function inner(url) {\n    let timer;\n    try {\n      return await Promise.race([fetch(url), new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 1); })]);\n    } finally {\n      clearTimeout(timer);\n    }\n  };\n}',
+      code: 'function outer() {\n  const controller = new AbortController();\n  return async function inner(url) {\n    let timer;\n    try {\n      return await Promise.race([fetch(url, { signal: controller.signal }), new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 1); })]);\n    } finally {\n      clearTimeout(timer);\n    }\n  };\n}',
       errors: [{ messageId: 'controllerNotLocal' }],
     },
     // The local is not an AbortController.
@@ -132,7 +135,7 @@ ruleTester.run('timeout-aborts-request', rule, {
     },
     // A race at module level has no function to hold a controller.
     {
-      code: 'const controller = new AbortController();\nlet timer;\ntry {\n  await Promise.race([fetch(url), new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 1); })]);\n} finally {\n  clearTimeout(timer);\n}',
+      code: 'const controller = new AbortController();\nlet timer;\ntry {\n  await Promise.race([fetch(url, { signal: controller.signal }), new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 1); })]);\n} finally {\n  clearTimeout(timer);\n}',
       errors: [{ messageId: 'controllerNotLocal' }],
     },
     // The timer is never cleared.
@@ -141,12 +144,12 @@ ruleTester.run('timeout-aborts-request', rule, {
       errors: [{ messageId: 'timerNotCleared' }],
     },
     {
-      code: 'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  return Promise.race([fetch(url), new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 1); })]);\n}',
+      code: 'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  return Promise.race([fetch(url, { signal: controller.signal }), new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 1); })]);\n}',
       errors: [{ messageId: 'timerNotCleared' }],
     },
     // Cleared outside a finally: an error path leaves the timer pending.
     {
-      code: 'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  const result = await Promise.race([fetch(url), new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 1); })]);\n  clearTimeout(timer);\n  return result;\n}',
+      code: 'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  const result = await Promise.race([fetch(url, { signal: controller.signal }), new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 1); })]);\n  clearTimeout(timer);\n  return result;\n}',
       errors: [{ messageId: 'timerNotCleared' }],
     },
     // A finally that clears some other timer.
@@ -173,16 +176,16 @@ ruleTester.run('timeout-aborts-request', rule, {
     },
     // A finally chained on a different promise does not count, and one on the race in another function neither.
     {
-      code: 'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  return Promise.race([fetch(url), new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 1); })]).then(() => 1);\n}',
+      code: 'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  return Promise.race([fetch(url, { signal: controller.signal }), new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 1); })]).then(() => 1);\n}',
       errors: [{ messageId: 'timerNotCleared' }],
     },
     {
-      code: 'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  try {\n    setup(() => { clearTimeout(timer); });\n  } finally {\n    clearTimeout(timer);\n  }\n  return Promise.race([fetch(url), new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 1); })]);\n}',
+      code: 'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  try {\n    setup(() => { clearTimeout(timer); });\n  } finally {\n    clearTimeout(timer);\n  }\n  return Promise.race([fetch(url, { signal: controller.signal }), new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 1); })]);\n}',
       errors: [{ messageId: 'timerNotCleared' }],
     },
     // A race in the finally clause is followed by nothing of that statement.
     {
-      code: 'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  try {\n    setup();\n  } finally {\n    clearTimeout(timer);\n    await Promise.race([fetch(url), new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 1); })]);\n  }\n}',
+      code: 'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  try {\n    setup();\n  } finally {\n    clearTimeout(timer);\n    await Promise.race([fetch(url, { signal: controller.signal }), new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 1); })]);\n  }\n}',
       errors: [{ messageId: 'timerNotCleared' }],
     },
     // Returned without await inside the try: the finally runs at once, clearing the timer before it can fire, and the catch never sees the rejection.
@@ -198,6 +201,20 @@ ruleTester.run('timeout-aborts-request', rule, {
     {
       code: 'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  let pending;\n  try {\n    pending = Promise.race([fetch(url, { signal: controller.signal }), new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 5); })]);\n  } finally {\n    clearTimeout(timer);\n  }\n  return await pending;\n}',
       errors: [{ messageId: 'timerNotCleared' }],
+    },
+    // The timer aborts a controller the raced request never received.
+    {
+      code: 'async function f(url) {\n  const controller = new AbortController();\n  const other = new AbortController();\n  let timer;\n  try {\n    return await Promise.race([fetch(url, { signal: other.signal }), new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 1); })]);\n  } finally {\n    clearTimeout(timer);\n  }\n}',
+      errors: [{ messageId: 'controllerNotUsedByRequest', data: { controller: 'controller' } }],
+    },
+    {
+      code: 'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  try {\n    return await Promise.race([fetch(url), new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 1); })]);\n  } finally {\n    clearTimeout(timer);\n  }\n}',
+      errors: [{ messageId: 'controllerNotUsedByRequest' }],
+    },
+    // The request named by a const is read through its initialiser.
+    {
+      code: 'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  const request = fetch(url);\n  try {\n    return await Promise.race([request, new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 1); })]);\n  } finally {\n    clearTimeout(timer);\n  }\n}',
+      errors: [{ messageId: 'controllerNotUsedByRequest' }],
     },
     // A catch that does not test the signal.
     {
@@ -242,7 +259,7 @@ ruleTester.run('timeout-aborts-request', rule, {
     },
     // A chained catch is held to the same rule.
     {
-      code: 'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  return Promise.race([fetch(url), new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 1); })])\n    .catch((error) => { throw error; })\n    .finally(() => { clearTimeout(timer); });\n}',
+      code: 'async function f(url) {\n  const controller = new AbortController();\n  let timer;\n  return Promise.race([fetch(url, { signal: controller.signal }), new Promise((_, reject) => { timer = setTimeout(() => controller.abort(), 1); })])\n    .catch((error) => { throw error; })\n    .finally(() => { clearTimeout(timer); });\n}',
       errors: [{ messageId: 'catchDoesNotCheckAbort' }],
     },
     // Several timer arms are each checked.

@@ -1,6 +1,6 @@
 import { AST_NODE_TYPES, ASTUtils, ESLintUtils, TSESLint, type TSESTree } from '@typescript-eslint/utils';
 
-type MessageIds = 'timeoutDoesNotAbort' | 'controllerNotLocal' | 'timerNotCleared' | 'catchDoesNotCheckAbort';
+type MessageIds = 'timeoutDoesNotAbort' | 'controllerNotLocal' | 'timerNotCleared' | 'catchDoesNotCheckAbort' | 'controllerNotUsedByRequest';
 
 type Variable = TSESLint.Scope.Variable;
 
@@ -117,6 +117,7 @@ const timeoutAbortsRequest = createRule<[], MessageIds>({
     messages: {
       timeoutDoesNotAbort: 'This timeout settles the race but never aborts the request it raced against, which keeps running. Call abort() on the request\'s AbortController in the timer callback.',
       controllerNotLocal: 'The AbortController this timer aborts must be created in the function that holds the race (a local const), not at module level, in an outer function or as a parameter, so each race aborts only its own request.',
+      controllerNotUsedByRequest: 'The timer aborts {{ controller }}, but no other arm of the race uses it, so the request being raced is not the one this aborts. Pass {{ controller }}.signal to the request.',
       timerNotCleared: 'Keep the id this setTimeout returns in a variable and pass it to clearTimeout in a finally around the race, so a request that wins does not leave the timer pending.',
       catchDoesNotCheckAbort: 'This handler must return early when {{ controller }}.signal.aborted, so a timeout is handled apart from a failure of the request.',
     },
@@ -262,6 +263,26 @@ const timeoutAbortsRequest = createRule<[], MessageIds>({
         (statement) => impliesAborted(statement.test, controller) && collect(sourceCode, statement.consequent, (node): node is TSESTree.ReturnStatement => node.type === AST_NODE_TYPES.ReturnStatement, true).length > 0,
       );
 
+    /**
+     * Whether the controller reaches the work the timer is raced against: it is referenced in an arm other than the one holding the timer, or in the `const` initialiser such an arm names. A race whose other arms never touch the controller aborts a controller nothing is listening to.
+     */
+    const controllerReachesRequest = (race: TSESTree.CallExpression, timerArm: TSESTree.Node, controller: Variable): boolean => {
+      const [arms] = race.arguments;
+      if (arms?.type !== AST_NODE_TYPES.ArrayExpression) return false;
+      const requestCode = (arm: TSESTree.Node): TSESTree.Node[] => {
+        if (arm.type !== AST_NODE_TYPES.Identifier) return [arm];
+        const definition = ASTUtils.findVariable(sourceCode.getScope(arm), arm.name)?.defs[0];
+        const init = definition?.type === TSESLint.Scope.DefinitionType.Variable ? definition.node.init : null;
+
+        return init === null ? [arm] : [arm, init];
+      };
+
+      return arms.elements
+        .filter((arm): arm is TSESTree.Expression => arm !== null && arm.type !== AST_NODE_TYPES.SpreadElement && arm !== timerArm)
+        .flatMap(requestCode)
+        .some((code) => collect(sourceCode, code, (node): node is TSESTree.Identifier => node.type === AST_NODE_TYPES.Identifier && ASTUtils.findVariable(sourceCode.getScope(node), node.name) === controller, false).length > 0);
+    };
+
     return {
       CallExpression(race) {
         if (!isPromiseRace(race)) return;
@@ -269,18 +290,18 @@ const timeoutAbortsRequest = createRule<[], MessageIds>({
         if (arms?.type !== AST_NODE_TYPES.ArrayExpression) return;
 
         for (const arm of arms.elements) {
-          const promise = arm === null || arm.type === AST_NODE_TYPES.SpreadElement ? undefined : promiseOfArm(arm);
-          const [executor] = promise?.arguments ?? [];
+          if (arm === null || arm.type === AST_NODE_TYPES.SpreadElement) continue;
+          const [executor] = promiseOfArm(arm)?.arguments ?? [];
           if (executor === undefined || !isFunction(executor)) continue;
 
           for (const timer of collect(sourceCode, executor.body, (node): node is TSESTree.CallExpression => isCallTo(node, 'setTimeout'), false)) {
-            checkTimer(race, timer);
+            checkTimer(race, arm, timer);
           }
         }
       },
     };
 
-    function checkTimer(race: TSESTree.CallExpression, timer: TSESTree.CallExpression): void {
+    function checkTimer(race: TSESTree.CallExpression, timerArm: TSESTree.Node, timer: TSESTree.CallExpression): void {
       const [callback] = timer.arguments;
       const body = callback === undefined ? undefined : callbackBody(sourceCode.getScope(timer), callback);
       const aborts = body === undefined ? [] : collect(sourceCode, body, isAbortCall, false);
@@ -293,6 +314,7 @@ const timeoutAbortsRequest = createRule<[], MessageIds>({
         if (controller === undefined) {
           context.report({ node: timer, messageId: 'controllerNotLocal' });
         } else {
+          if (!controllerReachesRequest(race, timerArm, controller)) context.report({ node: timer, messageId: 'controllerNotUsedByRequest', data: { controller: controller.name } });
           for (const handler of catchHandlers(race)) {
             if (!returnsOnAbort(handler, controller)) context.report({ node: handler, messageId: 'catchDoesNotCheckAbort', data: { controller: controller.name } });
           }
