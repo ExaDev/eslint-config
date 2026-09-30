@@ -654,6 +654,8 @@ A line with no substitution becomes a single-quoted string and a line with one s
 
 The rule reports without offering a fix when it cannot show that the pieces join back to exactly the same value: a line continuation (a backslash before a line break), a carriage return or Unicode line separator in the source, a `\x` or `\u` escape that spells a line feed, or an octal-looking escape. A final check compares the line breaks it found with the line feeds in the cooked value, so a case the scanner mis-reads is refused rather than rewritten.
 
+It also reports without a fix when the template sits where TypeScript needs its literal type, which the joined string (a plain `string`) does not have: under `as const`, `as`, `satisfies` or a type assertion (also through an enclosing array or object), as a string enum member's initialiser, or as the initialiser of a declaration with a type annotation. Without type information it cannot see the contextual type of a call argument or a return value, so those are still fixed.
+
 A tagged template is never reported. The tag receives the literal's pieces, so joining them would change what it is called with, and multi-line `sql`, `css` or `markdown` templates are the point of the syntax. There is therefore no option listing tags to ignore. `allowFiles` takes globs in the [file glob dialect](#file-level-rules) for files whose multi-line strings are intended (fixtures, prompts):
 
 ```ts
