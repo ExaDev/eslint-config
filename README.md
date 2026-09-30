@@ -332,6 +332,10 @@ Bundled into `exadevConfig()`'s default output the same way React/Next.js auto-d
 | `turbo-boundaries-script` | | **The root package has a `boundaries` script equal to `turbo boundaries`,** invoked from the configured aggregate script. See [Turbo boundaries](#turbo-boundaries). |
 | `no-boundaries-ignore` | | **Bans the `@boundaries-ignore` comment** outside files listed with a reason. A JavaScript and TypeScript rule. See [Turbo boundaries](#turbo-boundaries). |
 | `test-file-kind` | | **A test file's name must declare its own test kind.** A filename suffix immediately before `.test`/`.spec` (e.g. `foo.unit.test.ts`), one of a configurable `{ kinds }` set (default: `unit`, `integration`, `e2e`). A naming-discipline rule, not a content classifier — it checks only the filename, never what the file actually tests. Self-scoped to real test/spec files (`context.filename`), so it never misfires when applied unscoped and never relies on a consumer's own `files` config. Requires no type information. |
+| `required-exports` | | **Files matching a glob must export the configured names.** `{ files, exports }` entries; presence only, no shape check. See [File-level rules](#file-level-rules). |
+| `required-imports` | | **Files matching a glob must import, and optionally call, a module matching a specifier pattern.** See [File-level rules](#file-level-rules). |
+| `import-policy` | | **Glob-scoped import policy:** deny lists, specifiers confined to named files, and exact exception edges, with a message that names the requirement. Wired by `importPolicyConfig`. See [Import policy](#import-policy). |
+| `filename-pattern` | | **Filename conventions by glob:** a name regex, a required sibling file, and a naming scheme required once a file passes a line count. See [Filename patterns](#filename-patterns). |
 
 ## Barrel policy
 
@@ -354,6 +358,110 @@ Notes on `'auto'`:
 - `private: true` in `package.json` is not consulted by the detection: a pnpm workspace package is routinely both `private` and a genuine import target for sibling packages via `exports`, so `private` says nothing about whether a barrel is warranted.
 
 In every mode, re-exports are banned outside a permitted barrel, and a permitted barrel may contain only re-export statements. The umbrella composes the identical predicates the standalone rules use (shared in [`src/rules/barrel-helpers.ts`](src/rules/barrel-helpers.ts)). It is non-fixable — the autofix lives on `no-non-barrel-reexport`.
+
+## File-level rules
+
+`required-exports`, `required-imports`, `import-policy` and `filename-pattern` check one file against a convention that depends on its path. Each self-scopes through `context.filename`, so it is a no-op on every other file and can sit in a shared config without a `files` array of its own. None needs type information, and none is in `recommended`, since each takes options only a project can supply.
+
+`files` in these rules is a glob, or a list of globs, in the dialect used for every file glob in this package (braces, `*`, `?`, `[...]`, `**` as whole segments, a leading `!` to exclude, wildcards never matching dot-prefixed names), matched against the path relative to ESLint's working directory. A glob without a `/` names a file at any depth, so `fake.ts` and `**/fake.ts` are the same.
+
+### Required exports
+
+```ts
+'exadev/required-exports': ['error', [
+  { files: '**/contract/src/errors.ts', exports: ['ContractError', 'contractErrorSchema'] },
+  { files: 'fake.ts', exports: ['createFake'] },
+]]
+```
+
+A file matching `files` must export every name in `exports`. Counted: `export const`, `let`, `var` (destructuring included), functions, classes, enums, interfaces, type aliases and namespaces, `export { a, b as c }` with or without `from`, `export type { ... }`, `export * as ns from`, and `export default` as the name `default`. A bare `export * from './x'` counts nothing, because the names it forwards live in a file this rule does not read; list the names in an explicit re-export if a barrel must satisfy the rule. When several entries match one file, the file is reported once, listing every missing name.
+
+### Required imports
+
+```ts
+'exadev/required-imports': ['error', [
+  {
+    files: '**/adapters/*/src/**/*.test.ts',
+    from: ['**/contract/src/*conformance*', '@acme/contract/conformance'],
+    call: true,
+  },
+]]
+```
+
+A file matching `files` must import at least one binding from a module whose specifier matches `from` (a pattern or a list). With `call: true` it must also call a binding it imported from there, which a bare import that is never used does not satisfy. A call counts wherever it sits (module top level or inside a callback), including through a namespace or default import (`kit.run(...)`); passing the binding as an argument is not a call. Side-effect imports and type-only imports (`import type`, or every specifier inline `type`) bind no runtime value and do not count.
+
+Resolution is by specifier pattern, not through the module graph, so no type information is needed and the package need not be installed. A `from` pattern follows the rules in [Specifier patterns](#specifier-patterns): a relative specifier such as `../../contract/src/run-conformance` is matched by the path it resolves to (the reference implementation's form), and a package specifier such as `@acme/contract/conformance/pg` is matched as written (the adapter's form). List both forms in `from` to cover a kit imported either way. The rule proves the kit is wired in, not that the kit is any good, and a skipped test still satisfies it.
+
+Each unsatisfied entry reports once on the program node.
+
+### Specifier patterns
+
+`required-imports` (`from`) and [`import-policy`](#import-policy) (`specifiers`) match module specifiers the same way:
+
+- Patterns use the file-glob dialect, and each also selects everything beneath it, so `fs` selects `fs/promises` and `@scope/pkg` selects `@scope/pkg/sub`.
+- A leading `node:` is ignored on both sides, so `fs` and `node:fs` are one builtin.
+- A relative specifier is resolved against the linted file's directory to a path relative to the working directory, then matched only by patterns containing a `/`. A bare pattern such as `fs` therefore never selects `./fs`. A relative specifier that leaves the working directory matches nothing.
+- Nothing is resolved through `node_modules` or the TypeScript path map, so an alias such as `@/db` is matched as the string it is.
+
+## Import policy
+
+`importPolicyConfig` turns a list of policies into a flat-config block for `exadev/import-policy`, or pass the same list to `exadevConfig({ importPolicies })`.
+
+```ts
+import { defineConfig } from 'eslint/config';
+import { exadevConfig, importPolicyConfig } from '@exadev/eslint-config';
+
+export default defineConfig(
+  ...exadevConfig(),
+  ...importPolicyConfig([
+    {
+      files: ['src/worker/**'],
+      deny: [{ specifiers: ['fs', 'path', 'child_process'], message: 'worker code runs where Node builtins do not exist' }],
+    },
+    {
+      files: ['src/**'],
+      ignores: ['src/**/*.test.ts'],
+      confine: [{ specifiers: ['@anthropic-ai/sdk'], onlyIn: ['src/agent/adapter.ts'], allowTypeImports: true }],
+    },
+    {
+      files: ['src/routes/**'],
+      deny: [{ specifiers: ['src/db'], message: 'routes reach data through the service layer' }],
+      exceptEdges: [{ file: 'src/routes/legacy.ts', specifier: '../db/client', reason: 'predates the service layer' }],
+    },
+  ]),
+);
+```
+
+A policy selects files with `files` and `ignores` and holds them to:
+
+- `deny`: `specifiers` the files may not import. `message` is required and should name the requirement (why, and what to do instead), not the rule. `importNames` limits the ban to those imported names (`default` for a default import); a namespace import, a dynamic import, `require` and `export *` take every name, so they are still reported. `allowTypeImports` leaves erased imports alone.
+- `confine`: `specifiers` the files may import only in the files `onlyIn` selects, so the inverse case needs no hand-built complement. `allowTypeImports` and an optional `message` work as for `deny`; the default message lists `onlyIn`.
+- `exceptEdges`: one exact `file` and `specifier` pair with a required `reason`. Neither may contain a glob character, so an exception cannot widen. The specifier is compared exactly as written in that file. Creating the config throws for an exception that could never apply (a file the policy does not select, or a specifier none of its `deny` or `confine` entries selects), so a stale exception fails instead of lingering.
+
+Specifiers follow [Specifier patterns](#specifier-patterns). The rule is syntactic and covers `import`, `import type`, `export ... from`, `export * from`, `import x = require()`, dynamic `import()` with a static string, `require()` with a static string that is not shadowed, and `import('x')` type queries. A specifier built at runtime cannot be judged and is skipped.
+
+ESLint's core `no-restricted-imports` covers only the static forms (`import`, `export ... from`, `export * from` and `import x = require()`); it has no check for dynamic `import()`, `require()` or `import('x')` type queries, and `no-restricted-modules` is deprecated since ESLint 7. A preset compiled to `no-restricted-imports` blocks would also inherit flat config's rule-level override: when two policies select the same file, the later block's option list replaces the earlier one's, and an exception edge would have to restate every other restriction of the file. So the preset compiles to one block for a purpose-built rule instead, where every policy that selects a file applies to it. Files outside a policy's `files` are untouched.
+
+## Filename patterns
+
+```ts
+'exadev/filename-pattern': ['error', [
+  // A name convention: stories are PascalCase.stories.tsx.
+  { files: '**/*.stories.tsx', pattern: '[A-Z][A-Za-z0-9]*\\.stories\\.tsx' },
+  // A relationship between two files: a component needs its stylesheet beside it.
+  { files: ['src/components/*.tsx', '!**/*.stories.tsx'], sibling: ['{name}.module.css', '{name}.module.scss'] },
+  // A relationship between size and name: a file over 400 lines must be a numbered part.
+  { files: 'src/**/*.ts', overLines: 400, pattern: '.+\\.part-\\d{2}\\.ts' },
+]]
+```
+
+An entry applies to files matching `files` (and, with `overLines`, to those with more lines than that) and needs a `pattern`, a `sibling`, or both:
+
+- `pattern` is a regular expression source that the whole file name (last path segment, extension included) must match.
+- `sibling` is a path or list of paths relative to the linted file's directory; at least one must exist. `{name}` stands for the file's name without its final extension (`Button` for `Button.tsx`), and a path may enter a subdirectory (`styles/{name}.css`). To exempt other files, exclude them in `files`.
+- `overLines` counts physical lines, ignoring the newline that ends the file. It is a naming requirement, so it does not replace ESLint's `max-lines`, which still reports the size; this rule requires that the parts an over-long file is split into follow the scheme. It does not check that the parts exist as a sequence.
+
+Why not a dependency: [`eslint-plugin-check-file`](https://github.com/dukeluo/eslint-plugin-check-file) (`filename-naming-convention`, `folder-match-with-fex`, `filename-blocklist`, `folder-naming-convention`, `no-index`) and [`unicorn/filename-case`](https://github.com/sindresorhus/eslint-plugin-unicorn/blob/main/docs/rules/filename-case.md) cover case styles and per-glob name patterns, and check-file also folder names and blocked names. Neither can express that another file must exist beside the linted one, or that a name depends on the file's line count, which are the two cases this rule exists for. The name-pattern case is the same as what check-file offers, so a project that already uses that plugin for case styles and folder layout can keep it alongside this rule.
 
 ## Workspace architecture
 
@@ -738,6 +846,9 @@ pnpm build
 - [`src/rules/file-scope.ts`](src/rules/file-scope.ts) lets a rule scope itself by filename, so it still behaves when a consumer wires it onto a wider `files` list.
   - `createFileScope(globs)` returns a `(filename, cwd) => boolean` matching the file relative to `cwd` in the same glob dialect as the workspace `packages` globs (braces, `*`, `?`, `[...]`, `**`, `!` excludes, wildcards never matching dot-prefixed names). A file outside `cwd` (its relative path starts with `..`) is never in scope, whatever the patterns. Build it once per `create()`.
   - `fileGlobsSchema` and `readFileGlobs` are the option schema and runtime validator for a glob list; a list needs at least one include and may not repeat a glob.
+- [`src/rules/file-entry.ts`](src/rules/file-entry.ts) is the shared option handling for the per-file rules (`required-exports`, `required-imports`, `import-policy`, `filename-pattern`): `createEntryScope` widens a glob without a `/` to any depth on top of `createFileScope`, and the `read*` helpers validate entries and reject unknown keys.
+- [`src/rules/specifier-match.ts`](src/rules/specifier-match.ts) matches import specifiers against patterns for `required-imports` and `import-policy`, reusing the path matcher `createPathMatcher` in `file-scope.ts`.
+- [`src/import-policy.ts`](src/import-policy.ts) builds the `importPolicyConfig` block from the validated policies in [`src/rules/import-policy-options.ts`](src/rules/import-policy-options.ts), which the rule reads with the same reader.
 - [`src/rules/file-reference.ts`](src/rules/file-reference.ts) is the option shape for a rule that reads another file: `{ path, relativeTo? }`, resolved against the linted file's directory (`file`, the default) or the workspace root (`root`, found the way the workspace architecture rules find it).
   - `readReferencedJson` parses the target as JSONC through [`src/rules/jsonc.ts`](src/rules/jsonc.ts) (comments, trailing commas and a leading byte order mark), returning `undefined` for a missing file and throwing, naming the path, for one that does not parse.
 - [`src/turbo-config.ts`](src/turbo-config.ts) builds the turbo blocks (`buildTurboConfig` internally, `turboConfig` publicly) from the one shared options object in [`src/rules/turbo-options.ts`](src/rules/turbo-options.ts).
