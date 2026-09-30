@@ -57,29 +57,52 @@ function matchesGlob(file: string, input: InputGlob): boolean {
   return createFileScope([input.glob])(file, input.base);
 }
 
+// A task without `inputs` hashes the package's own files.
+function inputEntries(task: TurboTask): readonly string[] {
+  return task.inputs ?? [TURBO_DEFAULT];
+}
+
+function inputGlobs(task: TurboTask, dirs: Readonly<{ root: string; pkg: string }>): readonly (Readonly<{ entry: string; negated: boolean }> & Readonly<{ glob: InputGlob }>)[] {
+  return inputEntries(task).map((entry) => {
+    const negated = entry.startsWith('!');
+
+    return { entry, negated, glob: toInputGlob(negated ? entry.slice('!'.length) : entry, dirs) };
+  });
+}
+
+type CacheKeyInput = Readonly<{ file: string; task: TurboTask; globalDependencies: readonly string[]; dirs: Readonly<{ root: string; pkg: string }> }>;
+
+/**
+ * The first `!` entry of the `inputs` of `task` that matches the absolute path `file`, as written, or `undefined` when none does. A `!` glob is read like any other glob and then excludes: it also excludes a file that `$TURBO_DEFAULT$` or another glob includes, and listing a file it matches does not include it.
+ */
+export function excludingInput(input: CacheKeyInput): string | undefined {
+  const { file, task, dirs } = input;
+
+  return inputGlobs(task, dirs).find(({ negated, glob }) => negated && matchesGlob(file, glob))?.entry;
+}
+
 /**
  * Whether the cache key of `task`, run in the package at `dirs.pkg`, includes the absolute path `file`. A file is included by `globalDependencies` (relative to the repository root), by the package's own files when `inputs` is unset or lists `$TURBO_DEFAULT$`, or by an `inputs` glob (relative to the package, or to the repository root behind `$TURBO_ROOT$/`), and never when a `!` glob of `inputs` excludes it.
  */
-export function cacheKeyIncludes(input: Readonly<{ file: string; task: TurboTask; globalDependencies: readonly string[]; dirs: Readonly<{ root: string; pkg: string }> }>): boolean {
+export function cacheKeyIncludes(input: CacheKeyInput): boolean {
   const { file, task, globalDependencies, dirs } = input;
-  const entries = task.inputs ?? [TURBO_DEFAULT];
-  // A `!` glob is read like any other and then excludes: a file only a `!` glob matches is excluded anyway, so listing it does not include it.
-  const globs = entries.map((entry) => ({ negated: entry.startsWith('!'), glob: toInputGlob(entry.startsWith('!') ? entry.slice('!'.length) : entry, dirs) }));
+  const globs = inputGlobs(task, dirs);
   const listed = globs.some(({ glob }) => matchesGlob(file, glob));
-  const excluded = globs.some(({ negated, glob }) => negated && matchesGlob(file, glob));
   const inPackage = !relative(dirs.pkg, file).startsWith('..');
-  const included = (entries.includes(TURBO_DEFAULT) && inPackage) || listed;
+  const included = (inputEntries(task).includes(TURBO_DEFAULT) && inPackage) || listed;
 
-  return createFileScope(globalDependencies)(file, dirs.root) || (included && !excluded);
+  return createFileScope(globalDependencies)(file, dirs.root) || (included && excludingInput(input) === undefined);
 }
 
-export type ConfigInputProblemKind = 'missingPackageConfig' | 'missingRootConfig';
+export type ConfigInputProblemKind = 'missingPackageConfig' | 'missingRootConfig' | 'excludedConfig';
 
 interface MissingConfig {
   readonly kind: ConfigInputProblemKind;
   readonly tool: string;
   // The config file's name, relative to the package (missingPackageConfig) or to the repository root (missingRootConfig).
   readonly file: string;
+  // Only for `excludedConfig`: the `!` entry of `inputs`, as written, that drops the file from the cache key. Removing or narrowing it is the fix, since listing the file again does not override it.
+  readonly excludedBy?: string;
 }
 
 export interface ConfigInputProblem extends MissingConfig {
@@ -101,7 +124,13 @@ function missingConfigs(
       ...(pkg.dir === '' ? [] : configFilesIn(fs, dirs.root, globs).map((file) => ({ kind: 'missingRootConfig' as const, tool, file, path: join(dirs.root, file) }))),
     ];
 
-    return candidates.filter(({ path }) => !cacheKeyIncludes({ file: path, task, globalDependencies: config.globalDependencies, dirs })).map(({ kind, file }) => ({ kind, tool, file }));
+    return candidates.flatMap(({ kind, file, path }): readonly MissingConfig[] => {
+      const key = { file: path, task, globalDependencies: config.globalDependencies, dirs };
+      if (cacheKeyIncludes(key)) return [];
+      const excludedBy = excludingInput(key);
+
+      return [excludedBy === undefined ? { kind, tool, file } : { kind: 'excludedConfig', tool, file, excludedBy }];
+    });
   });
 }
 
@@ -135,7 +164,7 @@ export function checkConfigInputs(
     if (task.cache === false) continue;
     const dirs = { root: rootDir, pkg: resolve(rootDir, pkg.dir) };
     for (const missing of missingConfigs({ fs, config, task, pkg, command, dirs, toolConfigs })) {
-      const identity = `${missing.kind}\0${missing.tool}\0${missing.file}`;
+      const identity = `${missing.kind}\0${missing.tool}\0${missing.file}\0${missing.excludedBy ?? ''}`;
       grouped.set(identity, { ...missing, packages: [...(grouped.get(identity)?.packages ?? []), pkg.dir === '' ? ROOT_PACKAGE_QUALIFIER : (pkg.name ?? pkg.dir)] });
     }
   }
