@@ -1,3 +1,34 @@
+# [2.24.0](https://github.com/ExaDev/eslint-config/compare/v2.23.3...v2.24.0) (2026-09-30)
+
+
+### Bug Fixes
+
+* build the surrounding-quote pattern per call so a mutation of it is testable ([fd2c92e](https://github.com/ExaDev/eslint-config/commit/fd2c92e74d532d0960f13a1c08a4dfa9303131e3))
+* derive turbo boundary tag groups from the workspace architecture groups ([4d62519](https://github.com/ExaDev/eslint-config/commit/4d625197cf09868c7a607db3fd4b26cbbb405148))
+* ignore a leading byte order mark when parsing a referenced JSONC file ([60a8232](https://github.com/ExaDev/eslint-config/commit/60a8232331eb26c01ebbdfcc5b7f1db8ea00b164))
+* keep files outside the working directory out of every file scope ([007dad8](https://github.com/ExaDev/eslint-config/commit/007dad82cbcd67cc01e5e358eb3c3cc28c45b272))
+* read an empty flow sequence in pnpm-workspace.yaml as no packages ([916b808](https://github.com/ExaDev/eslint-config/commit/916b808dc7f54ef14a45cc5fd3b3c343be0afed1))
+* recognise a boundaries script run with valueless package manager flags ([f4d42dc](https://github.com/ExaDev/eslint-config/commit/f4d42dcaf3c37b928a05b8443cea71ea0b4db883))
+* reject duplicate file globs and name the specific glob-list failure ([1a9cb04](https://github.com/ExaDev/eslint-config/commit/1a9cb04297d581393996cc7888c8c29371974aeb))
+* reject JSONC with a value-less comma and keep tokens apart across a block comment ([39b1f53](https://github.com/ExaDev/eslint-config/commit/39b1f53cf8e562c2783ebc5bb32ea1ab1b223b97))
+* reject positional words after the delegated task in a public script ([3b3222f](https://github.com/ExaDev/eslint-config/commit/3b3222f9217cb306e795341b8add7de07f7e03dd))
+* throw on malformed turbo.json values and read outputs null as undeclared ([04d5444](https://github.com/ExaDev/eslint-config/commit/04d5444172cd52ecda170aa7060c905a0a8e1b0c))
+* treat a // task run or depended on by its bare name as reachable ([620f0e1](https://github.com/ExaDev/eslint-config/commit/620f0e1d580aefc9f91ca0eac52fa2135337cabd))
+
+
+### Features
+
+* add a file-reference option for reading a sibling or root file ([9d26018](https://github.com/ExaDev/eslint-config/commit/9d26018b01a37a517186566d08755a7c3c3b0402))
+* add filename glob scoping and a JSONC parser for JSON rules ([e37e761](https://github.com/ExaDev/eslint-config/commit/e37e7618d52e8de6944bb23823456adf9c26181f))
+* add package-has-files, dev-dependency-only and required-scripts workspace rules ([5fa720b](https://github.com/ExaDev/eslint-config/commit/5fa720bb8a2f64aa86318a034c641f3b04d70457))
+* add turbo boundaries opt-in, package tag, script and ignore-comment rules ([8f11ed9](https://github.com/ExaDev/eslint-config/commit/8f11ed93f861e1923e9b80ee935590890b2b3bf1))
+* add turbo script convention, task and script cross-check, outputs and no-fix rules ([3f94c75](https://github.com/ExaDev/eslint-config/commit/3f94c75bc7d762776700e5b3852179ebecaa3699))
+* let no-uphill-dependency allow documented edges and exempt whole target groups ([e41fb8a](https://github.com/ExaDev/eslint-config/commit/e41fb8a7867b1fecbc67074b5b8ae5ee148cf72b))
+* match a glob against files as well as directories inside a package directory ([381ac23](https://github.com/ExaDev/eslint-config/commit/381ac23f40ce1fdf81505ff532b7de4a6b115ca8))
+* read allow, exemptTargetGroups, requiredFiles, devOnly and requiredScripts workspace options ([da54d26](https://github.com/ExaDev/eslint-config/commit/da54d263e594b3276f77c761224a6785dc29ad14))
+* share the JSON language block builder and json/jsonc file globs ([73d66e0](https://github.com/ExaDev/eslint-config/commit/73d66e01dd5534d1e09e15e5e21b15a3c4502288))
+* wire the turbo rules through turboConfig and exadevConfig ([71d943e](https://github.com/ExaDev/eslint-config/commit/71d943ea362de8c0261031a84b91a3df10993509))
+
 ## [2.23.3](https://github.com/ExaDev/eslint-config/compare/v2.23.2...v2.23.3) (2026-09-29)
 
 ## [2.23.2](https://github.com/ExaDev/eslint-config/compare/v2.23.1...v2.23.2) (2026-09-29)
