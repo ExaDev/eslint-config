@@ -73,6 +73,16 @@ ruleTester.run('scoped-first-parameter', rule, {
     { code: 'type TenantScope = { readonly tenantId: string };\ntype Scope = TenantScope;\ninterface OrderRepository { list(scope: Scope): void }', options },
     // An import alias under a different name resolves to the type's own declared name.
     { code: 'namespace Auth { export interface TenantScope { readonly tenantId: string } }\nimport Scope = Auth.TenantScope;\ninterface OrderRepository { list(scope: Scope): void }', options },
+    // A scope declared as an alias of a generic instantiation, which is what prefer-readonly-object-param steers towards.
+    { code: 'type TenantScope = Readonly<{ id: string }>;\ninterface OrderRepository { list(scope: TenantScope): void }', options },
+    // A scope declared as an alias of a primitive, whose alias TypeScript drops from the resolved type.
+    { code: 'type TenantScope = string;\ninterface OrderRepository { list(scope: TenantScope, id: string): void }', options },
+    // A second alias, an import rename and a qualified name each lead back to the declaration.
+    { code: 'type TenantScope = Readonly<{ id: string }>;\ntype Scope = TenantScope;\ntype Inner = Scope;\ninterface OrderRepository { list(scope: Inner): void }', options },
+    { code: 'namespace Auth { export type TenantScope = Readonly<{ id: string }> }\ninterface OrderRepository { list(scope: Auth.TenantScope): void }', options },
+    { code: "import type { TenantScope as Scope } from './__fixtures__/scoped-first-parameter/scope';\ninterface OrderRepository { list(scope: Scope): void }", options },
+    // A generic scope alias is named by the alias that declares it.
+    { code: 'type TenantScope<T> = Readonly<{ id: T }>;\ninterface OrderRepository { list(scope: TenantScope<string>): void }', options },
     // A type parameter constrained to the scope stands for the scope.
     { code: `${PRELUDE}interface OrderRepository { list<S extends TenantScope>(scope: S): void }`, options },
     // TypeScript's this pseudo-parameter is not the first argument.
@@ -98,6 +108,11 @@ ruleTester.run('scoped-first-parameter', rule, {
     { code: `${PRELUDE}interface OrderRepository { find(id: string, scope: TenantScope): void }`, options, errors: [wrong('OrderRepository', 'find', 'string')] },
     // A structurally identical type of another name is not the scope.
     { code: `${PRELUDE}interface OtherScope { readonly tenantId: string }\ninterface OrderRepository { list(scope: OtherScope): void }`, options, errors: [wrong('OrderRepository', 'list', 'OtherScope')] },
+    // A primitive alias under another name is not the scope, and neither is Readonly of the scope.
+    { code: 'type TenantId = string;\ntype OtherId = string;\ninterface OrderRepository { list(scope: OtherId): void }', options: [{ interfaces: 'Repository$', parameter: { type: 'TenantId' } }], errors: [{ messageId: 'wrongType', data: { owner: 'OrderRepository', method: 'list', type: 'TenantId', actual: 'string' } }] },
+    { code: `${PRELUDE}interface OrderRepository { list(scope: Readonly<TenantScope>): void }`, options, errors: [wrong('OrderRepository', 'list', 'Readonly<TenantScope>')] },
+    // Renaming an unrelated type to the required name does not make it the scope.
+    { code: "import type { Other as TenantScope } from './__fixtures__/scoped-first-parameter/scope';\ninterface OrderRepository { list(scope: TenantScope): void }", options, errors: [{ messageId: 'wrongType' }] },
     // A union with the scope does not guarantee one.
     { code: `${PRELUDE}interface OrderRepository { list(scope: TenantScope | undefined): void }`, options, errors: [wrong('OrderRepository', 'list', 'TenantScope | undefined')] },
     // No annotation means no type to resolve.

@@ -1,6 +1,6 @@
 import { AST_NODE_TYPES, ESLintUtils, type ParserServicesWithTypeInformation, type TSESLint, type TSESTree } from '@typescript-eslint/utils';
 import type { JSONSchema4 } from '@typescript-eslint/utils/json-schema';
-import type * as ts from 'typescript';
+import * as ts from 'typescript';
 import { isRecord } from '../is-record';
 import { assertOnlyKeys } from './file-entry';
 
@@ -109,18 +109,51 @@ function aliasMembers(annotation: TSESTree.TypeNode): readonly Member[] {
 }
 
 /**
- * The names a resolved type is declared under: its alias when it has one, and its own symbol (an interface, class or enum name). Matching either is what lets a second alias or an import rename of the same type count. A type parameter stands for its constraint, so `<S extends TenantScope>(scope: S)` resolves to `TenantScope`.
+ * The names a type reference is declared under, following it the way a reader would: an import alias to the declaration it renames, and a type alias whose body is itself a reference (`type Scope = TenantScope`) to the type it names. Every declaration reached contributes its own name, so both `type TenantScope = Readonly<{ id: string }>` and `type TenantId = string` are named by the alias that declares them, which the resolved type no longer records (TypeScript keeps the alias of a generic instantiation as `Readonly`, and drops the alias of a primitive). An import alias's own local name is not a declaration and contributes nothing, so renaming an unrelated type to the required name does not satisfy the rule. A type parameter contributes nothing, since its constraint is read from the resolved type.
  */
-function declaredNames(checker: ts.TypeChecker, type: ts.Type): readonly string[] {
-  const resolved = type.isTypeParameter() ? (checker.getBaseConstraintOfType(type) ?? type) : type;
+function referenceNames(checker: ts.TypeChecker, start: ts.Symbol | undefined): readonly string[] {
+  const names: string[] = [];
+  const seen = new Set<ts.Symbol>();
+  for (let symbol = start; symbol !== undefined && !seen.has(symbol); ) {
+    seen.add(symbol);
+    if ((symbol.flags & ts.SymbolFlags.Alias) !== 0) {
+      symbol = checker.getAliasedSymbol(symbol);
+    } else if ((symbol.flags & ts.SymbolFlags.TypeParameter) !== 0) {
+      break;
+    } else {
+      names.push(symbol.getName());
+      symbol = aliasTarget(checker, symbol);
+    }
+  }
 
-  return [resolved.aliasSymbol?.getName(), resolved.getSymbol()?.getName()].filter((name): name is string => name !== undefined);
+  return names;
 }
 
-function typeOfParameter(services: ParserServicesWithTypeInformation, parameter: TSESTree.Parameter): ts.Type | undefined {
-  const annotation = 'typeAnnotation' in parameter ? parameter.typeAnnotation?.typeAnnotation : undefined;
+/**
+ * The symbol a type alias's body names, when the body is itself a type reference (`type Scope = TenantScope`); `undefined` for any other symbol or body (`type Scope = string`, `type Scope = { ... }`).
+ */
+function aliasTarget(checker: ts.TypeChecker, symbol: ts.Symbol): ts.Symbol | undefined {
+  const declaration = symbol.declarations?.find(ts.isTypeAliasDeclaration);
+  if (declaration === undefined || !ts.isTypeReferenceNode(declaration.type)) return undefined;
+  const { typeName } = declaration.type;
 
-  return annotation === undefined ? undefined : services.getTypeAtLocation(annotation);
+  return checker.getSymbolAtLocation(ts.isIdentifier(typeName) ? typeName : typeName.right);
+}
+
+/**
+ * The names a parameter's declared type answers to: the declarations its annotation reaches (`referenceNames`), and, from the resolved type, its alias and its own symbol (an interface, class or enum name). A type parameter stands for its constraint, so `<S extends TenantScope>(scope: S)` resolves to `TenantScope`.
+ */
+function declaredNames(services: ParserServicesWithTypeInformation, checker: ts.TypeChecker, annotation: TSESTree.TypeNode, type: ts.Type): readonly string[] {
+  const resolved = type.isTypeParameter() ? (checker.getBaseConstraintOfType(type) ?? type) : type;
+  const reference = annotation.type === AST_NODE_TYPES.TSTypeReference ? annotation.typeName : undefined;
+  const identifier = reference?.type === AST_NODE_TYPES.TSQualifiedName ? reference.right : reference;
+  const referenced = identifier?.type === AST_NODE_TYPES.Identifier ? referenceNames(checker, services.getSymbolAtLocation(identifier)) : [];
+
+  return [...referenced, resolved.aliasSymbol?.getName(), resolved.getSymbol()?.getName()].filter((name): name is string => name !== undefined);
+}
+
+function annotationOf(parameter: TSESTree.Parameter): TSESTree.TypeNode | undefined {
+  return 'typeAnnotation' in parameter ? parameter.typeAnnotation?.typeAnnotation : undefined;
 }
 
 /**
@@ -137,7 +170,7 @@ type MessageIds = 'missingParameter' | 'wrongType' | 'wrongName' | 'notRequired'
 const createRule = ESLintUtils.RuleCreator((name) => `https://github.com/ExaDev/eslint-config/blob/main/src/rules/${name}.ts`);
 
 /**
- * Requires every method of the configured repository-like interfaces to take a scope (a tenant, an account) as its first parameter, so a call cannot be written without one. It checks the signature only: a method can accept a `TenantScope` and ignore it, so a passing run does not show that tenants are isolated. That takes conformance tests run against each implementation, which is why `required-imports` and the conformance-test presets exist. Type-aware, since the parameter's type is resolved through aliases and imports rather than read from its spelling.
+ * Requires every method of the configured repository-like interfaces to take a scope (a tenant, an account) as its first parameter, so a call cannot be written without one. It checks the signature only: a method can accept a `TenantScope` and ignore it, so a passing run does not show that tenants are isolated. Showing that takes conformance tests run against each implementation, which `required-imports` can require every implementation to wire in. Type-aware, since the parameter's type is resolved through aliases and imports rather than read from its spelling.
  */
 const scopedFirstParameter = createRule<[unknown], MessageIds>({
   name: 'scoped-first-parameter',
@@ -175,8 +208,9 @@ const scopedFirstParameter = createRule<[unknown], MessageIds>({
           context.report({ node: first, messageId: 'notRequired', data });
           continue;
         }
-        const type = typeOfParameter(services, first);
-        if (type === undefined || !declaredNames(checker, type).includes(requiredType)) {
+        const annotation = annotationOf(first);
+        const type = annotation === undefined ? undefined : services.getTypeAtLocation(annotation);
+        if (annotation === undefined || type === undefined || !declaredNames(services, checker, annotation, type).includes(requiredType)) {
           context.report({ node: first, messageId: 'wrongType', data: { ...data, actual: type === undefined ? 'untyped' : checker.typeToString(type) } });
           continue;
         }
