@@ -37,5 +37,40 @@ export default defineConfig(
     // src/consumer-compatibility.ts deliberately exercises tseslint.config() (now @deprecated) to prove this package's exported array still satisfies it, so existing consumers who haven't migrated to defineConfig() keep working; see that file's own comment. src/readme-examples.ts does the same for the one README example (the "lighter option" section's plugin.configs.recommended pattern) that documents tseslint.config() specifically, since that wrapper is README.md's own stated reason a consumer would still reach for it (string extends isn't accepted there).
     files: ['src/consumer-compatibility.ts', 'src/readme-examples.ts'],
     rules: { '@typescript-eslint/no-deprecated': 'off' },
+  },  {
+    // The compiler options this package's own source relies on (exhaustive handler maps, indexed-access narrowing, exact optional properties), required of the lint program so that loosening tsconfig.json fails lint instead of silently disabling them. The lint program here is the build's own tsconfig.json, so the two agree.
+    files: ['**/*.{ts,tsx,mts,cts}'],
+    rules: {
+      'exadev/require-compiler-options': [
+        'error',
+        {
+          strict: true,
+          noUncheckedIndexedAccess: true,
+          exactOptionalPropertyTypes: true,
+          noImplicitReturns: true,
+          noImplicitOverride: true,
+          noFallthroughCasesInSwitch: true,
+          noPropertyAccessFromIndexSignature: true,
+          noUncheckedSideEffectImports: true,
+          noUnusedLocals: true,
+          noUnusedParameters: true,
+          verbatimModuleSyntax: true,
+          isolatedModules: true,
+          strictBuiltinIteratorReturn: true,
+          forceConsistentCasingInFileNames: true,
+          allowUnreachableCode: false,
+          allowUnusedLabels: false,
+        },
+      ],
+    },
+  },
+  {
+    // This package's own test runner and mutation configs held to the tool config rules. vitest-coverage-config is not applied: coverage here is a report, and the gate is the mutation break threshold.
+    files: ['vitest*.config.ts', 'stryker*.config.ts'],
+    rules: {
+      'exadev/vitest-config': 'error',
+      'exadev/stryker-break-threshold': 'error',
+      'exadev/stryker-thresholds-order': 'error',
+    },
   },
 );
