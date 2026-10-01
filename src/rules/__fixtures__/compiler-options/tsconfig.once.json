@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "strict": false
+  },
+  "include": ["source.ts", "second.ts"]
+}
