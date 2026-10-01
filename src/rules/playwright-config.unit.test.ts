@@ -40,6 +40,14 @@ ruleTester.run('playwright-config', rule, {
     { code: 'export default defineConfig({ ...shared, projects: [] });', filename: FILENAME },
     { code: 'export default shared;', filename: FILENAME },
     { code: 'export default { forbidOnly: true } satisfies PlaywrightTestConfig;', filename: FILENAME },
+    // defineConfig merges every argument, so a setting made by any visible argument, or possibly by one that is not visible, counts.
+    { code: "import base from './base'; export default defineConfig(base, { use: {} });", filename: FILENAME },
+    { code: 'export default defineConfig({ forbidOnly: true }, { projects: [] });', filename: FILENAME },
+    { code: 'export default defineConfig({ projects: [] }, { forbidOnly: true });', filename: FILENAME },
+    { code: 'export default defineConfig({ forbidOnly: false }, ...overrides);', filename: FILENAME },
+    { code: 'export default defineConfig({ forbidOnly: false }, base);', filename: FILENAME },
+    { code: 'export default defineConfig(base, { forbidOnly: true, fullyParallel: true }, { projects: [] });', filename: FILENAME, options: [{ fullyParallel: true }] as const },
+    { code: 'export default defineConfig(base, { forbidOnly: true }, { projects: [] });', filename: FILENAME, options: [{ workers: true }] },
     // The optional checks are off unless asked for.
     { code: 'export default defineConfig({ forbidOnly: true, fullyParallel: false });', filename: FILENAME },
     { code: 'export default defineConfig({ forbidOnly: true, fullyParallel: true, workers: process.env.CI ? 1 : undefined });', filename: FILENAME, options: strict },
@@ -62,6 +70,16 @@ ruleTester.run('playwright-config', rule, {
     { code: 'export default defineConfig(() => ({}));', filename: FILENAME, errors: [{ messageId: 'forbidOnlyNotSet' }] },
     { code: 'export default defineConfig({});', filename: 'e2e/playwright.ci.config.mts', errors: [{ messageId: 'forbidOnlyNotSet' }] },
     { code: 'export default defineConfig({});', filename: 'e2e.config.ts', options: [{ files: ['e2e.config.ts'] }], errors: [{ messageId: 'forbidOnlyNotSet' }] },
+    // The merged configuration is judged: the last argument that spells a setting decides it.
+    { code: 'export default defineConfig({ retries: 1 }, { projects: [] });', filename: FILENAME, errors: [{ messageId: 'forbidOnlyNotSet', line: 1, column: 45 }] },
+    { code: 'export default defineConfig({ forbidOnly: true }, { forbidOnly: false });', filename: FILENAME, errors: [{ messageId: 'forbidOnlyFalse', line: 1, column: 53 }] },
+    { code: 'export default defineConfig(base, { forbidOnly: false });', filename: FILENAME, errors: [{ messageId: 'forbidOnlyFalse' }] },
+    {
+      code: 'export default defineConfig({ forbidOnly: true, fullyParallel: true }, { projects: [] });',
+      filename: FILENAME,
+      options: [{ workers: true }] as const,
+      errors: [{ messageId: 'workersNotSet', line: 1, column: 72 }],
+    },
     // The optional checks, when asked for.
     {
       code: 'export default defineConfig({ forbidOnly: true });',

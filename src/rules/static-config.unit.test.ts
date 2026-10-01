@@ -83,6 +83,39 @@ describe('configObjects', () => {
   });
 });
 
+describe('configGroups and lookupGroup', () => {
+  function groupLookup(source: string, name: string) {
+    const config = configFor(source, 'config.ts');
+    const [group] = config.configGroups(HELPERS);
+    if (group === undefined) throw new Error('no group');
+
+    return { group, found: config.lookupGroup(group, name) };
+  }
+
+  it('makes one group of the arguments of a helper call, marking an argument that is not visible', () => {
+    const { group } = groupLookup('export default defineConfig(base, { a: 1 }, ...more);', 'a');
+    expect(group.map((member) => member !== undefined)).toStrictEqual([false, true, false]);
+  });
+
+  it('makes a group of each element of an array and of each branch of a conditional', () => {
+    expect(configFor('export default [{ a: 1 }, defineConfig({ b: 1 }, { c: 1 })];', 'config.ts').configGroups(HELPERS).map((group) => group.length)).toStrictEqual([1, 2]);
+    expect(configFor('export default x ? { a: 1 } : { b: 1 };', 'config.ts').configGroups(HELPERS)).toHaveLength(2);
+  });
+
+  it('lets the last argument that spells a key decide it', () => {
+    expect(groupLookup('export default defineConfig({ a: 1 }, { a: 2 });', 'a').found).toMatchObject({ kind: 'present' });
+    expect(groupLookup('export default defineConfig({ a: 1 }, { b: 2 });', 'a').found).toMatchObject({ kind: 'present' });
+    expect(groupLookup('export default defineConfig({ a: 1 }, { b: 2 });', 'c').found).toStrictEqual({ kind: 'absent' });
+  });
+
+  it('is opaque when an argument that is not visible comes after the last spelling, and decided when it comes before', () => {
+    expect(groupLookup('export default defineConfig({ a: 1 }, base);', 'a').found).toStrictEqual({ kind: 'opaque' });
+    expect(groupLookup('export default defineConfig({ b: 1 }, base);', 'a').found).toStrictEqual({ kind: 'opaque' });
+    expect(groupLookup('export default defineConfig(base, { a: 1 });', 'a').found).toMatchObject({ kind: 'present' });
+    expect(groupLookup('export default defineConfig(base, { b: 1 });', 'a').found).toStrictEqual({ kind: 'opaque' });
+  });
+});
+
 describe('lookup', () => {
   const lookupIn = (source: string, name: string) => {
     const config = configFor(`export default ${source};`, 'config.ts');

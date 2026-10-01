@@ -15,6 +15,11 @@ export type PropertyLookup =
 export type StaticLiteral = { readonly known: true; readonly value: boolean | number | string | null | undefined } | { readonly known: false };
 
 /**
+ * The arguments of one call to a config helper, in order, which the helper merges with later arguments overriding earlier ones. A member is the object literal an argument stands for, or `undefined` for an argument whose value is not visible in the source (an import, a call, a spread, or anything that stands for more than one object). A configuration that is not a helper call is a group of its one object literal.
+ */
+export type ConfigGroup = readonly (TSESTree.ObjectExpression | undefined)[];
+
+/**
  * A read-only view of one config file's top-level structure, answering only what the source states. A rule built on it stays silent about everything else, because a value produced by a call, a spread or an import cannot be judged without running the file.
  */
 export interface StaticConfig {
@@ -26,6 +31,14 @@ export interface StaticConfig {
    * Every object literal that is a candidate config in the file's default export (`export default`, `export =` or `module.exports =`): the literal itself, the elements of an array, the arguments of a call to one of `helpers` (`defineConfig`, `mergeConfig`), the returned value of a function, and either branch of a conditional. A call to any other function contributes nothing, because its result is not visible.
    */
   readonly configObjects: (helpers: ReadonlySet<string>) => readonly TSESTree.ObjectExpression[];
+  /**
+   * The same candidates as `configObjects`, grouped by the helper call that merges them, so a rule can judge what the merged configuration sets instead of each literal alone.
+   */
+  readonly configGroups: (helpers: ReadonlySet<string>) => readonly ConfigGroup[];
+  /**
+   * Looks `name` up in the configuration `group` merges to: the last member that spells it decides, and a member that is not visible after the last spelling makes the answer `opaque`, since it may override the value or supply it.
+   */
+  readonly lookupGroup: (group: ConfigGroup, name: string) => PropertyLookup;
   /**
    * The object literals `node` stands for, followed the same way as `configObjects` follows the default export.
    */
@@ -109,13 +122,13 @@ export function createStaticConfig(program: TSESTree.Program): StaticConfig {
     return current;
   }
 
-  function objectsOf(node: TSESTree.Node, helpers: ReadonlySet<string>, visited: Set<TSESTree.Node>): readonly TSESTree.ObjectExpression[] {
+  function groupsOf(node: TSESTree.Node, helpers: ReadonlySet<string>, visited: Set<TSESTree.Node>): readonly ConfigGroup[] {
     const target = resolve(node);
     if (visited.has(target)) return [];
     visited.add(target);
-    const follow = (next: TSESTree.Node): readonly TSESTree.ObjectExpression[] => objectsOf(next, helpers, visited);
+    const follow = (next: TSESTree.Node): readonly ConfigGroup[] => groupsOf(next, helpers, visited);
 
-    if (target.type === AST_NODE_TYPES.ObjectExpression) return [target];
+    if (target.type === AST_NODE_TYPES.ObjectExpression) return [[target]];
     if (target.type === AST_NODE_TYPES.ArrayExpression) {
       return target.elements.flatMap((element) => (element === null || element.type === AST_NODE_TYPES.SpreadElement ? [] : follow(element)));
     }
@@ -125,12 +138,27 @@ export function createStaticConfig(program: TSESTree.Program): StaticConfig {
       const name = calleeName(target.callee);
       if (name === undefined || !helpers.has(name)) return [];
 
-      return target.arguments.flatMap((argument) => (argument.type === AST_NODE_TYPES.SpreadElement ? [] : follow(argument)));
+      // An argument that stands for alternatives (a conditional, several returns) multiplies the groups: each combination is one possible merged configuration.
+      return target.arguments.reduce<readonly ConfigGroup[]>(
+        (combined, argument) => {
+          const alternatives: readonly ConfigGroup[] = argument.type === AST_NODE_TYPES.SpreadElement ? [] : follow(argument);
+          const options: readonly ConfigGroup[] = alternatives.length === 0 ? [[undefined]] : alternatives;
+
+          return combined.flatMap((prefix) => options.map((option): ConfigGroup => [...prefix, ...option]));
+        },
+        [[]],
+      );
     }
     if (!isFunctionNode(target)) return [];
     if (target.body.type !== AST_NODE_TYPES.BlockStatement) return follow(target.body);
 
     return returnedExpressions(target.body.body).flatMap(follow);
+  }
+
+  function objectsOf(node: TSESTree.Node, helpers: ReadonlySet<string>, visited: Set<TSESTree.Node>): readonly TSESTree.ObjectExpression[] {
+    const objects = new Set(groupsOf(node, helpers, visited).flatMap((group) => group.flatMap((member) => (member === undefined ? [] : [member]))));
+
+    return [...objects];
   }
 
   function defaultExports(): readonly TSESTree.Node[] {
@@ -163,6 +191,16 @@ export function createStaticConfig(program: TSESTree.Program): StaticConfig {
     if (lastUnknownIndex > match.index) return { kind: 'opaque' };
 
     return { kind: 'present', property: match.property, value: match.property.value };
+  }
+
+  function lookupGroup(group: ConfigGroup, name: string): PropertyLookup {
+    for (const member of group.toReversed()) {
+      if (member === undefined) return { kind: 'opaque' };
+      const found = lookup(member, name);
+      if (found.kind !== 'absent') return found;
+    }
+
+    return { kind: 'absent' };
   }
 
   function literal(node: TSESTree.Node): StaticLiteral {
@@ -198,6 +236,12 @@ export function createStaticConfig(program: TSESTree.Program): StaticConfig {
 
       return defaultExports().flatMap((exported) => objectsOf(exported, helpers, visited));
     },
+    configGroups: (helpers) => {
+      const visited = new Set<TSESTree.Node>();
+
+      return defaultExports().flatMap((exported) => groupsOf(exported, helpers, visited));
+    },
+    lookupGroup,
     objectsOf: (node, helpers) => objectsOf(node, helpers, new Set()),
     lookup,
     literal,
