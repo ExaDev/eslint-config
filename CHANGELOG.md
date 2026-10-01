@@ -1,3 +1,26 @@
+# [2.30.0](https://github.com/ExaDev/eslint-config/compare/v2.29.0...v2.30.0) (2026-10-01)
+
+
+### Bug Fixes
+
+* accept a root file name as a vitest coverage threshold key ([798e0b5](https://github.com/ExaDev/eslint-config/commit/798e0b5252644173483b5915be8ef361d0a570cb))
+* judge the merged configuration of a playwright defineConfig call ([f782623](https://github.com/ExaDev/eslint-config/commit/f782623b505af45297c5d60a344829882f343b3a))
+* name TypeScript 5.4 as the minimum for require-compiler-options ([922f3ff](https://github.com/ExaDev/eslint-config/commit/922f3ffa04f1d96e0885ebeff864755781b756db))
+* read compiler options from the tsconfig, not the typescript-eslint program ([5285c58](https://github.com/ExaDev/eslint-config/commit/5285c588fd082bf5d4baafd07567ae020b9107f9))
+* report require-compiler-options again in each run of a long-lived ESLint instance ([14c4e7f](https://github.com/ExaDev/eslint-config/commit/14c4e7fb269d2f33d5f1cd8c65c44a43d5b6e2db))
+* stop reporting a bare node_modules in vitest coverage.exclude ([ba58cd0](https://github.com/ExaDev/eslint-config/commit/ba58cd0ed59c3551570f6550bda222f864919ce7))
+* tell require-compiler-options runs apart by tsconfig and lint order ([3e6380e](https://github.com/ExaDev/eslint-config/commit/3e6380e9e2381a9b7ee110a55a2525c7629a9fe6))
+
+
+### Features
+
+* add playwright-config rule ([625d287](https://github.com/ExaDev/eslint-config/commit/625d28788b3078959e7c6dc6c325c1eb630b1174))
+* add require-compiler-options rule ([5849719](https://github.com/ExaDev/eslint-config/commit/5849719e3a0fca31638e03ac58ea76252a000126))
+* add stryker-break-threshold and stryker-thresholds-order rules ([e3c82cd](https://github.com/ExaDev/eslint-config/commit/e3c82cdf490c0f7719db4a94d053cb5dfc085d0a))
+* add vitest-config and vitest-coverage-config rules ([e60fc1d](https://github.com/ExaDev/eslint-config/commit/e60fc1d61ce68b5825ea5590bb5347c01ee94e92))
+* read the literal structure of a tool config file ([cb450e7](https://github.com/ExaDev/eslint-config/commit/cb450e74e48a9b2b4574be6ed82e6bd0143f9c5d))
+* register the tool config rules in the plugin ([78f3710](https://github.com/ExaDev/eslint-config/commit/78f3710c4936ae964dabc67b0fd25dd73de8fac3))
+
 # [2.29.0](https://github.com/ExaDev/eslint-config/compare/v2.28.0...v2.29.0) (2026-10-01)
 
 
