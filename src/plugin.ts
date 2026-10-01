@@ -37,6 +37,7 @@ import noUphillDependency from './rules/no-uphill-dependency';
 import packageHasFiles from './rules/package-has-files';
 import packageJsonKeyOrder from './rules/package-json-key-order';
 import packageNameMirrorsPath from './rules/package-name-mirrors-path';
+import packageRequirements from './rules/package-requirements';
 import preferNumericSortCompare from './rules/prefer-numeric-sort-compare';
 import preferDocComment from './rules/prefer-doc-comment';
 import preferOptionsObjectParam from './rules/prefer-options-object-param';
@@ -112,6 +113,7 @@ const plugin: TSESLint.FlatConfig.Plugin = {
     'package-has-files': packageHasFiles,
     'package-json-key-order': packageJsonKeyOrder,
     'package-name-mirrors-path': packageNameMirrorsPath,
+    'package-requirements': packageRequirements,
     'playwright-config': playwrightConfig,
     'prefer-doc-comment': preferDocComment,
     'prefer-numeric-sort-compare': preferNumericSortCompare,
