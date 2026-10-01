@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noUncheckedIndexedAccess": false,
+    "strict": false,
+    "target": "es2020"
+  },
+  "include": ["source.ts", "second.ts"]
+}
