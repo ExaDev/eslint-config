@@ -1,7 +1,7 @@
 import { ESLintUtils } from '@typescript-eslint/utils';
 import type * as ts from 'typescript';
 import { isRecord } from '../is-record';
-import { describeCompilerOptionValue, effectiveCompilerOption, isScalarOptionValue, parseRequirement, resolveCompilerOptions, type CompilerOptionRequirement } from './compiler-option-values';
+import { describeCompilerOptionValue, effectiveCompilerOption, isScalarOptionValue, parseRequirement, readTsconfig, tsconfigPathOf, type CompilerOptionRequirement } from './compiler-option-values';
 import { relativeToCwd } from './file-scope';
 
 type MessageIds = 'differs';
@@ -73,7 +73,9 @@ const requireCompilerOptions = createRule<[unknown], MessageIds>({
         linted.add(context.filename);
         if (!isFirstOfRun) return;
 
-        const compilerOptions = resolveCompilerOptions(program);
+        const configFilePath = tsconfigPathOf(program);
+        // A program with no tsconfig behind it has nothing to re-read and is judged on its own options.
+        const compilerOptions = configFilePath === undefined ? program.getCompilerOptions() : readTsconfig(configFilePath).options;
         const differences = requirements.flatMap((requirement) => {
           const actual = effectiveCompilerOption(compilerOptions, requirement.name);
           if (requirement.accepted.includes(actual)) return [];
@@ -82,8 +84,7 @@ const requireCompilerOptions = createRule<[unknown], MessageIds>({
         });
         if (differences.length === 0) return;
 
-        const configFilePath = compilerOptions['configFilePath'];
-        const tsconfig = typeof configFilePath === 'string' ? relativeToCwd(configFilePath, context.cwd) : 'the default project';
+        const tsconfig = configFilePath === undefined ? 'the default project' : relativeToCwd(configFilePath, context.cwd);
         context.report({ loc: { line: node.loc.start.line, column: node.loc.start.column }, messageId: 'differs', data: { tsconfig, differences: differences.join('; ') } });
       },
     };
