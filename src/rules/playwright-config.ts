@@ -8,8 +8,10 @@ type MessageIds = 'forbidOnlyNotSet' | 'forbidOnlyFalse' | 'fullyParallelNotSet'
 const OPTION_NAME = 'exadev/playwright-config';
 const OPTION_KEYS = ['files', 'fullyParallel', 'workers'] as const;
 
-// Any `playwright*.config.*`, so a profile such as `playwright.ci.config.ts` is covered.
-const PLAYWRIGHT_FILE_GLOBS: readonly string[] = ['**/playwright*.config.*'];
+/**
+ * The built-in filename scope of the Playwright rule: any `playwright*.config.*`, so a profile such as `playwright.ci.config.ts` is covered.
+ */
+export const PLAYWRIGHT_FILE_GLOBS: readonly string[] = ['**/playwright*.config.*'];
 
 // `defineConfig` is the only helper Playwright documents for its config.
 const PLAYWRIGHT_HELPERS: ReadonlySet<string> = new Set(['defineConfig']);

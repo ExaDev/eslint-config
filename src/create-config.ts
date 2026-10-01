@@ -14,6 +14,7 @@ import recommendedTypeChecked from './recommended-type-checked';
 import stylisticCommentsConfig from './stylistic-comments';
 import { toPublicConfigArray } from './to-public-config-array';
 import { buildTestHygieneConfig, type TestHygieneOptions } from './test-hygiene';
+import { buildToolingWiringConfig, type ToolingWiringOptions } from './tooling-wiring';
 import { buildTurboConfig } from './turbo-config';
 import { buildTurboEnvConfig } from './turbo-env';
 import type { ImportPolicy } from './rules/import-policy-options';
@@ -42,6 +43,8 @@ export interface ExadevConfigOptions {
   readonly testHygiene?: TestHygieneOptions;
   // Off unless given, like testHygiene: which Markdown files must contain which headings is a per-repository decision. Giving it throws when the optional peer @eslint/markdown is not installed. See markdownHeadingsConfig in src/markdown-headings.ts.
   readonly markdownHeadings?: MarkdownHeadingsOptions;
+  // Off unless given, like markdownHeadings: whether a repository wants its publish checks, root tooling and hook wiring enforced is a per-repository decision. An empty object enables every section with its defaults. Giving a package.json section (publish, root or hooks) throws when the optional peer @eslint/json is not installed. See toolingWiringConfig in src/tooling-wiring.ts.
+  readonly toolingWiring?: ToolingWiringOptions;
 }
 
 /**
@@ -79,6 +82,7 @@ export function exadevConfig(options: ExadevConfigOptions = {}, ...userConfigs: 
     ...(options.pureModules !== undefined ? buildPureModulesConfig(options.pureModules) : []),
     ...(options.testHygiene !== undefined ? buildTestHygieneConfig(options.testHygiene) : []),
     ...(options.markdownHeadings !== undefined ? buildMarkdownHeadingsConfig(options.markdownHeadings) : []),
+    ...(options.toolingWiring !== undefined ? buildToolingWiringConfig(options.toolingWiring) : []),
     ...userConfigs,
   ];
 
