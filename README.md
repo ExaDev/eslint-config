@@ -4,7 +4,7 @@
 
 > A real ESLint plugin (not a shareable config) exposing custom rules shared across ExaDev projects. Also published under the unscoped alias `exadev-eslint-config`.
 
-**Contents:** [Why](#why) · [Getting started](#getting-started) · [The lighter option](#the-lighter-option-the-plugin-named-export) · [Optional features](#optional-features) · [Rules](#rules) · [Barrel policy](#barrel-policy) · [Workspace architecture](#workspace-architecture) · [Turbo](#turbo) · [Development](#development) · [License](#license)
+**Contents:** [Why](#why) · [Getting started](#getting-started) · [The lighter option](#the-lighter-option-the-plugin-named-export) · [Optional features](#optional-features) · [Rules](#rules) · [Barrel policy](#barrel-policy) · [Tool config files](#tool-config-files) · [Tooling wiring](#tooling-wiring) · [Verifying ESLint is applied](#verifying-eslint-is-applied) · [Workspace architecture](#workspace-architecture) · [Turbo](#turbo) · [Development](#development) · [License](#license)
 
 ## Why
 
@@ -199,6 +199,7 @@ export default tseslint.config(
 | [Import policy](#import-policy) | Off unless given (only a repository can say which imports it forbids) | `exadevConfig({ importPolicies })` / `importPolicyConfig(policies)` |
 | [Pure modules](#pure-modules) | Off unless given (only a repository can say which modules are a functional core) | `exadevConfig({ pureModules })` / `pureModulesConfig(options)` |
 | [Guard and conformance test hygiene](#guard-and-conformance-test-hygiene) | Off unless given (only a repository can say which tests are guards); needs the optional peer `@vitest/eslint-plugin` | `exadevConfig({ testHygiene })` / `testHygieneConfig(options)` |
+| [Tooling wiring](#tooling-wiring) | Off unless given (only a repository can say it wants its publish checks, root tooling and hooks enforced); the package.json sections need the optional peer `@eslint/json` | `exadevConfig({ toolingWiring })` / `toolingWiringConfig(options)` |
 | [Turbo environment variable checking](#environment-variables-read-in-source) | Auto-detected: on if `eslint-plugin-turbo` is installed | `exadevConfig({ turboEnv })` |
 | [Required Markdown headings](#required-markdown-headings) | Off unless given (only a repository can say which documents need which headings); needs the optional peer `@eslint/markdown` | `exadevConfig({ markdownHeadings })` / `markdownHeadingsConfig(options)` |
 
@@ -379,6 +380,7 @@ Bundled into `exadevConfig()`'s default output the same way React/Next.js auto-d
 | `package-has-files` | | **Requires configured files to exist inside every matching workspace package.** ESLint cannot report a file that does not exist, so the diagnostic is anchored on the package's own `package.json`, listing the missing paths. Entries may be globs. Opt-in: a no-op unless the shared `requiredFiles` option is given. See [Required files](#required-files). |
 | `dev-dependency-only` | | **A package may only appear under `devDependencies` of other workspace packages.** Reports a restricted package listed under `dependencies`, `peerDependencies` or `optionalDependencies`, at the offending entry. Opt-in: a no-op unless the shared `devOnly` option is given. See [Dev-only packages](#dev-only-packages). |
 | `required-scripts` | | **Requires configured `scripts` in every matching workspace package,** optionally with an exact command or required and forbidden flags. Opt-in: a no-op unless the shared `requiredScripts` option is given. See [Required scripts](#required-scripts). |
+| `package-requirements` | | **Requires configured fields, files and scripts in each `package.json` a condition selects:** private or publishable, the repository root, a name pattern, a declared dependency. The graph-free counterpart of `package-has-files` and `required-scripts`, so it applies to a single-package repository and to the root manifest. Wired by `toolingWiringConfig`. See [Tooling wiring](#tooling-wiring). |
 | `turbo-script-convention` | | **Public scripts delegate to turbo.** In the root package every prefixed script (`_lint`) needs a public counterpart (`lint`) that is `turbo run _lint`, with only flags after it; in any other package a bare script named after a task the root orchestrates is reported. See [Turbo](#turbo). Opt-in via `exadevConfig({ turbo })` or `turboConfig()`. A JSON-language rule. |
 | `turbo-script-has-task` | | **Every prefixed script is configured as a turbo task,** since turbo runs a script only when a task names it. See [Turbo](#turbo). |
 | `turbo-task-has-script` | | **Every task in the root `turbo.json` is implemented and reachable.** A task no package implements is skipped silently by turbo; a `//#` task or an aggregate nothing depends on or invokes never runs. See [Turbo](#turbo). |
@@ -923,6 +925,103 @@ With both, the higher floor is the one named in the message.
 
 `exadev/playwright-config` requires `forbidOnly` to be set, because Playwright defaults it to false and a committed `test.only` then runs one test and passes. `true` and any non-literal expression pass, so `forbidOnly: !!process.env.CI` is accepted; an absent key, `false`, `undefined` and `null` are reported. Two options add checks that a setting is present: `fullyParallel: true` requires `fullyParallel` to be set and not false, and `workers: true` requires `workers` to be set to anything, so the worker count on CI and locally is a stated choice. Only the top level of the config is read.
 
+## Tooling wiring
+
+A repository that publishes a package or runs a shared toolchain wires in the same auxiliary tools: package-shape checks before publishing, dead-code detection, dependency-version consistency, commit hooks. Each is dropped one repository at a time without anything noticing, and a package that stops running its shape checks before publishing looks identical to one that never had them. `toolingWiringConfig` (or `exadevConfig({ toolingWiring })`) holds a repository to the wiring and wires the [tool config rules](#tool-config-files) beside it. Every section is on unless given as `false`, and `{}` enables all of them:
+
+```ts
+// eslint.config.ts
+import { defineConfig } from 'eslint/config';
+import { exadevConfig } from '@exadev/eslint-config';
+
+export default defineConfig(
+  ...exadevConfig({
+    toolingWiring: {
+      publish: { tools: ['publint', 'attw'], smokeProject: 'smoke' },
+      root: { tools: ['knip', 'syncpack'] },
+      hooks: true,
+      toolConfigs: { stryker: { min: 80 }, vitest: { coverageFiles: ['vitest.base.config.ts'] } },
+    },
+  }),
+);
+```
+
+| Section | Held to | Applies to |
+| --- | --- | --- |
+| `publish` | `prepublishOnly` runs each of `tools` (default `publint` and `attw`), `engines` is set, and the optional `smokeProject` directory exists. | Every `package.json` that does not set `"private": true`. |
+| `root` | A configuration and a script of the same name for each of `tools` (default `knip` and `syncpack`), and `packageManager` is set. | The `package.json` in the directory ESLint runs from. |
+| `hooks` | `prepare` runs `husky` and the `.husky` directory exists. | Every `package.json` that declares `husky` under `dependencies`, `devDependencies`, `peerDependencies` or `optionalDependencies`. |
+| `toolConfigs` | The [tool config rules](#tool-config-files) for Vitest, Stryker and Playwright, each given the options of its tool (`forbidNumericMaxWorkers` and `coverageFiles`, `min` and `base`, `fullyParallel` and `workers`), or `false` to leave a tool out. | The JavaScript and TypeScript config files each rule scopes itself to. |
+
+`prepublishOnly` is checked as the command written, split into whole tokens, so `tsdown && publint && attw --pack` and `pnpm run publint && pnpm run attw` both satisfy `tools: ['publint', 'attw']`, and no script named after the tool is needed. A root tool's configuration is accepted as any of the file names the tool reads (`knip.json`, `knip.jsonc`, `.knip.json`, `.knip.jsonc`, `knip.ts`, `knip.js`, `knip.config.ts`, `knip.config.js` for knip; `.syncpackrc` and its `.json`, `.yaml`, `.yml`, `.js`, `.ts`, `.mjs` and `.cjs` forms, and `syncpack.config.js`, `.ts`, `.mjs` and `.cjs` for syncpack), or as a `knip` or `syncpack` property of `package.json`. The names were read from the tools' own source and binary, so a release that reads a further name needs this list extended. A repository with no knip or syncpack setup gives `root: false` or lists the tools it has, and one that uses another hook manager gives `hooks: false`.
+
+The package.json sections need `@eslint/json`, an optional peer (`pnpm add -D @eslint/json`), and throw with the install command when it cannot be resolved. `toolConfigs` needs nothing, and a tool whose config files the repository does not have is left alone, because each rule scopes itself by file name. The tool config blocks cover only `.ts`, `.mts`, `.cts`, `.js`, `.mjs` and `.cjs` files, so a `vitest.workspace.json` is never read as a script.
+
+### Package requirements
+
+The three package.json sections are one `exadev/package-requirements` entry each. The rule is the graph-free counterpart of [`package-has-files`](#required-files) and [`required-scripts`](#required-scripts): those two select workspace packages by group and need a `pnpm-workspace.yaml`, so they cannot reach a single-package repository or the root manifest, which no group owns. This rule reads only the manifest and its directory, and a condition picks the manifests it applies to. Wire it directly for requirements the preset does not state:
+
+```ts
+{
+  files: ['**/package.json'],
+  language: 'json/json',
+  plugins: { exadev: plugin, json },
+  rules: {
+    'exadev/package-requirements': [
+      'error',
+      {
+        requirements: [
+          { when: { private: false }, fields: ['engines', 'files'], scripts: [{ name: 'prepublishOnly', includes: ['publint'] }] },
+          { when: { root: true }, files: ['.husky', { glob: 'knip.{json,ts}', orField: 'knip' }] },
+          { when: { namePattern: '-contract$', declares: ['zod'] }, scripts: ['typecheck'] },
+        ],
+      },
+    ],
+  },
+}
+```
+
+Each requirement lists `scripts`, `files` or `fields`, and an optional `when` whose stated conditions must all hold:
+
+- `private`: `true` for a manifest that sets `"private": true`, `false` for any other.
+- `root`: `true` for the manifest in the directory ESLint runs from, `false` for any other.
+- `namePattern`: a regular expression the declared `name` matches, in the dialect of the [package selectors](#package-selectors). A manifest with no `name` never matches.
+- `declares`: dependency names; at least one must appear under `dependencies`, `devDependencies`, `peerDependencies` or `optionalDependencies`.
+
+`scripts` are checked as for [`requiredScripts`](#required-scripts), on the command as written. `files` are paths or globs relative to the package directory, resolved as for [`requiredFiles`](#required-files); an entry written `{ glob, orField }` is also satisfied by that top-level manifest field being set, for a tool that reads its configuration from either place. `fields` must be set: present, and not `null`, an empty string, an empty object or an empty array. Requirements that select the same manifest merge, and one diagnostic lists everything missing of each kind, on the manifest, or on the `scripts` entry for a missing script. The directory ESLint runs from is the repository root for this purpose, so lint a workspace from its root.
+
+## Verifying ESLint is applied
+
+Every check in this package runs inside ESLint, so none of them can notice that a repository's `eslint.config.ts` no longer includes this package, has set its rules to `off`, or has been narrowed with `ignores` until nothing is linted. The repository looks configured and enforces nothing. `verifyEslintConfig` and `assertEslintConfig` check from outside the configuration: they resolve it through ESLint's Node API (`calculateConfigForFile`, the object `--print-config` prints, with `files` and `ignores` applied) for a sample file of each kind the repository lints, and report each file that is not linted and each required rule that is missing, off or weaker than required. They are plain async functions, so a test runs them:
+
+```ts
+// eslint-config.unit.test.ts
+import { assertEslintConfig } from '@exadev/eslint-config';
+import { it } from 'vitest';
+
+it('applies the shared ESLint config to every kind of file', async () => {
+  await assertEslintConfig({
+    samples: ['src/index.ts', 'src/index.unit.test.ts', 'package.json', { path: 'eslint.config.ts', except: ['@typescript-eslint/no-unsafe-assignment'] }],
+    rules: { 'exadev/require-compiler-options': 'error' },
+    except: ['exadev/barrel-policy'],
+  });
+});
+```
+
+`assertEslintConfig` throws one error listing a line per violation, each naming the rule and the file; `verifyEslintConfig` returns the violations (`{ kind, file, rule?, required?, actual?, message }`, `kind` being `not-linted`, `missing`, `off` or `too-weak`) for a caller that wants to report them differently.
+
+| Option | Meaning |
+| --- | --- |
+| `samples` | The files to resolve, relative to `cwd`: one per kind of source the repository lints. A bare string is `{ path }`; an object may add `rules` and `except` for that file alone. A sample need not exist, since ESLint resolves its configuration from the path. |
+| `rules` | Rules required for every sample, each with the severity it must at least have (`warn` or `error`). They replace a baseline requirement for the same rule. |
+| `except` | Baseline rules not required. |
+| `baseline` | The configuration whose enabled rules every sample must also have enabled, each at least at the severity it gives. Defaults to this package's default export, so a repository lists only its exceptions. `false` requires only `rules`. |
+| `cwd`, `configFile` | The directory ESLint resolves from (default: the working directory), and the config file under test (default: the one ESLint finds). |
+
+A required rule passes when its resolved severity is at least the required one, so `error` satisfies a `warn` requirement. Severities are normalised first, since a resolved rule entry is `[severity, ...options]` with the severity a number or a string. A file that is ignored, or that no configuration block matches, is reported as `not-linted`: ESLint resolves no configuration for either.
+
+The default baseline is the default export as it resolves in this process, including the React and Next.js rules it detects from the installed peers. A repository that configured `exadevConfig(options)` passes the same call as `baseline` (`baseline: exadevConfig({ react: false })`), or the shared options object both read, so the verifier requires what the repository meant to enable and not what auto-detection would add. The check proves the rules are active for the sample files; it does not run them.
+
 ## Workspace architecture
 
 Six rules (`no-uphill-dependency`, `no-dependency-cycle`, `package-name-mirrors-path`, `package-has-files`, `dev-dependency-only`, `required-scripts`) share one options object, `WorkspaceArchitectureOptions`, describing a pnpm workspace's own dependency-direction rules (which package is allowed to depend on which other, checked directly against every `package.json`'s declared `dependencies`) and the per-package requirements layered on the same groups. The last four rules are opt-in within it: each does nothing unless its own option is given. Off by default, since `groups` has no sensible default; enable it either through `exadevConfig({ workspaceArchitecture })` (the full bundle) or the standalone `workspaceArchitectureConfig(options)` export (for a consumer building its own config from the lighter `plugin` export, e.g. one that isn't using `exadevConfig()` at all):
@@ -1317,12 +1416,14 @@ pnpm build
 - [`src/turbo-config.ts`](src/turbo-config.ts) builds the turbo blocks (`buildTurboConfig` internally, `turboConfig` publicly) from the one shared options object in [`src/rules/turbo-options.ts`](src/rules/turbo-options.ts).
   - The pure decisions live in [`src/rules/turbo-checks.ts`](src/rules/turbo-checks.ts), independent of ESLint, so they are tested against plain maps; the rules are thin visitors over them. [`src/rules/turbo-json.ts`](src/rules/turbo-json.ts) reads the parts of a `turbo.json` the rules need and finds the root one, [`src/rules/turbo-workspace.ts`](src/rules/turbo-workspace.ts) lists the packages and their scripts, and [`src/rules/turbo-commands.ts`](src/rules/turbo-commands.ts) reads a script command for a delegation, the tasks it invokes, or a boundaries run.
   - Rules that read sibling and ancestor files take a `WorkspaceFs` through their factory, and their tests use [`src/rules/memory-fs.ts`](src/rules/memory-fs.ts), an in-memory implementation, rather than fixture trees on disk.
+- [`src/tooling-wiring.ts`](src/tooling-wiring.ts) builds the `toolingWiringConfig` blocks: it turns the `publish`, `root` and `hooks` sections into the requirements of one `exadev/package-requirements` entry and the `toolConfigs` section into one block of the tool config rules over the union of their file scopes, each glob paired with the script extensions in a nested `files` array (flat config reads that as "both must match"). [`src/rules/package-requirements.ts`](src/rules/package-requirements.ts) reads the manifest facts, [`src/rules/package-requirements-checks.ts`](src/rules/package-requirements-checks.ts) holds the pure decisions and [`src/rules/package-requirements-options.ts`](src/rules/package-requirements-options.ts) the option schema and reader. Script requirements go through `checkScriptRequirements` in [`src/rules/workspace-requirements.ts`](src/rules/workspace-requirements.ts), shared with `required-scripts`.
+- [`src/verify-eslint.ts`](src/verify-eslint.ts) is the out-of-band verifier. It loads `eslint` with a dynamic `import()` on first use, since the module is re-exported from the entry point every `eslint.config.ts` imports and only a verification run needs the Node API.
 - [`src/rules/static-config.ts`](src/rules/static-config.ts) is the shared reader for the tool config rules. `createStaticConfig(program)` answers only what a config file's source states: which object literals the default export reaches, whether a key is `present`, `absent` or `opaque` (a later spread or non-literal computed key could supply it), and the literal a value stands for. [`src/rules/tool-config-options.ts`](src/rules/tool-config-options.ts) holds the option handling they share, and [`src/rules/vitest-test-objects.ts`](src/rules/vitest-test-objects.ts) finds the `test` objects of a Vitest config, projects included. `stryker-break-threshold` parses its `base` file with `@typescript-eslint/typescript-estree` and reads it through the same `createStaticConfig`.
 - [`src/rules/compiler-option-values.ts`](src/rules/compiler-option-values.ts) is where `require-compiler-options` agrees with `tsc`. `tsconfigPathOf` finds the tsconfig a program was created from, and `readTsconfig` re-reads it, with the files it lists, because typescript-eslint overrides some options in its programs. TypeScript exports `computedOptions` (how it derives an effective option from the others) and `optionDeclarations` (every option with its documented default) at run time but not in its typings; this module reads them through `Reflect.get` and narrows with guards, converts a required value with the compiler's own `convertCompilerOptionsFromJson`, and throws when the installed compiler does not export them.
 - [`src/rules/run-tracker.ts`](src/rules/run-tracker.ts) decides which lint carries a finding that belongs to a set of files rather than to one, so `require-compiler-options` reports once per run; it reads run boundaries from the order of the lints, as [Compiler options](#compiler-options) describes.
 - [`src/rules/tsconfig-attribution.ts`](src/rules/tsconfig-attribution.ts) works out which tsconfig governs a linted file, attributing a program with no tsconfig to the one the file was last linted under while that tsconfig still lists it.
 - [`src/create-config.ts`](src/create-config.ts) is config assembly's single source of truth.
-  - `exadevConfig(options, ...userConfigs)` concatenates, in order: `buildGitignoreConfig`, `recommendedTypeChecked`, `jsdocAndTsdoc`, `jsonCanonicalConfig`, `stylisticCommentsConfig`, `buildReactConfig`, `buildNextjsConfig`, `buildPackageJsonKeyOrderConfig` (each tri-state builder fed its matching option), `buildWorkspaceArchitectureConfig` (only when `workspaceArchitecture` is given; there is no auto-detected default), `buildTurboConfig` (only when `turbo` is given, likewise), `buildImportPolicyConfig` (only when `importPolicies` is given, likewise), `buildPureModulesConfig` (only when `pureModules` is given, likewise), `buildTestHygieneConfig` (only when `testHygiene` is given, likewise), `buildMarkdownHeadingsConfig` (only when `markdownHeadings` is given, likewise), and any trailing user configs.
+  - `exadevConfig(options, ...userConfigs)` concatenates, in order: `buildGitignoreConfig`, `recommendedTypeChecked`, `jsdocAndTsdoc`, `jsonCanonicalConfig`, `stylisticCommentsConfig`, `buildReactConfig`, `buildNextjsConfig`, `buildPackageJsonKeyOrderConfig` (each tri-state builder fed its matching option), `buildWorkspaceArchitectureConfig` (only when `workspaceArchitecture` is given; there is no auto-detected default), `buildTurboConfig` (only when `turbo` is given, likewise), `buildImportPolicyConfig` (only when `importPolicies` is given, likewise), `buildPureModulesConfig` (only when `pureModules` is given, likewise), `buildTestHygieneConfig` (only when `testHygiene` is given, likewise), `buildMarkdownHeadingsConfig` (only when `markdownHeadings` is given, likewise), `buildToolingWiringConfig` (only when `toolingWiring` is given, likewise), and any trailing user configs.
   - `defaultConfig` is `exadevConfig()` evaluated once, eagerly, at module load.
 - [`src/robustness-rules.ts`](src/robustness-rules.ts) holds `UNTYPED_ROBUSTNESS_RULES`, the core ESLint rules that need no type information, spread into both `plugin.configs.recommended` and the type-checked block so the two cannot drift apart.
 - [`src/stylistic-comments.ts`](src/stylistic-comments.ts) builds `stylisticCommentsConfig`: the hand-picked `@stylistic/eslint-plugin` rules plus this package's own `exadev/prefer-doc-comment`, in two blocks (one scoped to every JS/TS file, one scoped to JSX files only for the three JSX-specific rules). See [Stylistic comment, class-member and JSX rules](#stylistic-comment-class-member-and-jsx-rules).
@@ -1334,7 +1435,9 @@ pnpm build
   export { publicPlugin as plugin } from './plugin';
   export { pureModulesConfig } from './pure-modules';
   export { testHygieneConfig } from './test-hygiene';
+  export { toolingWiringConfig } from './tooling-wiring';
   export { turboConfig } from './turbo-config';
+  export { assertEslintConfig, verifyEslintConfig } from './verify-eslint';
   export { workspaceArchitectureConfig } from './workspace-architecture';
   export type { MarkdownFrontmatter, MarkdownHeadingsOptions } from './markdown-headings';
   export type { PureModulesOptions } from './pure-modules';
@@ -1368,7 +1471,7 @@ pnpm build
 
 ### Conventions
 
-- [`eslint.config.ts`](eslint.config.ts) dogfoods this package's own factory export on itself (`import { exadevConfig } from './src/index'`), spreading `exadevConfig({ react: false, nextjs: false })` — forced off explicitly, not the plain auto-detecting default, since `eslint-plugin-react`/`@next/eslint-plugin-next` are real devDependencies of *this* repo (needed to test [`src/react.ts`](src/react.ts)/[`src/nextjs.ts`](src/nextjs.ts)'s own "package is resolvable" branch) even though this repo is neither a React nor a Next.js project. `no-side-effects-in-index` and `no-non-barrel-reexport` self-scope to [`src/index.ts`](src/index.ts) internally, so no `files`/`ignores` wiring is needed here. Plugin construction lives in [`src/plugin.ts`](src/plugin.ts) specifically so `src/index.ts` stays a pure re-export point.
+- [`eslint.config.ts`](eslint.config.ts) dogfoods this package's own factory export on itself (`import { exadevConfig } from './src/index'`), spreading `exadevConfig({ react: false, nextjs: false, ... })`, with the [tooling wiring](#tooling-wiring) preset on for the sections it uses. React and Next.js are forced off explicitly, not left to the plain auto-detecting default, since `eslint-plugin-react`/`@next/eslint-plugin-next` are real devDependencies of *this* repo (needed to test [`src/react.ts`](src/react.ts)/[`src/nextjs.ts`](src/nextjs.ts)'s own "package is resolvable" branch) even though this repo is neither a React nor a Next.js project. `no-side-effects-in-index` and `no-non-barrel-reexport` self-scope to [`src/index.ts`](src/index.ts) internally, so no `files`/`ignores` wiring is needed here. Plugin construction lives in [`src/plugin.ts`](src/plugin.ts) specifically so `src/index.ts` stays a pure re-export point.
 - [`tsconfig.json`](tsconfig.json) enables [`verbatimModuleSyntax`](https://www.typescriptlang.org/tsconfig/#verbatimModuleSyntax) (`import type`/`export type` required for type-only imports — also enforced by `consistent-type-imports`) and [`noUncheckedIndexedAccess`](https://www.typescriptlang.org/tsconfig/#noUncheckedIndexedAccess) (narrow indexed access before use rather than asserting).
 - Conventional commits are enforced by [commitlint](https://commitlint.js.org), restricted to the type-enum defined once in [`release.config.ts`](release.config.ts)'s `commitTypes` — both commitlint and semantic-release derive from that single list.
 
