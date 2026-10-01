@@ -78,12 +78,12 @@ function calleeName(callee: TSESTree.Node): string | undefined {
 }
 
 /**
- * The statically known name of a property key: an identifier or string literal key, or a computed key that is a string literal or an untagged template without substitutions. `undefined` for any key that is computed at run time.
+ * The statically known name of a property key: an identifier, a string or number literal, or a computed key that is a string literal or an untagged template without substitutions. A number literal names its property as `String(value)`, so `100:` is `'100'`. `undefined` for any key that is computed at run time.
  */
-function keyName(property: TSESTree.Property): string | undefined {
+export function keyName(property: TSESTree.Property): string | undefined {
   const { key } = property;
   if (!property.computed && key.type === AST_NODE_TYPES.Identifier) return key.name;
-  if (key.type === AST_NODE_TYPES.Literal && typeof key.value === 'string') return key.value;
+  if (key.type === AST_NODE_TYPES.Literal && (typeof key.value === 'string' || typeof key.value === 'number')) return String(key.value);
   if (key.type === AST_NODE_TYPES.TemplateLiteral && key.expressions.length === 0) return key.quasis.map((quasi) => quasi.value.cooked).join('');
 
   return undefined;

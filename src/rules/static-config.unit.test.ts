@@ -132,6 +132,12 @@ describe('lookup', () => {
     expect(lookupIn("{ ['a']: 1 }", 'a').kind).toBe('present');
   });
 
+  it('names a number literal key by its property name', () => {
+    expect(lookupIn('{ 100: true }', '100').kind).toBe('present');
+    expect(lookupIn('{ 1e3: true }', '1000').kind).toBe('present');
+    expect(lookupIn('{ 100: true }', 'a').kind).toBe('absent');
+  });
+
   it('reports a key spelled nowhere as absent', () => {
     expect(lookupIn('{ a: 1 }', 'b').kind).toBe('absent');
     expect(lookupIn('{}', 'a').kind).toBe('absent');
