@@ -16,7 +16,7 @@ describe('vitest-config meta', () => {
       '`allowOnly: true` lets a focused test (`.only`) through, so the rest of the suite is skipped without failing the run. Vitest already allows `.only` outside CI by default; remove this or set it to false.',
     );
     expect(rule.meta.messages.bareNodeModules).toBe(
-      'The bare string "node_modules" excludes only a top-level directory of that name and misses nested copies. Use "**/node_modules/**".',
+      'The bare string "node_modules" in `test.exclude` excludes only a top-level directory of that name and misses nested copies. Use "**/node_modules/**".',
     );
     expect(rule.meta.messages.unknownThresholdKey).toBe(
       'The key "{{ key }}" under `coverage.thresholds` is not one Vitest reads (statements, branches, functions, lines, perFile, autoUpdate, 100), so it is treated as a file glob and matches no file; the threshold enforces nothing. Move the values up a level, or use a glob such as "src/**".',
@@ -63,6 +63,8 @@ ruleTester.run('vitest-config', rule, {
     // A nested pattern is the form that works.
     { code: "export default defineConfig({ test: { exclude: ['**/node_modules/**', 'dist'], coverage: { exclude: ['**/node_modules/**'] } } });", filename: FILENAME },
     { code: "export default defineConfig({ test: { exclude: [pattern, 'node_modules/**'] } });", filename: FILENAME },
+    // Coverage filtering matches with `contains: true`, so a bare name there already ignores nested copies.
+    { code: "export default defineConfig({ test: { coverage: { exclude: ['node_modules', 'node_modules/'] } } });", filename: FILENAME },
     // Every documented threshold key, and keys that are clearly globs.
     {
       code: "export default defineConfig({ test: { coverage: { thresholds: { statements: 80, branches: 80, functions: 80, lines: 80, perFile: true, autoUpdate: false, 'src/**/*.ts': { lines: 90 }, 'a/b.ts': { lines: 1 }, '{a,b}': { lines: 1 }, '!x': { lines: 1 }, 'f?.ts': { lines: 1 }, '[ab].ts': { lines: 1 } } } } });",
@@ -117,13 +119,13 @@ ruleTester.run('vitest-config', rule, {
       errors: [{ messageId: 'allowOnly' }],
     },
     { code: 'export default defineWorkspace([{ test: { allowOnly: true } }, { test: { passWithNoTests: true } }]);', filename: 'vitest.workspace.ts', errors: [{ messageId: 'allowOnly' }, { messageId: 'passWithNoTests' }] },
-    // A bare node_modules entry, with or without a trailing slash, in either exclude list.
+    // A bare node_modules entry in test.exclude, with or without a trailing slash.
     {
-      code: "export default defineConfig({ test: { exclude: ['node_modules', 'dist'], coverage: { exclude: ['node_modules/', 'src/**'] } } });",
+      code: "export default defineConfig({ test: { exclude: ['node_modules', 'node_modules/', 'dist'] } });",
       filename: FILENAME,
       errors: [
         { messageId: 'bareNodeModules', line: 1, column: 49 },
-        { messageId: 'bareNodeModules', line: 1, column: 96 },
+        { messageId: 'bareNodeModules', line: 1, column: 65 },
       ],
     },
     { code: 'const exclude = ["node_modules"]; export default defineConfig({ test: { exclude } });', filename: FILENAME, errors: [{ messageId: 'bareNodeModules' }] },
