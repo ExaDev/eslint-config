@@ -11,7 +11,8 @@ const OPTION_NAME = 'exadev/require-compiler-options';
 const createRule = ESLintUtils.RuleCreator((name) => `https://github.com/ExaDev/eslint-config/blob/main/src/rules/${name}.ts`);
 
 // A program is shared by every file it contains, so the finding belongs to the program and not to the file that happened to be linted first. The key is the program plus the required options, so the same program linted under two different rule configurations reports once for each. A WeakMap lets a program that a long-running process has replaced be collected.
-const reported = new WeakMap<ts.Program, Set<string>>();
+// The value is the files linted since the last report. ESLint gives a rule no signal that a run has started, but a program that outlives a run (an editor integration, a long-lived ESLint instance) meets the same file again in the next one, so a file seen twice marks a new run and the finding is reported again. A run that lints only files the previous run did not lint cannot be told apart from the same run and stays silent.
+const lintedSinceReport = new WeakMap<ts.Program, Map<string, Set<string>>>();
 
 function isAcceptedValue(value: unknown): value is boolean | number | string {
   return typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string';
@@ -66,10 +67,15 @@ const requireCompilerOptions = createRule<[unknown], MessageIds>({
 
     return {
       Program(node) {
-        const claimed = reported.get(program) ?? new Set<string>();
-        reported.set(program, claimed);
-        if (claimed.has(signature)) return;
-        claimed.add(signature);
+        const bySignature = lintedSinceReport.get(program) ?? new Map<string, Set<string>>();
+        lintedSinceReport.set(program, bySignature);
+        const linted = bySignature.get(signature) ?? new Set<string>();
+        bySignature.set(signature, linted);
+        const isNewRun = linted.has(context.filename);
+        if (isNewRun) linted.clear();
+        const isFirstOfRun = linted.size === 0;
+        linted.add(context.filename);
+        if (!isFirstOfRun) return;
 
         const compilerOptions = resolveCompilerOptions(program);
         const differences = requirements.flatMap((requirement) => {

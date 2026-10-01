@@ -57,7 +57,7 @@ function testerFor(tsconfig: string): RuleTester {
 
 const code = 'export const value = 1;';
 
-// Every (tsconfig, options) pair below is used by exactly one case: the rule reports once per program and option set, so a repeat would be silent.
+// The rule reports once per program and option set within a run, and a program is shared by the cases below, so each case lints the same file once and is the first of its own run.
 testerFor('tsconfig.inherits.json').run('require-compiler-options with an inherited configuration', rule, {
   valid: [
     // strict and target come from the extended base, not from this file.
@@ -148,8 +148,8 @@ testerFor('tsconfig.loose.json').run('require-compiler-options with an overridin
 });
 
 describe('require-compiler-options once per program', () => {
-  it('reports once for a program shared by several linted files', async () => {
-    const eslint = new ESLint({
+  function onceEslint(): ESLint {
+    return new ESLint({
       cwd: FIXTURES,
       overrideConfigFile: true,
       overrideConfig: [
@@ -161,11 +161,29 @@ describe('require-compiler-options once per program', () => {
         },
       ],
     });
-    const results = await eslint.lintFiles(['source.ts', 'second.ts']);
+  }
+
+  it('reports once for a program shared by several linted files', async () => {
+    const results = await onceEslint().lintFiles(['source.ts', 'second.ts']);
     const messages = results.flatMap((result) => result.messages);
     expect(messages).toHaveLength(1);
     expect(messages[0]?.ruleId).toBe('exadev/require-compiler-options');
     expect(messages[0]?.line).toBe(1);
     expect(messages[0]?.message).toContain('strict is false, required true');
+  });
+
+  it('reports again in the next run of one long-lived ESLint instance while the tsconfig still violates the requirement', async () => {
+    const eslint = onceEslint();
+    const first = await eslint.lintFiles(['source.ts', 'second.ts']);
+    const second = await eslint.lintFiles(['source.ts', 'second.ts']);
+    expect(first.flatMap((result) => result.messages)).toHaveLength(1);
+    expect(second.flatMap((result) => result.messages)).toHaveLength(1);
+  });
+
+  it('starts a new run at the first file the previous run had already linted', async () => {
+    const eslint = onceEslint();
+    await eslint.lintFiles(['source.ts', 'second.ts']);
+    const results = await eslint.lintFiles(['second.ts']);
+    expect(results.flatMap((result) => result.messages)).toHaveLength(1);
   });
 });
