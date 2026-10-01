@@ -1,3 +1,18 @@
+# [2.29.0](https://github.com/ExaDev/eslint-config/compare/v2.28.0...v2.29.0) (2026-10-01)
+
+
+### Bug Fixes
+
+* match a bare allow filename at any depth in no-defensive-fallback ([6efefae](https://github.com/ExaDev/eslint-config/commit/6efefae3a0f32429ed7d3a0a075cf07e48c48249))
+* report a swallowing rejection handler passed as the second argument of then ([2c68d5a](https://github.com/ExaDev/eslint-config/commit/2c68d5aceac3838c1327fd0ae29b0b9912d3b763))
+* report void, 0n and continue swallows in no-defensive-fallback ([72dcd42](https://github.com/ExaDev/eslint-config/commit/72dcd427560b2f0b8a9f43684c2ebc13b1bb0f16))
+
+
+### Features
+
+* add no-defensive-fallback rule ([1cee130](https://github.com/ExaDev/eslint-config/commit/1cee13002e69e662eabe6cdc443b62453808456b))
+* enable core robustness rules and stricter switch exhaustiveness ([758c55a](https://github.com/ExaDev/eslint-config/commit/758c55a19a6868c9e63441d4b6bc57685bb706ad))
+
 # [2.28.0](https://github.com/ExaDev/eslint-config/compare/v2.27.0...v2.28.0) (2026-09-30)
 
 
