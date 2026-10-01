@@ -12,8 +12,8 @@ const OPTION_KEYS = ['files', 'forbidNumericMaxWorkers'] as const;
 // The keys Vitest reads under `coverage.thresholds` itself: the four metrics, `perFile`, `autoUpdate` and the `100` shorthand. Every other key is treated as a file glob (checked against the Vitest source: coverage.resolveThresholds skips exactly these and builds a matcher from the rest).
 const DOCUMENTED_THRESHOLD_KEYS: ReadonlySet<string> = new Set(['statements', 'branches', 'functions', 'lines', 'perFile', 'autoUpdate', '100']);
 
-// A key is clearly meant as a glob when it holds a path separator or a glob metacharacter. A bare word such as `global` has neither, so it would be matched as a literal file name and match nothing.
-const GLOB_CHARACTERS = /[/*?[\]{}!]/u;
+// A key is clearly meant as a glob or a file when it holds a path separator, a glob metacharacter or a dot (a file name such as `index.ts` is a valid glob for that file at the root). A bare word such as `global` has none, so it would be matched as a literal file name and match nothing.
+const GLOB_CHARACTERS = /[/*?[\]{}!.]/u;
 
 const createRule = ESLintUtils.RuleCreator((name) => `https://github.com/ExaDev/eslint-config/blob/main/src/rules/${name}.ts`);
 
@@ -45,7 +45,7 @@ function keyText(property: TSESTree.Property): string | undefined {
 }
 
 /**
- * Whether `property` is a `thresholds` key that enforces nothing: not one Vitest documents and not clearly a glob.
+ * Whether `property` is a `thresholds` key that enforces nothing: not one Vitest documents and not clearly a glob or a file name.
  */
 function isInertThresholdKey(key: string): boolean {
   return !DOCUMENTED_THRESHOLD_KEYS.has(key) && !GLOB_CHARACTERS.test(key);
