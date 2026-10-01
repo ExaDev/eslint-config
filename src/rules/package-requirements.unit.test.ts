@@ -111,7 +111,7 @@ ruleTester.run('package-requirements', rule, {
       code: manifest({ name: 'root' }),
       filename: ROOT_FILE,
       options: options({ when: { root: true }, files: ['.husky', 'knip.json', { glob: 'syncpack.config.*', orField: 'syncpack' }] }),
-      errors: [{ messageId: 'missingFiles', data: { name: 'root', files: 'knip.json, syncpack.config.* (or a "syncpack" field)' } }],
+      errors: [{ messageId: 'missingFiles', data: { name: 'root', files: 'knip.json, one of syncpack.config.* (or a "syncpack" property)' } }],
     },
     // A husky repo must wire the prepare script.
     {

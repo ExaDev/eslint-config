@@ -1,7 +1,7 @@
 import type { FileRequirement, PackageCondition, PackageRequirement } from './package-requirements-options';
 import type { ScriptRequirement } from './workspace-constraint-options';
 import type { WorkspaceFs } from './workspace-fs';
-import { anyPathMatchesGlob } from './workspace-glob';
+import { anyPathMatchesGlob, expandBraces } from './workspace-glob';
 
 // The pure decisions behind package-requirements, independent of ESLint and momoa so each can be unit-tested against plain facts and a fabricated tree.
 
@@ -58,7 +58,7 @@ export function unsetFields(requirements: readonly PackageRequirement[], facts: 
 }
 
 function describeFile(requirement: FileRequirement): string {
-  return typeof requirement === 'string' ? requirement : `${requirement.glob} (or a "${requirement.orField}" field)`;
+  return typeof requirement === 'string' ? requirement : `one of ${expandBraces(requirement.glob).join(', ')} (or a "${requirement.orField}" property)`;
 }
 
 function fileIsMissing(requirement: FileRequirement, fs: WorkspaceFs, packageDir: string, facts: ManifestFacts): boolean {

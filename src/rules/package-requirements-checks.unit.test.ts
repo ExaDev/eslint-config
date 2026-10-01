@@ -83,7 +83,7 @@ describe('missingFiles', () => {
   it('accepts a set manifest field instead of the file, and names both when neither exists', () => {
     const entry = { glob: 'syncpack.config.*', orField: 'syncpack' };
     expect(missingFiles([{ files: [entry] }], fs, '/pkg', { ...FACTS, setFields: new Set(['syncpack']) })).toEqual([]);
-    expect(missingFiles([{ files: [entry] }], fs, '/pkg', FACTS)).toEqual(['syncpack.config.* (or a "syncpack" field)']);
+    expect(missingFiles([{ files: [entry] }], fs, '/pkg', FACTS)).toEqual(['one of syncpack.config.* (or a "syncpack" property)']);
     expect(missingFiles([{ files: [{ glob: 'knip.json', orField: 'knip' }] }], fs, '/pkg', FACTS)).toEqual([]);
   });
 
