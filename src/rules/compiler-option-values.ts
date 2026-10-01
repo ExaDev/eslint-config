@@ -23,7 +23,7 @@ interface OptionDeclaration {
   readonly defaultValueDescription: unknown;
 }
 
-const UNSUPPORTED_COMPILER = 'requires TypeScript 5.5 or later: the installed compiler does not expose the option metadata (`optionDeclarations`, `computedOptions`) the rule reads to work out an option\'s effective value.';
+const UNSUPPORTED_COMPILER = 'requires TypeScript 5.4 or later: the installed compiler does not expose the option metadata (`optionDeclarations`, `computedOptions`) the rule reads to work out an option\'s effective value.';
 
 function isOptionDeclaration(value: unknown): value is OptionDeclaration {
   return isRecord(value) && typeof value['name'] === 'string' && 'type' in value && 'defaultValueDescription' in value;

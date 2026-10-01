@@ -1,9 +1,19 @@
 import { join } from 'node:path';
 import * as ts from 'typescript';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { describeCompilerOptionValue, effectiveCompilerOption, parseRequirement, resolveCompilerOptions } from './compiler-option-values';
 
 describe('effectiveCompilerOption', () => {
+  it('names TypeScript 5.4, where computedOptions first appears, as the minimum when the compiler does not export it', () => {
+    const original: (target: object, key: PropertyKey) => unknown = Reflect.get.bind(Reflect);
+    const spy = vi.spyOn(Reflect, 'get').mockImplementation((target, key) => (key === 'computedOptions' ? undefined : original(target, key)));
+    try {
+      expect(() => effectiveCompilerOption({}, 'skipLibCheck')).toThrow(/requires TypeScript 5\.4 or later/u);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it('returns the written value of a plain flag', () => {
     expect(effectiveCompilerOption({ skipLibCheck: true }, 'skipLibCheck')).toBe(true);
     expect(effectiveCompilerOption({ skipLibCheck: false }, 'skipLibCheck')).toBe(false);
