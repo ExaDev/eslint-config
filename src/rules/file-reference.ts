@@ -1,4 +1,5 @@
 import { dirname, resolve } from 'node:path';
+import type { JSONSchema4 } from '@typescript-eslint/utils/json-schema';
 import { isRecord } from '../is-record';
 import { parseJsonc } from './jsonc';
 import type { WorkspaceFs } from './workspace-fs';
@@ -18,7 +19,7 @@ export interface FileReference {
 /**
  * The option schema for a rule option naming another file to read (a sibling manifest, a root config).
  */
-export const fileReferenceSchema = {
+export const fileReferenceSchema: JSONSchema4 = {
   type: 'object',
   properties: {
     path: { type: 'string', minLength: 1 },
@@ -26,7 +27,7 @@ export const fileReferenceSchema = {
   },
   required: ['path'],
   additionalProperties: false,
-} as const;
+};
 
 /**
  * Validates a file-reference option value at runtime, mirroring `fileReferenceSchema` for callers that build rule options before ESLint's own schema validation sees them. Throws naming `optionName` for anything else, including an unknown key.
