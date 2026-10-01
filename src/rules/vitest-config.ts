@@ -1,7 +1,7 @@
 import { AST_NODE_TYPES, ESLintUtils, type TSESTree } from '@typescript-eslint/utils';
 import type { FileScope } from './file-scope';
 import { readToolConfigFlag, readToolConfigRecord, readToolConfigScope, toolConfigFilesSchema } from './tool-config-options';
-import { createStaticConfig, type StaticConfig } from './static-config';
+import { createStaticConfig, keyName, type StaticConfig } from './static-config';
 import { VITEST_FILE_GLOBS, vitestTestObjects } from './vitest-test-objects';
 
 type MessageIds = 'passWithNoTests' | 'allowOnly' | 'bareNodeModules' | 'unknownThresholdKey' | 'numericMaxWorkers';
@@ -34,14 +34,6 @@ function reportBareNodeModules(config: StaticConfig, test: TSESTree.ObjectExpres
     const entry = config.literal(element);
     if (entry.known && typeof entry.value === 'string' && isBareNodeModules(entry.value)) report(element);
   }
-}
-
-function keyText(property: TSESTree.Property): string | undefined {
-  const { key } = property;
-  if (!property.computed && key.type === AST_NODE_TYPES.Identifier) return key.name;
-  if (key.type === AST_NODE_TYPES.Literal && (typeof key.value === 'string' || typeof key.value === 'number')) return String(key.value);
-
-  return undefined;
 }
 
 /**
@@ -125,7 +117,7 @@ const vitestConfig = createRule<[unknown], MessageIds>({
           if (thresholdsObject?.type !== AST_NODE_TYPES.ObjectExpression) continue;
           for (const member of thresholdsObject.properties) {
             if (member.type === AST_NODE_TYPES.SpreadElement) continue;
-            const key = keyText(member);
+            const key = keyName(member);
             if (key !== undefined && isInertThresholdKey(key)) context.report({ node: member.key, messageId: 'unknownThresholdKey', data: { key } });
           }
         }
