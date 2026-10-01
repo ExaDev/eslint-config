@@ -1,7 +1,14 @@
 import { join } from 'node:path';
 import * as ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
-import { describeCompilerOptionValue, effectiveCompilerOption, parseRequirement, resolveCompilerOptions } from './compiler-option-values';
+import { describeCompilerOptionValue, effectiveCompilerOption, isScalarOptionValue, parseRequirement, resolveCompilerOptions } from './compiler-option-values';
+
+describe('isScalarOptionValue', () => {
+  it('accepts a boolean, a number and a string and nothing else', () => {
+    expect([true, 0, 'es2022'].every(isScalarOptionValue)).toBe(true);
+    expect([undefined, null, {}, [], Symbol.iterator].some(isScalarOptionValue)).toBe(false);
+  });
+});
 
 describe('effectiveCompilerOption', () => {
   it('names TypeScript 5.4, where computedOptions first appears, as the minimum when the compiler does not export it', () => {
