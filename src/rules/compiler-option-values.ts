@@ -62,12 +62,18 @@ function toOptionValue(value: unknown): CompilerOptionValue {
 }
 
 /**
- * The compiler options of the configuration `program` was created from, as `tsc` resolves them: `extends` followed, nothing else added. This re-reads the tsconfig named by the program's `configFilePath` instead of trusting `program.getCompilerOptions()`, because typescript-eslint overrides `noEmit`, `noUnusedLocals`, `noUnusedParameters`, `allowJs` and `checkJs` in the programs it builds, so those would always look satisfied. A program with no tsconfig behind it (`configFilePath` unset) has nothing to re-read and its own options are returned. Throws, quoting the compiler, when the tsconfig cannot be read or parsed.
+ * The tsconfig `program` was created from, as its `configFilePath` names it, or `undefined` for a program with no tsconfig behind it.
  */
-export function resolveCompilerOptions(program: ts.Program): ts.CompilerOptions {
-  const programOptions = program.getCompilerOptions();
-  const configFilePath = programOptions['configFilePath'];
-  if (typeof configFilePath !== 'string') return programOptions;
+export function tsconfigPathOf(program: ts.Program): string | undefined {
+  const configFilePath = program.getCompilerOptions()['configFilePath'];
+
+  return typeof configFilePath === 'string' ? configFilePath : undefined;
+}
+
+/**
+ * The tsconfig at `configFilePath` as `tsc` resolves it: `extends` followed and nothing else added to its options, together with the files it lists. A rule reads this instead of trusting `program.getCompilerOptions()`, because typescript-eslint overrides `noEmit`, `noUnusedLocals`, `noUnusedParameters`, `allowJs` and `checkJs` in the programs it builds, so those would always look satisfied. Throws, quoting the compiler, when the tsconfig cannot be read or parsed.
+ */
+export function readTsconfig(configFilePath: string): ts.ParsedCommandLine {
   const parsed = ts.getParsedCommandLineOfConfigFile(configFilePath, undefined, {
     ...ts.sys,
     onUnRecoverableConfigFileDiagnostic: (diagnostic) => {
@@ -76,7 +82,7 @@ export function resolveCompilerOptions(program: ts.Program): ts.CompilerOptions 
   });
   if (parsed === undefined) throw new Error(`@exadev/eslint-config: "exadev/require-compiler-options" cannot read ${configFilePath}.`);
 
-  return parsed.options;
+  return parsed;
 }
 
 /**

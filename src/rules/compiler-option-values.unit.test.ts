@@ -1,7 +1,7 @@
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import * as ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
-import { describeCompilerOptionValue, effectiveCompilerOption, isScalarOptionValue, parseRequirement, resolveCompilerOptions } from './compiler-option-values';
+import { describeCompilerOptionValue, effectiveCompilerOption, isScalarOptionValue, parseRequirement, readTsconfig, tsconfigPathOf } from './compiler-option-values';
 
 describe('isScalarOptionValue', () => {
   it('accepts a boolean, a number and a string and nothing else', () => {
@@ -88,26 +88,36 @@ describe('describeCompilerOptionValue', () => {
   });
 });
 
-describe('resolveCompilerOptions', () => {
-  const FIXTURES = join(import.meta.dirname, '__fixtures__', 'compiler-options');
+describe('tsconfigPathOf', () => {
   const programFor = (options: ts.CompilerOptions): ts.Program => ts.createProgram({ rootNames: [], options });
 
-  it('returns the options of the named tsconfig with extends resolved, not the options the program was given', () => {
-    // typescript-eslint adds noUnusedLocals and noUnusedParameters to the program it builds; the tsconfig says otherwise.
-    const program = programFor({ configFilePath: join(FIXTURES, 'tsconfig.unused.json'), noUnusedLocals: true, noUnusedParameters: true });
-    const resolved = resolveCompilerOptions(program);
-    expect(resolved.noUnusedLocals).toBe(false);
-    expect(resolved.noUnusedParameters).toBe(false);
-    expect(resolved.strict).toBe(true);
-    expect(resolved.target).toBe(ts.ScriptTarget.ES2022);
+  it('names the tsconfig the program was created from', () => {
+    expect(tsconfigPathOf(programFor({ configFilePath: '/repo/tsconfig.json' }))).toBe('/repo/tsconfig.json');
   });
 
-  it('returns the program options when no tsconfig is behind the program', () => {
-    expect(resolveCompilerOptions(programFor({ strict: true })).strict).toBe(true);
+  it('names nothing for a program with no tsconfig behind it', () => {
+    expect(tsconfigPathOf(programFor({ strict: true }))).toBeUndefined();
+  });
+});
+
+describe('readTsconfig', () => {
+  const FIXTURES = join(import.meta.dirname, '__fixtures__', 'compiler-options');
+
+  it('returns the options of the tsconfig with extends resolved and nothing added', () => {
+    // typescript-eslint adds noUnusedLocals and noUnusedParameters to the program it builds; the tsconfig says otherwise.
+    const { options } = readTsconfig(join(FIXTURES, 'tsconfig.unused.json'));
+    expect(options.noUnusedLocals).toBe(false);
+    expect(options.noUnusedParameters).toBe(false);
+    expect(options.strict).toBe(true);
+    expect(options.target).toBe(ts.ScriptTarget.ES2022);
+  });
+
+  it('returns the files the tsconfig lists', () => {
+    expect(readTsconfig(join(FIXTURES, 'tsconfig.once.json')).fileNames.map((fileName) => basename(fileName)).toSorted()).toStrictEqual(['second.ts', 'source.ts']);
   });
 
   it('throws, naming the file, when the tsconfig cannot be read', () => {
     const missing = join(FIXTURES, 'tsconfig.missing.json');
-    expect(() => resolveCompilerOptions(programFor({ configFilePath: missing }))).toThrow(new RegExp(`cannot read ${missing.replaceAll('.', '\\.')}`, 'u'));
+    expect(() => readTsconfig(missing)).toThrow(new RegExp(`cannot read ${missing.replaceAll('.', '\\.')}`, 'u'));
   });
 });
