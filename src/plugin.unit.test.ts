@@ -34,6 +34,31 @@ describe('plugin.rules', () => {
   });
 });
 
+describe('tool config rules', () => {
+  const TOOL_CONFIG_RULES = [
+    'require-compiler-options',
+    'vitest-config',
+    'vitest-coverage-config',
+    'stryker-break-threshold',
+    'stryker-thresholds-order',
+    'playwright-config',
+  ];
+
+  it('registers every tool config rule', () => {
+    for (const name of TOOL_CONFIG_RULES) {
+      expect(plugin.rules).toHaveProperty(name);
+    }
+  });
+
+  it('enables none of them in the recommended bundle, since each takes options or a policy only a repository can supply', () => {
+    const config = plugin.configs?.['recommended'];
+    if (Array.isArray(config)) throw new Error('Unreachable: the recommended config is a single object.');
+    for (const name of TOOL_CONFIG_RULES) {
+      expect(config?.rules).not.toHaveProperty(`exadev/${name}`);
+    }
+  });
+});
+
 describe('plugin.configs.recommended', () => {
   it('bundles the banned barrel policy plus this plugin\'s own always-present non-type-aware rules, referencing the fully-built plugin object', () => {
     const config = plugin.configs?.['recommended'];
