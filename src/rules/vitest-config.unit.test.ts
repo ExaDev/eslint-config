@@ -65,6 +65,8 @@ ruleTester.run('vitest-config', rule, {
     { code: "export default defineConfig({ test: { exclude: [pattern, 'node_modules/**'] } });", filename: FILENAME },
     // Coverage filtering matches with `contains: true`, so a bare name there already ignores nested copies.
     { code: "export default defineConfig({ test: { coverage: { exclude: ['node_modules', 'node_modules/'] } } });", filename: FILENAME },
+    // A file name at the root is a valid glob for that file.
+    { code: "export default defineConfig({ test: { coverage: { thresholds: { 'index.ts': { lines: 90 }, 'vitest.setup.mts': { lines: 1 } } } } });", filename: FILENAME },
     // Every documented threshold key, and keys that are clearly globs.
     {
       code: "export default defineConfig({ test: { coverage: { thresholds: { statements: 80, branches: 80, functions: 80, lines: 80, perFile: true, autoUpdate: false, 'src/**/*.ts': { lines: 90 }, 'a/b.ts': { lines: 1 }, '{a,b}': { lines: 1 }, '!x': { lines: 1 }, 'f?.ts': { lines: 1 }, '[ab].ts': { lines: 1 } } } } });",
