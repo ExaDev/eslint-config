@@ -3,7 +3,7 @@ import { RuleTester } from '@typescript-eslint/rule-tester';
 import { ESLint } from 'eslint';
 import tseslint from 'typescript-eslint';
 import { describe, expect, it } from 'vitest';
-import plugin from '../plugin';
+import { plugin } from '../index';
 import { relativeToCwd } from './file-scope';
 import rule, { readCompilerOptionRequirements } from './require-compiler-options';
 
@@ -19,7 +19,7 @@ describe('require-compiler-options meta', () => {
 
   it('says in its message that the lint program and the build must agree', () => {
     expect(rule.meta.messages.differs).toBe(
-      'The effective compiler options of {{ tsconfig }} differ from the required ones: {{ differences }}. This is the configuration ESLint type-checks against, so it must also be the one the build uses for the check to mean anything.',
+      'The effective compiler options of {{ tsconfig }} differ from the required ones: {{ differences }}. ESLint type-checks against this tsconfig, so the build must use the same one for the check to mean anything.',
     );
   });
 });
@@ -67,6 +67,8 @@ testerFor('tsconfig.inherits.json').run('require-compiler-options with an inheri
     { code, filename: 'source.ts', options: [{ strictNullChecks: true, noImplicitAny: true }] },
     // An unset flag with a plain documented default of false satisfies `false`.
     { code, filename: 'source.ts', options: [{ verbatimModuleSyntax: false }] },
+    // The tsconfig states noUnusedParameters; typescript-eslint forces both unused flags on in the lint program, which the rule does not read.
+    { code, filename: 'source.ts', options: [{ noUnusedParameters: true }] },
     // No requirements, nothing to report.
     { code, filename: 'source.ts', options: [{}] },
   ],
@@ -83,12 +85,31 @@ testerFor('tsconfig.inherits.json').run('require-compiler-options with an inheri
       options: [{ target: ['es2024', 'esnext'] }],
       errors: [{ messageId: 'differs', data: { tsconfig: tsconfigLabel('tsconfig.inherits.json'), differences: 'target is es2022, required one of es2024, esnext' } }],
     },
+    // The tsconfig leaves noUnusedLocals unset although the lint program has it on.
+    {
+      code,
+      filename: 'source.ts',
+      options: [{ noUnusedLocals: true }],
+      errors: [{ messageId: 'differs', data: { tsconfig: tsconfigLabel('tsconfig.inherits.json'), differences: 'noUnusedLocals is false, required true' } }],
+    },
     // An option whose unset state is neither true nor false is reported as not set, even when `false` is required.
     {
       code,
       filename: 'source.ts',
       options: [{ allowUnreachableCode: false }],
       errors: [{ messageId: 'differs', data: { tsconfig: tsconfigLabel('tsconfig.inherits.json'), differences: 'allowUnreachableCode is not set, required false' } }],
+    },
+  ],
+});
+
+testerFor('tsconfig.unused.json').run('require-compiler-options with the unused flags turned off', rule, {
+  valid: [],
+  invalid: [
+    {
+      code,
+      filename: 'source.ts',
+      options: [{ noUnusedLocals: true, noUnusedParameters: true }],
+      errors: [{ messageId: 'differs', data: { tsconfig: tsconfigLabel('tsconfig.unused.json'), differences: 'noUnusedLocals is false, required true; noUnusedParameters is false, required true' } }],
     },
   ],
 });
