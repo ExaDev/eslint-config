@@ -75,22 +75,25 @@ const playwrightConfig = createRule<[unknown], MessageIds>({
     return {
       Program(program) {
         const config = createStaticConfig(program);
-        for (const configObject of config.configObjects(PLAYWRIGHT_HELPERS)) {
-          const forbidOnly = config.lookup(configObject, 'forbidOnly');
-          if (forbidOnly.kind === 'absent') context.report({ node: configObject, messageId: 'forbidOnlyNotSet' });
+        // `defineConfig` merges all its arguments, so each call is judged as the one configuration they make together.
+        for (const group of config.configGroups(PLAYWRIGHT_HELPERS)) {
+          const last = group.at(-1);
+          if (last === undefined) continue;
+          const forbidOnly = config.lookupGroup(group, 'forbidOnly');
+          if (forbidOnly.kind === 'absent') context.report({ node: last, messageId: 'forbidOnlyNotSet' });
           if (forbidOnly.kind === 'present') {
             if (isOff(config.literal(forbidOnly.value))) context.report({ node: forbidOnly.property, messageId: 'forbidOnlyFalse' });
           }
 
           if (requireFullyParallel) {
-            const fullyParallel = config.lookup(configObject, 'fullyParallel');
-            if (fullyParallel.kind === 'absent') context.report({ node: configObject, messageId: 'fullyParallelNotSet' });
+            const fullyParallel = config.lookupGroup(group, 'fullyParallel');
+            if (fullyParallel.kind === 'absent') context.report({ node: last, messageId: 'fullyParallelNotSet' });
             if (fullyParallel.kind === 'present') {
               if (isOff(config.literal(fullyParallel.value))) context.report({ node: fullyParallel.property, messageId: 'fullyParallelFalse' });
             }
           }
 
-          if (requireWorkers && config.lookup(configObject, 'workers').kind === 'absent') context.report({ node: configObject, messageId: 'workersNotSet' });
+          if (requireWorkers && config.lookupGroup(group, 'workers').kind === 'absent') context.report({ node: last, messageId: 'workersNotSet' });
         }
       },
     };
