@@ -2,7 +2,7 @@ import { join, parse } from 'node:path';
 import { RuleTester } from '@typescript-eslint/rule-tester';
 import { ESLint } from 'eslint';
 import tseslint from 'typescript-eslint';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { plugin } from '../index';
 import { relativeToCwd } from './file-scope';
 import rule, { readCompilerOptionRequirements } from './require-compiler-options';
@@ -147,7 +147,16 @@ testerFor('tsconfig.loose.json').run('require-compiler-options with an overridin
   ],
 });
 
-describe('require-compiler-options once per program', () => {
+describe('require-compiler-options once per run in a long-lived process', () => {
+  // typescript-eslint infers a single CLI run from CI=true, and in a single run it parses a file it has already parsed in the process with a throwaway program, as if in a fix pass. TSESTREE_SINGLE_RUN overrides that inference, so these tests get the persistent programs of a long-lived process wherever they run.
+  beforeEach(() => {
+    vi.stubEnv('TSESTREE_SINGLE_RUN', 'false');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   function onceEslint(): ESLint {
     return new ESLint({
       cwd: FIXTURES,
