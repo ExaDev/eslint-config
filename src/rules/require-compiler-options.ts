@@ -1,7 +1,7 @@
 import { ESLintUtils } from '@typescript-eslint/utils';
 import type * as ts from 'typescript';
 import { isRecord } from '../is-record';
-import { describeCompilerOptionValue, effectiveCompilerOption, parseRequirement, resolveCompilerOptions, type CompilerOptionRequirement } from './compiler-option-values';
+import { describeCompilerOptionValue, effectiveCompilerOption, isScalarOptionValue, parseRequirement, resolveCompilerOptions, type CompilerOptionRequirement } from './compiler-option-values';
 import { relativeToCwd } from './file-scope';
 
 type MessageIds = 'differs';
@@ -14,10 +14,6 @@ const createRule = ESLintUtils.RuleCreator((name) => `https://github.com/ExaDev/
 // The value is the files linted since the last report. ESLint gives a rule no signal that a run has started, but a program that outlives a run (an editor integration, a long-lived ESLint instance) meets the same file again in the next one, so a file seen twice marks a new run and the finding is reported again. A run that lints only files the previous run did not lint cannot be told apart from the same run and stays silent.
 const lintedSinceReport = new WeakMap<ts.Program, Map<string, Set<string>>>();
 
-function isAcceptedValue(value: unknown): value is boolean | number | string {
-  return typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string';
-}
-
 /**
  * Reads the rule's option object into one requirement per compiler option. Each value is `true`, `false`, or a non-empty list of accepted values; an enum-valued option takes its tsconfig spelling (`"es2022"`). Throws naming the option for a malformed value, an unknown compiler option, or a value the compiler would reject.
  */
@@ -26,7 +22,7 @@ export function readCompilerOptionRequirements(options: unknown): readonly Compi
 
   return Object.entries(options).map(([name, specification]) => {
     if (typeof specification === 'boolean') return parseRequirement(name, specification);
-    if (Array.isArray(specification) && specification.length > 0 && specification.every(isAcceptedValue)) return parseRequirement(name, specification);
+    if (Array.isArray(specification) && specification.length > 0 && specification.every(isScalarOptionValue)) return parseRequirement(name, specification);
 
     throw new Error(`@exadev/eslint-config: "${OPTION_NAME}" needs "${name}" to be true, false or a non-empty list of accepted values.`);
   });

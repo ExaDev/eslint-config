@@ -50,8 +50,15 @@ function computedValue(options: ts.CompilerOptions, name: string): unknown {
   return Reflect.apply(entry['computeValue'], entry, [options]);
 }
 
+/**
+ * Whether `value` is one of the scalar kinds a compiler option comparison can hold: a boolean, number or string.
+ */
+export function isScalarOptionValue(value: unknown): value is boolean | number | string {
+  return typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string';
+}
+
 function toOptionValue(value: unknown): CompilerOptionValue {
-  return typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string' ? value : undefined;
+  return isScalarOptionValue(value) ? value : undefined;
 }
 
 /**
