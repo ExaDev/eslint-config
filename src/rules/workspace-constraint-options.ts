@@ -69,6 +69,26 @@ const selectorSchema = {
 
 const nonEmptyStringArray = { type: 'array', items: { type: 'string', minLength: 1 }, minItems: 1 } as const;
 
+/**
+ * The option schema of one script requirement: a bare script name, or an object that also constrains the command.
+ */
+export const scriptRequirementSchema = {
+  oneOf: [
+    { type: 'string', minLength: 1 },
+    {
+      type: 'object',
+      properties: {
+        name: { type: 'string', minLength: 1 },
+        equals: { type: 'string' },
+        includes: nonEmptyStringArray,
+        excludes: nonEmptyStringArray,
+      },
+      required: ['name'],
+      additionalProperties: false,
+    },
+  ],
+} as const;
+
 export const workspaceConstraintOptionsSchema = {
   allow: {
     type: 'array',
@@ -107,22 +127,7 @@ export const workspaceConstraintOptionsSchema = {
         scripts: {
           type: 'array',
           minItems: 1,
-          items: {
-            oneOf: [
-              { type: 'string', minLength: 1 },
-              {
-                type: 'object',
-                properties: {
-                  name: { type: 'string', minLength: 1 },
-                  equals: { type: 'string' },
-                  includes: nonEmptyStringArray,
-                  excludes: nonEmptyStringArray,
-                },
-                required: ['name'],
-                additionalProperties: false,
-              },
-            ],
-          },
+          items: scriptRequirementSchema,
         },
       },
       required: ['match', 'scripts'],
@@ -166,7 +171,10 @@ function readNonEmptyStrings(value: unknown, optionName: string, what: string): 
   return items.map((item) => readNonEmptyString(item, optionName, what));
 }
 
-function compilePattern(pattern: string, optionName: string): void {
+/**
+ * Throws naming `optionName` when `pattern` is not a valid regular expression in the dialect the selectors and `nameRanks` share.
+ */
+export function compilePattern(pattern: string, optionName: string): void {
   try {
     // The compiled RegExp is discarded: this call exists for the SyntaxError an invalid pattern throws, so it surfaces here naming the option instead of later, unattributed, at match time.
     void new RegExp(pattern, 'u');
@@ -270,25 +278,28 @@ const REQUIRED_SCRIPTS_KEYS = ['match', 'scripts'] as const;
 const SCRIPT_CONTENT_KEYS = ['name', 'equals', 'includes', 'excludes'] as const;
 
 // A flag that tokenises to nothing (whitespace only) would make `includes` pass and `excludes` fail for every script, so it is rejected up front.
-function readFlags(value: unknown, what: string): readonly string[] {
-  const flags = readNonEmptyStrings(value, 'requiredScripts', what);
+function readFlags(value: unknown, optionName: string, what: string): readonly string[] {
+  const flags = readNonEmptyStrings(value, optionName, what);
   const blank = flags.find((flag) => tokenizeCommand(flag).length === 0);
-  if (blank !== undefined) fail('requiredScripts', `${what} entry ${JSON.stringify(blank)} contains no tokens.`);
+  if (blank !== undefined) fail(optionName, `${what} entry ${JSON.stringify(blank)} contains no tokens.`);
 
   return flags;
 }
 
-function readScriptRequirement(value: unknown): ScriptRequirement {
-  if (typeof value === 'string') return readNonEmptyString(value, 'requiredScripts', 'a script name');
-  const fields = readEntry(value, 'requiredScripts', SCRIPT_CONTENT_KEYS);
+/**
+ * Reads one script requirement, a bare name or a name with content constraints. Throws naming `optionName` for anything malformed.
+ */
+export function readScriptRequirement(value: unknown, optionName: string): ScriptRequirement {
+  if (typeof value === 'string') return readNonEmptyString(value, optionName, 'a script name');
+  const fields = readEntry(value, optionName, SCRIPT_CONTENT_KEYS);
   const { equals, includes, excludes } = fields;
-  if (equals !== undefined && typeof equals !== 'string') fail('requiredScripts', '"equals" must be a string.');
+  if (equals !== undefined && typeof equals !== 'string') fail(optionName, '"equals" must be a string.');
 
   return {
-    name: readNonEmptyString(fields['name'], 'requiredScripts', '"name"'),
+    name: readNonEmptyString(fields['name'], optionName, '"name"'),
     ...(equals !== undefined && { equals }),
-    ...(includes !== undefined && { includes: readFlags(includes, '"includes"') }),
-    ...(excludes !== undefined && { excludes: readFlags(excludes, '"excludes"') }),
+    ...(includes !== undefined && { includes: readFlags(includes, optionName, '"includes"') }),
+    ...(excludes !== undefined && { excludes: readFlags(excludes, optionName, '"excludes"') }),
   };
 }
 
@@ -298,6 +309,6 @@ export function readRequiredScripts(value: unknown, context: ConstraintContext):
     const scripts = readArray(fields['scripts'], 'requiredScripts');
     if (scripts.length === 0) fail('requiredScripts', '"scripts" must not be empty.');
 
-    return { match: readSelector(fields['match'], 'requiredScripts', context), scripts: scripts.map(readScriptRequirement) };
+    return { match: readSelector(fields['match'], 'requiredScripts', context), scripts: scripts.map((script) => readScriptRequirement(script, 'requiredScripts')) };
   });
 }
