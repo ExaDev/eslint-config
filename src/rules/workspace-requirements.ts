@@ -1,5 +1,5 @@
 import { containsTokenRun, tokenizeCommand } from './command-tokens';
-import type { RequiredFiles, RequiredScripts, ScriptContent } from './workspace-constraint-options';
+import type { RequiredFiles, RequiredScripts, ScriptContent, ScriptRequirement } from './workspace-constraint-options';
 import type { WorkspaceFs } from './workspace-fs';
 import { anyPathMatchesGlob } from './workspace-glob';
 import { matchesSelector } from './workspace-checks';
@@ -61,14 +61,13 @@ function contentProblems(content: ScriptContent, actual: string): readonly Scrip
 }
 
 /**
- * Checks a package's `scripts` against every requirement whose selector matches `target`. `scripts` maps each declared script name to its command, or to undefined when the value is not a string (which counts as present, with an empty command for content checks). Missing names are listed once each, in declaration order.
+ * Checks a package's `scripts` against the script requirements themselves, whatever selected them. `scripts` maps each declared script name to its command, or to undefined when the value is not a string (which counts as present, with an empty command for content checks). Missing names are listed once each, in declaration order.
  */
-export function checkScripts(scripts: ReadonlyMap<string, string | undefined>, requirements: readonly RequiredScripts[], target: SelectorTarget): ScriptCheckResult {
-  const wanted = requirements.filter((requirement) => matchesSelector(requirement.match, target)).flatMap((requirement) => requirement.scripts.map(asContent));
+export function checkScriptRequirements(scripts: ReadonlyMap<string, string | undefined>, wanted: readonly ScriptRequirement[]): ScriptCheckResult {
   const missing = new Set<string>();
   const problems: ScriptProblem[] = [];
 
-  for (const content of wanted) {
+  for (const content of wanted.map(asContent)) {
     if (!scripts.has(content.name)) {
       missing.add(content.name);
       continue;
@@ -77,4 +76,14 @@ export function checkScripts(scripts: ReadonlyMap<string, string | undefined>, r
   }
 
   return { missing: [...missing], problems };
+}
+
+/**
+ * Checks a package's `scripts` against every requirement whose selector matches `target`. See `checkScriptRequirements` for the shape of `scripts` and the result.
+ */
+export function checkScripts(scripts: ReadonlyMap<string, string | undefined>, requirements: readonly RequiredScripts[], target: SelectorTarget): ScriptCheckResult {
+  return checkScriptRequirements(
+    scripts,
+    requirements.filter((requirement) => matchesSelector(requirement.match, target)).flatMap((requirement) => requirement.scripts),
+  );
 }
