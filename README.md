@@ -398,6 +398,12 @@ Bundled into `exadevConfig()`'s default output the same way React/Next.js auto-d
 | `filename-pattern` | | **Filename conventions by glob:** a name regex, a required sibling file, and a naming scheme required once a file passes a line count. See [Filename patterns](#filename-patterns). |
 | `pure-module` | | **Bans I/O, ambient state and `async` in the files it is wired onto:** imports of Node I/O modules, I/O and scheduling globals, argument-less `Date`, `Date.now`, `Math.random`, and `async`/`await`. Wired by `pureModulesConfig`. See [Pure modules](#pure-modules). |
 | `scoped-first-parameter` | | **Every method of the configured repository-like interfaces takes a scope parameter first.** Checks the signature only, not that the scope is used or that tenants are isolated. Requires type information. Opt-in: needs its `interfaces` and `parameter` options. See [Scoped first parameter](#scoped-first-parameter). |
+| `require-compiler-options` | | **The effective compiler options of the tsconfig ESLint type-checks against must have the configured values.** `extends` is resolved the way `tsc` resolves it. Reports once per program and names the tsconfig it resolved. Requires type information. Opt-in. See [Compiler options](#compiler-options). |
+| `vitest-config` | | **A Vitest config must not stop the run from failing:** `passWithNoTests: true`, `allowOnly: true`, a bare `node_modules` exclude, and coverage thresholds under a key Vitest reads as a file glob. Self-scopes to `vitest*.config.*` and `vitest.workspace.*`. Opt-in. See [Tool config files](#tool-config-files). |
+| `vitest-coverage-config` | | **The shared base Vitest config must spell out a complete `coverage` block:** `provider`, `include` and all four `thresholds` keys. A no-op unless `files` names the base config files. See [Tool config files](#tool-config-files). |
+| `stryker-break-threshold` | | **A Stryker config must set `thresholds.break` to a number,** optionally no lower than a minimum and no lower than the value in a shared base config. Self-scopes to `stryker*.config.*`. See [Tool config files](#tool-config-files). |
+| `stryker-thresholds-order` | | **Stryker `thresholds` must satisfy `break <= low <= high`,** using Stryker's defaults for a key the config leaves out. See [Tool config files](#tool-config-files). |
+| `playwright-config` | | **A Playwright config must set `forbidOnly`** to `true` or a non-literal expression such as `!!process.env.CI`, with optional checks that `fullyParallel` and `workers` are set. Self-scopes to `playwright*.config.*`. See [Tool config files](#tool-config-files). |
 | `injected-test-hygiene` | | **A conformance kit's injected test functions get the same hygiene as imported ones:** no `.only`, no `.skip`, and an assertion in every test body, for the `describe` and `it` a kit receives as parameters, which `@vitest/eslint-plugin` skips. Wired by `testHygieneConfig`. See [Guard and conformance test hygiene](#guard-and-conformance-test-hygiene). |
 | `non-vacuous-guard` | | **A guard test must show it can fail:** an unconditional lower bound on what it discovered, and its pattern checked against an input it must catch and one it must not. Wired by `testHygieneConfig`. See [Guard and conformance test hygiene](#guard-and-conformance-test-hygiene). |
 | `no-multiline-template-literal` | ✓ | **An untagged template literal whose value spans several lines should be an array of lines joined with `\n`.** Autofixes only when the rewrite provably yields the same string. See [Multi-line template literals](#multi-line-template-literals). |
@@ -793,6 +799,126 @@ export default defineConfig(...exadevConfig(), {
 
 Overlap: core `no-empty` already reports a catch block with no statements and no comment; this rule also reports the comment-only block, which `no-empty` accepts.
 
+## Compiler options
+
+Several enforcement patterns hold only while the compiler is strict: an exhaustive `satisfies Record<Command['type'], Handler>` map, `noUncheckedIndexedAccess` narrowing, `exactOptionalPropertyTypes`. Turning `strict` off in a tsconfig silently disables all of them, and nothing in the config notices. `exadev/require-compiler-options` reports it.
+
+```ts
+// eslint.config.ts
+import { defineConfig } from 'eslint/config';
+import { exadevConfig } from '@exadev/eslint-config';
+
+export default defineConfig(
+  ...exadevConfig(),
+  {
+    files: ['**/*.ts'],
+    rules: {
+      'exadev/require-compiler-options': [
+        'error',
+        {
+          strict: true,
+          noUncheckedIndexedAccess: true,
+          exactOptionalPropertyTypes: true,
+          noImplicitReturns: true,
+          noImplicitOverride: true,
+          noFallthroughCasesInSwitch: true,
+          noPropertyAccessFromIndexSignature: true,
+          noUncheckedSideEffectImports: true,
+          noUnusedLocals: true,
+          noUnusedParameters: true,
+          verbatimModuleSyntax: true,
+          isolatedModules: true,
+          strictBuiltinIteratorReturn: true,
+          forceConsistentCasingInFileNames: true,
+          allowUnreachableCode: false,
+          allowUnusedLabels: false,
+          target: ['es2022', 'es2023', 'es2024', 'esnext'],
+        },
+      ],
+    },
+  },
+);
+```
+
+Each key is a compiler option and each value says what the effective option must be: `true`, `false`, or a list of accepted values. An enum-valued option such as `target`, `module` or `moduleResolution` takes its tsconfig spelling, case-insensitively, and the rule converts it with the compiler's own tsconfig parser, so a list of accepted values is also how "at least" is written. An unknown option, a value the compiler rejects and a list-valued option such as `lib` throw when the rule is created, quoting the compiler.
+
+The rule asks the program ESLint already has which tsconfig governs the file (`program.getCompilerOptions().configFilePath`, so `parserOptions.project` and `projectService` both work) and reads that configuration through TypeScript's own config parser, which follows the whole `extends` chain exactly as `tsc` does. A flag inherited from a shared base counts, and a flag the base sets but a package overrides does not. It re-reads the tsconfig rather than trusting `program.getCompilerOptions()` because typescript-eslint overrides `noEmit`, `noUnusedLocals`, `noUnusedParameters`, `allowJs` and `checkJs` in the programs it builds, so those options would look satisfied whatever the tsconfig says. A program with no tsconfig behind it has nothing to re-read and is judged on its own options, in which those five are the overridden values.
+
+The value compared is the one the compiler acts on: a flag that follows `strict` (`strictNullChecks`, `noImplicitAny`) is judged on its effective value, and an option that is unset takes the plain default the installed compiler documents for it. An option whose unset state is neither true nor false, such as `allowUnreachableCode`, is reported as not set even when `false` is required, because `false` is a different setting from leaving it out. This reads the compiler's own option metadata, which TypeScript exports at run time without publishing in its typings, and needs a release that has it; the rule throws a clear error naming the requirement otherwise.
+
+A program is shared by every file it contains, so the rule reports once per program and rule configuration, on the first file ESLint lints from it, and not once per source file. The message names the tsconfig it resolved and lists each option whose effective value differs together with the value required. `parserOptions.project` or `projectService` may select a different tsconfig from the one the build uses (a `tsconfig.eslint.json`, say), in which case the rule checks the lint tsconfig and says nothing about the build; the two need to agree for the check to mean anything. A root tsconfig that covers only tooling files, with each package carrying its own, makes the same point: the tsconfig the rule sees is the one that contains the file being linted.
+
+Keep the strictness flags in a base config that compiles nothing and have the root and every package extend it. `skipLibCheck` is common in shared bases and weakens the checking of declaration files, so requiring it `false` is possible (`skipLibCheck: false`) but belongs in a repository that wants it, not in a default set. `isolatedDeclarations` is the compiler-side way to require explicit types on exported declarations and can be added to the set as `isolatedDeclarations: true`; `@typescript-eslint/explicit-module-boundary-types` in the default export is the lint-side alternative.
+
+The rule needs type information, so it is in neither `plugin.configs.recommended` nor the default export. ESLint's `--cache` keys on a file's content and the ESLint configuration, not on tsconfig contents, so clear the cache after changing a tsconfig or the option set.
+
+## Tool config files
+
+Tool configs decide whether the tools they configure enforce anything, and several can be set so that they enforce nothing: a test runner that passes when it finds no tests, `allowOnly` left on so a focused test reaches CI, coverage with no thresholds, a mutation run with no `break` threshold. These rules lint the config files as ordinary TypeScript. They read the object the file exports and run no tool.
+
+Each rule scopes itself by filename, so it can be switched on for every JavaScript and TypeScript file and acts only on the files it knows:
+
+| Rule | Built-in scope |
+| --- | --- |
+| `vitest-config` | `vitest*.config.*` and `vitest.workspace.*`, so `vitest.mutation.config.ts` is covered |
+| `vitest-coverage-config` | none: only the files named in its `files` option |
+| `stryker-break-threshold`, `stryker-thresholds-order` | `stryker*.config.*`, `stryker*.conf.*` and the dot-prefixed `.stryker.config.*` and `.stryker.conf.*` |
+| `playwright-config` | `playwright*.config.*` |
+
+Every rule takes a `files` option, a glob or list of globs in the [file glob dialect](#file-level-rules), that replaces the built-in scope; a glob without a `/` names a file at any depth.
+
+**Only what the file spells out is judged.** A rule follows the default export (`export default`, `export =` or `module.exports =`) through an object literal, an array, a call to a config helper (`defineConfig`, `defineProject`, `defineWorkspace`, `mergeConfig`), the returned value of a function, either branch of a conditional, and a top-level `const`. A value that is the result of any other call, an import, a spread or a computed key is not visible, and the rule stays silent about it instead of guessing. A package config that merges a shared base and sets only a few keys is therefore judged only on those keys, which is why the checks that need a complete picture run on the base file itself (`vitest-coverage-config`, and the `base` option of `stryker-break-threshold`).
+
+```ts
+// eslint.config.ts
+import { defineConfig } from 'eslint/config';
+import { exadevConfig } from '@exadev/eslint-config';
+
+export default defineConfig(
+  ...exadevConfig(),
+  {
+    files: ['**/*.config.{ts,mts,cts,js,mjs,cjs}'],
+    rules: {
+      'exadev/vitest-config': 'error',
+      'exadev/vitest-coverage-config': ['error', { files: ['vitest.base.config.ts'] }],
+      'exadev/stryker-break-threshold': ['error', { min: 80, base: { path: 'stryker.base.config.ts', relativeTo: 'root' } }],
+      'exadev/stryker-thresholds-order': 'error',
+      'exadev/playwright-config': 'error',
+    },
+  },
+);
+```
+
+### Vitest
+
+`exadev/vitest-config` reports, in the `test` object of a config and of every inline project in `test.projects` (at any depth) and in the project objects of a `vitest.workspace.*` file:
+
+- `passWithNoTests: true`, which makes the run pass when no test file is found, so a mistyped include glob or a deleted suite goes unnoticed;
+- `allowOnly: true`, which lets a committed `.only` through (Vitest's own default already allows it only outside CI);
+- the bare string `node_modules` (or `node_modules/`) in `test.exclude` or `test.coverage.exclude`, which excludes only a top-level directory of that name; `**/node_modules/**` is the form that also excludes nested copies;
+- a key under `test.coverage.thresholds` that Vitest does not read. Verified against the installed Vitest source, which skips `statements`, `branches`, `functions`, `lines`, `perFile`, `autoUpdate` and `100` and treats every other key as a file glob matched against the covered files, so thresholds nested under a word such as `global` match no file and enforce nothing. A key counts as intended for a glob when it contains a path separator or one of `*`, `?`, `[`, `]`, `{`, `}`, `!`; anything else is reported. This was checked against Vitest 4 only.
+
+The option `forbidNumericMaxWorkers: true` also reports a numeric `test.maxWorkers`, for a repository whose task runner already parallelises across packages and where a fixed worker count in each package multiplies. A percentage string or a computed value passes. The same setting in a `package.json` script is the concern of [`required-scripts`](#required-scripts): `{ name: 'test', excludes: ['--passWithNoTests'] }` reports the flag on the command line.
+
+`exadev/vitest-coverage-config` takes `files`, the shared base config files, and does nothing without it. In those files, every `test.coverage` block that is an object literal must set `provider`, `include` and a `thresholds` object with `statements`, `branches`, `functions` and `lines`, and one diagnostic lists everything missing. Per-package configs merge the base with `mergeConfig` and often set only `coverage.exclude`, so requiring thresholds in every file would report each of them for what it inherits.
+
+### Stryker
+
+`exadev/stryker-break-threshold` requires `thresholds.break` to be a number, since a run with no `break` (the default is `null`) never fails however low the mutation score falls. A missing `thresholds`, a missing `break`, `null`, `undefined` and a non-number are reported. A mutation job may deliberately run without `break` until a real threshold has been measured, so the rule is its own rule: set it to `'warn'`, or switch it off for those files, without touching the ordering check.
+
+A `break` is a gate only when it is high enough to fail something, and a value of 2 never does. Two options set a floor:
+
+- `min`, a number from 0 to 100;
+- `base`, a file reference (`{ path, relativeTo? }`, resolved against the linted file's directory or the workspace root) to the shared Stryker config. The rule parses that file, takes its `thresholds.break`, and reports a package whose own value is lower, so a package cannot quietly undercut the base. It throws, naming the file, when the base does not exist or spells out no numeric `break`, rather than comparing against nothing.
+
+With both, the higher floor is the one named in the message.
+
+`exadev/stryker-thresholds-order` requires `break <= low <= high`. A key left out takes Stryker's documented default (`high` 80, `low` 60) and `break` has none, so `thresholds: { break: 70 }` is reported because it exceeds the default `low`: the low and high marks are then unreachable on a passing run, which usually means they were left at their defaults when the break was raised. Equal marks are allowed, since `{ high: 100, low: 100, break: 100 }` is the strictest valid configuration. Stryker itself rejects only a `low` above `high`.
+
+### Playwright
+
+`exadev/playwright-config` requires `forbidOnly` to be set, because Playwright defaults it to false and a committed `test.only` then runs one test and passes. `true` and any non-literal expression pass, so `forbidOnly: !!process.env.CI` is accepted; an absent key, `false`, `undefined` and `null` are reported. Two options add checks that a setting is present: `fullyParallel: true` requires `fullyParallel` to be set and not false, and `workers: true` requires `workers` to be set to anything, so the worker count on CI and locally is a stated choice. Only the top level of the config is read.
+
 ## Workspace architecture
 
 Six rules (`no-uphill-dependency`, `no-dependency-cycle`, `package-name-mirrors-path`, `package-has-files`, `dev-dependency-only`, `required-scripts`) share one options object, `WorkspaceArchitectureOptions`, describing a pnpm workspace's own dependency-direction rules (which package is allowed to depend on which other, checked directly against every `package.json`'s declared `dependencies`) and the per-package requirements layered on the same groups. The last four rules are opt-in within it: each does nothing unless its own option is given. Off by default, since `groups` has no sensible default; enable it either through `exadevConfig({ workspaceArchitecture })` (the full bundle) or the standalone `workspaceArchitectureConfig(options)` export (for a consumer building its own config from the lighter `plugin` export, e.g. one that isn't using `exadevConfig()` at all):
@@ -1187,6 +1313,8 @@ pnpm build
 - [`src/turbo-config.ts`](src/turbo-config.ts) builds the turbo blocks (`buildTurboConfig` internally, `turboConfig` publicly) from the one shared options object in [`src/rules/turbo-options.ts`](src/rules/turbo-options.ts).
   - The pure decisions live in [`src/rules/turbo-checks.ts`](src/rules/turbo-checks.ts), independent of ESLint, so they are tested against plain maps; the rules are thin visitors over them. [`src/rules/turbo-json.ts`](src/rules/turbo-json.ts) reads the parts of a `turbo.json` the rules need and finds the root one, [`src/rules/turbo-workspace.ts`](src/rules/turbo-workspace.ts) lists the packages and their scripts, and [`src/rules/turbo-commands.ts`](src/rules/turbo-commands.ts) reads a script command for a delegation, the tasks it invokes, or a boundaries run.
   - Rules that read sibling and ancestor files take a `WorkspaceFs` through their factory, and their tests use [`src/rules/memory-fs.ts`](src/rules/memory-fs.ts), an in-memory implementation, rather than fixture trees on disk.
+- [`src/rules/static-config.ts`](src/rules/static-config.ts) is the shared reader for the tool config rules. `createStaticConfig(program)` answers only what a config file's source states: which object literals the default export reaches, whether a key is `present`, `absent` or `opaque` (a later spread or non-literal computed key could supply it), and the literal a value stands for. [`src/rules/tool-config-options.ts`](src/rules/tool-config-options.ts) holds the option handling they share, and [`src/rules/vitest-test-objects.ts`](src/rules/vitest-test-objects.ts) finds the `test` objects of a Vitest config, projects included. `stryker-break-threshold` parses its `base` file with `@typescript-eslint/typescript-estree` and reads it through the same `createStaticConfig`.
+- [`src/rules/compiler-option-values.ts`](src/rules/compiler-option-values.ts) is where `require-compiler-options` agrees with `tsc`. `resolveCompilerOptions` re-reads the program's tsconfig because typescript-eslint overrides some options in its programs. TypeScript exports `computedOptions` (how it derives an effective option from the others) and `optionDeclarations` (every option with its documented default) at run time but not in its typings; this module reads them through `Reflect.get` and narrows with guards, converts a required value with the compiler's own `convertCompilerOptionsFromJson`, and throws when the installed compiler does not export them.
 - [`src/create-config.ts`](src/create-config.ts) is config assembly's single source of truth.
   - `exadevConfig(options, ...userConfigs)` concatenates, in order: `buildGitignoreConfig`, `recommendedTypeChecked`, `jsdocAndTsdoc`, `jsonCanonicalConfig`, `stylisticCommentsConfig`, `buildReactConfig`, `buildNextjsConfig`, `buildPackageJsonKeyOrderConfig` (each tri-state builder fed its matching option), `buildWorkspaceArchitectureConfig` (only when `workspaceArchitecture` is given; there is no auto-detected default), `buildTurboConfig` (only when `turbo` is given, likewise), `buildImportPolicyConfig` (only when `importPolicies` is given, likewise), `buildPureModulesConfig` (only when `pureModules` is given, likewise), `buildTestHygieneConfig` (only when `testHygiene` is given, likewise), `buildMarkdownHeadingsConfig` (only when `markdownHeadings` is given, likewise), and any trailing user configs.
   - `defaultConfig` is `exadevConfig()` evaluated once, eagerly, at module load.
