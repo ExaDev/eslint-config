@@ -1,0 +1,17 @@
+{
+  "name": "wired",
+  "version": "1.0.0",
+  "devDependencies": {
+    "husky": "9.1.7"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@12.4.1",
+  "scripts": {
+    "knip": "knip",
+    "prepare": "husky",
+    "prepublishOnly": "tsdown && publint && attw --pack",
+    "syncpack": "syncpack lint"
+  }
+}
