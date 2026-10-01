@@ -1,8 +1,10 @@
 import { ESLintUtils } from '@typescript-eslint/utils';
 import type * as ts from 'typescript';
 import { isRecord } from '../is-record';
-import { describeCompilerOptionValue, effectiveCompilerOption, isScalarOptionValue, parseRequirement, readTsconfig, tsconfigPathOf, type CompilerOptionRequirement } from './compiler-option-values';
+import { describeCompilerOptionValue, effectiveCompilerOption, isScalarOptionValue, parseRequirement, readTsconfig, type CompilerOptionRequirement } from './compiler-option-values';
 import { relativeToCwd } from './file-scope';
+import { createRunTracker, type RunTracker } from './run-tracker';
+import { createTsconfigAttribution } from './tsconfig-attribution';
 
 type MessageIds = 'differs';
 
@@ -10,9 +12,22 @@ const OPTION_NAME = 'exadev/require-compiler-options';
 
 const createRule = ESLintUtils.RuleCreator((name) => `https://github.com/ExaDev/eslint-config/blob/main/src/rules/${name}.ts`);
 
-// A program is shared by every file it contains, so the finding belongs to the program and not to the file that happened to be linted first. The key is the program plus the required options, so the same program linted under two different rule configurations reports once for each. A WeakMap lets a program that a long-running process has replaced be collected.
-// The value is the files linted since the last report. ESLint gives a rule no signal that a run has started, but a program that outlives a run (an editor integration, a long-lived ESLint instance) meets the same file again in the next one, so a file seen twice marks a new run and the finding is reported again. A run that lints only files the previous run did not lint cannot be told apart from the same run and stays silent.
-const lintedSinceReport = new WeakMap<ts.Program, Map<string, Set<string>>>();
+// The finding belongs to the tsconfig, which governs every file of its program, and not to the file that happened to be linted first, so the rule reports once per tsconfig and option set per run. Runs are told apart by createRunTracker, one per tsconfig and option set, so the same tsconfig linted under two rule configurations reports once for each.
+// The trackers are keyed by tsconfig path and not by the TypeScript program, because typescript-eslint replaces programs: it rebuilds a watch or project service program after an edit, and when it infers a single run (TSESTREE_SINGLE_RUN, or CI=true or the eslint binary without --fix) it parses a file it has already parsed in the process, as it would in a fix pass, with a single-file program that has no tsconfig. Keyed by program, that throwaway program looked like a new program with nothing linted yet and was judged on its own options; createTsconfigAttribution attributes it to the file's tsconfig instead.
+const trackersByTsconfig = new Map<string, Map<string, RunTracker>>();
+// A program with no tsconfig behind it and none attributed to it is its own key. A WeakMap lets one that a long-running process has replaced be collected.
+const trackersByProgram = new WeakMap<ts.Program, Map<string, RunTracker>>();
+const governingTsconfig = createTsconfigAttribution();
+
+function trackersFor(owner: string | ts.Program): Map<string, RunTracker> {
+  const existing = typeof owner === 'string' ? trackersByTsconfig.get(owner) : trackersByProgram.get(owner);
+  if (existing !== undefined) return existing;
+  const created = new Map<string, RunTracker>();
+  if (typeof owner === 'string') trackersByTsconfig.set(owner, created);
+  else trackersByProgram.set(owner, created);
+
+  return created;
+}
 
 /**
  * Reads the rule's option object into one requirement per compiler option. Each value is `true`, `false`, or a non-empty list of accepted values; an enum-valued option takes its tsconfig spelling (`"es2022"`). Throws naming the option for a malformed value, an unknown compiler option, or a value the compiler would reject.
@@ -40,7 +55,7 @@ const requireCompilerOptions = createRule<[unknown], MessageIds>({
   meta: {
     type: 'problem',
     docs: {
-      description: 'Require the effective compiler options of the tsconfig the program being linted was created from, after `extends` is resolved, to have the configured values. Reports once per program and names the tsconfig it resolved.',
+      description: 'Require the effective compiler options of the tsconfig the program being linted was created from, after `extends` is resolved, to have the configured values. Reports once per tsconfig and run, and names the tsconfig it resolved.',
     },
     schema: [
       {
@@ -63,19 +78,14 @@ const requireCompilerOptions = createRule<[unknown], MessageIds>({
 
     return {
       Program(node) {
-        const bySignature = lintedSinceReport.get(program) ?? new Map<string, Set<string>>();
-        lintedSinceReport.set(program, bySignature);
-        const linted = bySignature.get(signature) ?? new Set<string>();
-        bySignature.set(signature, linted);
-        const isNewRun = linted.has(context.filename);
-        if (isNewRun) linted.clear();
-        const isFirstOfRun = linted.size === 0;
-        linted.add(context.filename);
-        if (!isFirstOfRun) return;
+        const tsconfig = governingTsconfig(program, context.filename);
+        const trackers = trackersFor(tsconfig ?? program);
+        const carries = trackers.get(signature) ?? createRunTracker();
+        trackers.set(signature, carries);
+        if (!carries(context.filename, context.sourceCode.text)) return;
 
-        const configFilePath = tsconfigPathOf(program);
         // A program with no tsconfig behind it has nothing to re-read and is judged on its own options.
-        const compilerOptions = configFilePath === undefined ? program.getCompilerOptions() : readTsconfig(configFilePath).options;
+        const compilerOptions = tsconfig === undefined ? program.getCompilerOptions() : readTsconfig(tsconfig).options;
         const differences = requirements.flatMap((requirement) => {
           const actual = effectiveCompilerOption(compilerOptions, requirement.name);
           if (requirement.accepted.includes(actual)) return [];
@@ -84,8 +94,8 @@ const requireCompilerOptions = createRule<[unknown], MessageIds>({
         });
         if (differences.length === 0) return;
 
-        const tsconfig = configFilePath === undefined ? 'the default project' : relativeToCwd(configFilePath, context.cwd);
-        context.report({ loc: { line: node.loc.start.line, column: node.loc.start.column }, messageId: 'differs', data: { tsconfig, differences: differences.join('; ') } });
+        const label = tsconfig === undefined ? 'the default project' : relativeToCwd(tsconfig, context.cwd);
+        context.report({ loc: { line: node.loc.start.line, column: node.loc.start.column }, messageId: 'differs', data: { tsconfig: label, differences: differences.join('; ') } });
       },
     };
   },

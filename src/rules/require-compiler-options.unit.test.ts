@@ -1,9 +1,11 @@
 import { join, parse } from 'node:path';
+import stylistic from '@stylistic/eslint-plugin';
 import { RuleTester } from '@typescript-eslint/rule-tester';
-import { ESLint } from 'eslint';
+import { ESLint, type Rule } from 'eslint';
 import tseslint from 'typescript-eslint';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { plugin } from '../index';
+import { isRecord } from '../is-record';
 import { relativeToCwd } from './file-scope';
 import rule, { readCompilerOptionRequirements } from './require-compiler-options';
 
@@ -147,30 +149,65 @@ testerFor('tsconfig.loose.json').run('require-compiler-options with an overridin
   ],
 });
 
+// The tsconfig of the program each linted file was parsed with, in lint order, so a test can show which kind of program typescript-eslint handed the rule.
+const parsedWith: (string | undefined)[] = [];
+
+// The parser services ESLint hands a rule are untyped, so the program's configFilePath is read through guards.
+function tsconfigParsedWith(services: unknown): string | undefined {
+  if (!isRecord(services) || !isRecord(services['program'])) return undefined;
+  const getCompilerOptions = services['program']['getCompilerOptions'];
+  if (typeof getCompilerOptions !== 'function') return undefined;
+  const options: unknown = Reflect.apply(getCompilerOptions, services['program'], []);
+  if (!isRecord(options) || typeof options['configFilePath'] !== 'string') return undefined;
+
+  return relativeToCwd(options['configFilePath'], FIXTURES);
+}
+
+const probe: Rule.RuleModule = {
+  meta: { type: 'problem', schema: [] },
+  create(context) {
+    parsedWith.push(tsconfigParsedWith(context.sourceCode.parserServices));
+
+    return {};
+  },
+};
+
+interface LintOptions {
+  readonly requirement: Readonly<Record<string, boolean>>;
+  // Removes the semicolon ending each fixture file, so a fixing run lints a file a second time.
+  readonly fix?: boolean;
+}
+
+function eslintFor({ requirement, fix = false }: LintOptions): ESLint {
+  return new ESLint({
+    cwd: FIXTURES,
+    fix,
+    overrideConfigFile: true,
+    overrideConfig: [
+      {
+        files: ['**/*.ts'],
+        languageOptions: { parser: tseslint.parser, parserOptions: { project: ['./tsconfig.once.json'], projectService: false, tsconfigRootDir: FIXTURES } },
+        plugins: { exadev: plugin, probe: { rules: { program: probe } }, '@stylistic': stylistic },
+        rules: { 'exadev/require-compiler-options': ['error', requirement], 'probe/program': 'error', ...(fix ? { '@stylistic/semi': ['error', 'never'] } : {}) },
+      },
+    ],
+  });
+}
+
+const messagesOf = (results: readonly ESLint.LintResult[]): string[] => results.flatMap((result) => result.messages.map((message) => message.message));
+
 describe('require-compiler-options once per run in a long-lived process', () => {
   // typescript-eslint infers a single CLI run from CI=true, and in a single run it parses a file it has already parsed in the process with a throwaway program, as if in a fix pass. TSESTREE_SINGLE_RUN overrides that inference, so these tests get the persistent programs of a long-lived process wherever they run.
   beforeEach(() => {
     vi.stubEnv('TSESTREE_SINGLE_RUN', 'false');
+    parsedWith.length = 0;
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
   });
 
-  function onceEslint(): ESLint {
-    return new ESLint({
-      cwd: FIXTURES,
-      overrideConfigFile: true,
-      overrideConfig: [
-        {
-          files: ['**/*.ts'],
-          languageOptions: { parser: tseslint.parser, parserOptions: { project: ['./tsconfig.once.json'], projectService: false, tsconfigRootDir: FIXTURES } },
-          plugins: { exadev: plugin },
-          rules: { 'exadev/require-compiler-options': ['error', { strict: true }] },
-        },
-      ],
-    });
-  }
+  const onceEslint = (): ESLint => eslintFor({ requirement: { strict: true } });
 
   it('reports once for a program shared by several linted files', async () => {
     const results = await onceEslint().lintFiles(['source.ts', 'second.ts']);
@@ -194,5 +231,50 @@ describe('require-compiler-options once per run in a long-lived process', () => 
     await eslint.lintFiles(['source.ts', 'second.ts']);
     const results = await eslint.lintFiles(['second.ts']);
     expect(results.flatMap((result) => result.messages)).toHaveLength(1);
+  });
+
+  it('reports once in a run that lints a file again to apply fixes', async () => {
+    const results = await eslintFor({ requirement: { strict: true }, fix: true }).lintFiles(['source.ts', 'second.ts']);
+    expect(results.map((result) => result.output)).toStrictEqual(['export const value = 1\n', 'export const other = 2\n']);
+    expect(messagesOf(results)).toHaveLength(1);
+  });
+});
+
+describe('require-compiler-options in a single run', () => {
+  // TSESTREE_SINGLE_RUN=true is what CI=true or the eslint binary makes typescript-eslint infer: one program per tsconfig built ahead of time, and a file it has already parsed in the process parsed again with a single-file program that has no tsconfig.
+  beforeEach(() => {
+    vi.stubEnv('TSESTREE_SINGLE_RUN', 'true');
+    parsedWith.length = 0;
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('judges a file parsed again without a tsconfig against the tsconfig it was linted under', async () => {
+    const eslint = eslintFor({ requirement: { strict: true } });
+    const first = await eslint.lintFiles(['source.ts', 'second.ts']);
+    parsedWith.length = 0;
+    const second = await eslint.lintFiles(['source.ts', 'second.ts']);
+    expect(parsedWith).toStrictEqual([undefined, undefined]);
+    expect(messagesOf(first)).toStrictEqual([expect.stringContaining('tsconfig.once.json differ from the required ones: strict is false, required true')]);
+    expect(messagesOf(second)).toStrictEqual(messagesOf(first));
+  });
+
+  it('does not judge a file parsed again without a tsconfig on that program\'s own options', async () => {
+    // The tsconfig sets noUncheckedIndexedAccess; the single-file program leaves it at its default, false.
+    const eslint = eslintFor({ requirement: { noUncheckedIndexedAccess: true } });
+    await eslint.lintFiles(['source.ts', 'second.ts']);
+    parsedWith.length = 0;
+    const results = await eslint.lintFiles(['source.ts', 'second.ts']);
+    expect(parsedWith).toStrictEqual([undefined, undefined]);
+    expect(messagesOf(results)).toStrictEqual([]);
+  });
+
+  it('keeps the finding in a run that lints a file again to apply fixes', async () => {
+    const results = await eslintFor({ requirement: { strict: true }, fix: true }).lintFiles(['source.ts', 'second.ts']);
+    expect(results.map((result) => result.output)).toStrictEqual(['export const value = 1\n', 'export const other = 2\n']);
+    expect(parsedWith).toContain(undefined);
+    expect(messagesOf(results)).toStrictEqual([expect.stringContaining('tsconfig.once.json differ from the required ones: strict is false, required true')]);
   });
 });
