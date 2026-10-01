@@ -55,6 +55,24 @@ function toOptionValue(value: unknown): CompilerOptionValue {
 }
 
 /**
+ * The compiler options of the configuration `program` was created from, as `tsc` resolves them: `extends` followed, nothing else added. This re-reads the tsconfig named by the program's `configFilePath` instead of trusting `program.getCompilerOptions()`, because typescript-eslint overrides `noEmit`, `noUnusedLocals`, `noUnusedParameters`, `allowJs` and `checkJs` in the programs it builds, so those would always look satisfied. A program with no tsconfig behind it (`configFilePath` unset) has nothing to re-read and its own options are returned. Throws, quoting the compiler, when the tsconfig cannot be read or parsed.
+ */
+export function resolveCompilerOptions(program: ts.Program): ts.CompilerOptions {
+  const programOptions = program.getCompilerOptions();
+  const configFilePath = programOptions['configFilePath'];
+  if (typeof configFilePath !== 'string') return programOptions;
+  const parsed = ts.getParsedCommandLineOfConfigFile(configFilePath, undefined, {
+    ...ts.sys,
+    onUnRecoverableConfigFileDiagnostic: (diagnostic) => {
+      throw new Error(`@exadev/eslint-config: "exadev/require-compiler-options" cannot read ${configFilePath}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, ' ')}`);
+    },
+  });
+  if (parsed === undefined) throw new Error(`@exadev/eslint-config: "exadev/require-compiler-options" cannot read ${configFilePath}.`);
+
+  return parsed.options;
+}
+
+/**
  * The value TypeScript acts on for `name`: the compiler's own derivation where it has one (`strictNullChecks` follows `strict`, `target` has a version-dependent default), otherwise the value written in the resolved configuration, otherwise the plain default its option metadata documents. `undefined` means the option is unset and its default is not a fixed value (`allowUnreachableCode`, whose unset state is neither true nor false).
  */
 export function effectiveCompilerOption(options: ts.CompilerOptions, name: string): CompilerOptionValue {

@@ -1,7 +1,7 @@
 import { ESLintUtils } from '@typescript-eslint/utils';
 import type * as ts from 'typescript';
 import { isRecord } from '../is-record';
-import { describeCompilerOptionValue, effectiveCompilerOption, parseRequirement, type CompilerOptionRequirement } from './compiler-option-values';
+import { describeCompilerOptionValue, effectiveCompilerOption, parseRequirement, resolveCompilerOptions, type CompilerOptionRequirement } from './compiler-option-values';
 import { relativeToCwd } from './file-scope';
 
 type MessageIds = 'differs';
@@ -43,7 +43,7 @@ const requireCompilerOptions = createRule<[unknown], MessageIds>({
   meta: {
     type: 'problem',
     docs: {
-      description: 'Require the effective compiler options of the program being linted, after `extends` is resolved, to have the configured values. Reports once per program and names the tsconfig it resolved.',
+      description: 'Require the effective compiler options of the tsconfig the program being linted was created from, after `extends` is resolved, to have the configured values. Reports once per program and names the tsconfig it resolved.',
     },
     schema: [
       {
@@ -54,7 +54,7 @@ const requireCompilerOptions = createRule<[unknown], MessageIds>({
       },
     ],
     messages: {
-      differs: 'The effective compiler options of {{ tsconfig }} differ from the required ones: {{ differences }}. This is the configuration ESLint type-checks against, so it must also be the one the build uses for the check to mean anything.',
+      differs: 'The effective compiler options of {{ tsconfig }} differ from the required ones: {{ differences }}. ESLint type-checks against this tsconfig, so the build must use the same one for the check to mean anything.',
     },
     defaultOptions: [{}],
   },
@@ -71,7 +71,7 @@ const requireCompilerOptions = createRule<[unknown], MessageIds>({
         if (claimed.has(signature)) return;
         claimed.add(signature);
 
-        const compilerOptions = program.getCompilerOptions();
+        const compilerOptions = resolveCompilerOptions(program);
         const differences = requirements.flatMap((requirement) => {
           const actual = effectiveCompilerOption(compilerOptions, requirement.name);
           if (requirement.accepted.includes(actual)) return [];
