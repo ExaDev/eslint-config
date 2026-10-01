@@ -22,10 +22,10 @@ function isBareNodeModules(value: string): boolean {
 }
 
 /**
- * Reports every bare `node_modules` entry in the list `key` of `owner`: a bare name excludes only a top-level directory of that name, so a nested copy (a workspace package's own `node_modules`) is still collected.
+ * Reports every bare `node_modules` entry in `test.exclude`: Vitest matches it with tinyglobby, where a bare name ignores only a top-level directory of that name, so a nested copy (a workspace package's own `node_modules`) is still collected. `test.coverage.exclude` is not checked, because coverage filtering matches with `contains: true` and a bare name there also ignores nested copies.
  */
-function reportBareNodeModules(config: StaticConfig, owner: TSESTree.ObjectExpression, report: (node: TSESTree.Node) => void): void {
-  const exclude = config.lookup(owner, 'exclude');
+function reportBareNodeModules(config: StaticConfig, test: TSESTree.ObjectExpression, report: (node: TSESTree.Node) => void): void {
+  const exclude = config.lookup(test, 'exclude');
   if (exclude.kind !== 'present') return;
   const list = config.resolve(exclude.value);
   if (list.type !== AST_NODE_TYPES.ArrayExpression) return;
@@ -88,7 +88,7 @@ const vitestConfig = createRule<[unknown], MessageIds>({
       allowOnly:
         '`allowOnly: true` lets a focused test (`.only`) through, so the rest of the suite is skipped without failing the run. Vitest already allows `.only` outside CI by default; remove this or set it to false.',
       bareNodeModules:
-        'The bare string "node_modules" excludes only a top-level directory of that name and misses nested copies. Use "**/node_modules/**".',
+        'The bare string "node_modules" in `test.exclude` excludes only a top-level directory of that name and misses nested copies. Use "**/node_modules/**".',
       unknownThresholdKey:
         'The key "{{ key }}" under `coverage.thresholds` is not one Vitest reads (statements, branches, functions, lines, perFile, autoUpdate, 100), so it is treated as a file glob and matches no file; the threshold enforces nothing. Move the values up a level, or use a glob such as "src/**".',
       numericMaxWorkers:
@@ -115,11 +115,9 @@ const vitestConfig = createRule<[unknown], MessageIds>({
 
           const coverage = config.lookup(test, 'coverage');
           const coverageObject = coverage.kind === 'present' ? config.resolve(coverage.value) : undefined;
-          for (const owner of coverageObject?.type === AST_NODE_TYPES.ObjectExpression ? [test, coverageObject] : [test]) {
-            reportBareNodeModules(config, owner, (node) => {
-              context.report({ node, messageId: 'bareNodeModules' });
-            });
-          }
+          reportBareNodeModules(config, test, (node) => {
+            context.report({ node, messageId: 'bareNodeModules' });
+          });
           if (coverageObject?.type !== AST_NODE_TYPES.ObjectExpression) continue;
 
           const thresholds = config.lookup(coverageObject, 'thresholds');
