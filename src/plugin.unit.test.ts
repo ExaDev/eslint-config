@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { JSX_FILE_PATTERNS } from './react';
 import plugin from './plugin';
 import { UNTYPED_ROBUSTNESS_RULES } from './robustness-rules';
+import multilineCommentStyle from './rules/multiline-comment-style';
 
 describe('plugin.meta', () => {
   it('carries the exact package name and rule-reference namespace', () => {
@@ -31,6 +32,13 @@ describe('plugin.rules', () => {
     const config = plugin.configs?.['recommended'];
     if (Array.isArray(config)) throw new Error('Unreachable: the recommended config is a single object.');
     expect(config?.rules).not.toHaveProperty('exadev/no-defensive-fallback');
+  });
+
+  it('registers the multiline-comment-style wrapper without enabling it in the recommended bundle, since only stylisticCommentsConfig wires it', () => {
+    expect(plugin.rules?.['multiline-comment-style']).toBe(multilineCommentStyle);
+    const config = plugin.configs?.['recommended'];
+    if (Array.isArray(config)) throw new Error('Unreachable: the recommended config is a single object.');
+    expect(config?.rules).not.toHaveProperty('exadev/multiline-comment-style');
   });
 });
 
