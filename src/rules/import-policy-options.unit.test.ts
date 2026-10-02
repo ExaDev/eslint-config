@@ -13,6 +13,7 @@ describe('readImportPolicies', () => {
           deny: [{ ...DENY, importNames: ['readFile'], allowTypeImports: true }],
           confine: [{ specifiers: ['sdk'], onlyIn: ['src/adapter.ts'], allowTypeImports: false, message: 'use the adapter' }],
           exceptEdges: [{ file: 'src/a.ts', specifier: 'fs', reason: 'needed' }],
+          computedSpecifiers: 'report',
         },
         { files: ['src/**'], deny: [DENY] },
       ]),
@@ -23,6 +24,7 @@ describe('readImportPolicies', () => {
         deny: [{ specifiers: ['fs'], importNames: ['readFile'], allowTypeImports: true, message: 'not in workers' }],
         confine: [{ specifiers: ['sdk'], onlyIn: ['src/adapter.ts'], allowTypeImports: false, message: 'use the adapter' }],
         exceptEdges: [{ file: 'src/a.ts', specifier: 'fs', reason: 'needed' }],
+        computedSpecifiers: 'report',
       },
       { files: ['src/**'], deny: [{ specifiers: ['fs'], message: 'not in workers' }] },
     ]);
@@ -61,6 +63,12 @@ describe('readImportPolicies', () => {
     expect(() => readImportPolicies([{ files: ['a'], confine: [{ specifiers: ['x'], onlyIn: ['a'], message: '' }] }])).toThrow(/non-empty string "message"/u);
     expect(() => readImportPolicies([{ files: ['a'], confine: [{ specifiers: ['x'], onlyIn: ['a'], allowTypeImports: 1 }] }])).toThrow(/"allowTypeImports" to be a boolean/u);
     expect(() => readImportPolicies([{ files: ['a'], confine: [{ specifiers: ['x'], onlyIn: ['!a'] }] }])).toThrow(/does not start with "!"/u);
+  });
+
+  it('accepts computedSpecifiers as ignore or report and rejects anything else', () => {
+    expect(readImportPolicies([{ files: ['a'], deny: [DENY], computedSpecifiers: 'ignore' }])).toStrictEqual([{ files: ['a'], deny: [DENY], computedSpecifiers: 'ignore' }]);
+    expect(() => readImportPolicies([{ files: ['a'], deny: [DENY], computedSpecifiers: 'warn' }])).toThrow(/"computedSpecifiers" to be one of "ignore", "report"/u);
+    expect(() => readImportPolicies([{ files: ['a'], deny: [DENY], computedSpecifiers: true }])).toThrow(/"computedSpecifiers" to be one of/u);
   });
 
   describe('exception edges', () => {

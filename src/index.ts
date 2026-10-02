@@ -14,7 +14,7 @@ export type { TestHygieneOptions } from './test-hygiene';
 export type { PlaywrightWiringOptions, PublishWiringOptions, RootTool, RootWiringOptions, StrykerWiringOptions, ToolConfigsWiringOptions, ToolingWiringOptions, VitestWiringOptions } from './tooling-wiring';
 export type { EffectiveSeverity, EslintSample, EslintViolation, EslintViolationKind, RequiredSeverity, VerifyEslintOptions } from './verify-eslint';
 export type { FileRequirement, PackageCondition, PackageRequirement, PackageRequirementsOptions } from './rules/package-requirements-options';
-export type { ImportConfine, ImportDeny, ImportExceptEdge, ImportPolicy } from './rules/import-policy-options';
+export type { ComputedSpecifierHandling, ImportConfine, ImportDeny, ImportExceptEdge, ImportPolicy } from './rules/import-policy-options';
 export type { FilenamePatternEntry } from './rules/filename-pattern';
 export type { RequiredHeading } from './rules/markdown-required-heading';
 export type { RequiredExportsEntry } from './rules/required-exports';

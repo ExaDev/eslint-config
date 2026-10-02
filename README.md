@@ -515,10 +515,31 @@ A policy selects files with `files` and `ignores` and holds them to:
 - `deny`: `specifiers` the files may not import. `message` is required and should name the requirement (why, and what to do instead), not the rule. `importNames` limits the ban to those imported names (`default` for a default import); a namespace import, a dynamic import, `require` and `export *` take every name, so they are still reported. `allowTypeImports` leaves erased imports alone.
 - `confine`: `specifiers` the files may import only in the files `onlyIn` selects, so the inverse case needs no hand-built complement. `allowTypeImports` and an optional `message` work as for `deny`; the default message lists `onlyIn`.
 - `exceptEdges`: one exact `file` and `specifier` pair with a required `reason`. Neither may contain a glob character, so an exception cannot widen. The specifier is compared exactly as written in that file, and `file` is normalised, so `./src/a.ts` and `src/a.ts` name the same file. Creating the config throws for an exception that could never apply (a file the policy does not select, or a specifier that no `deny` entry selects and no `confine` entry forbids in that file, such as one inside the confine's `onlyIn`), so a stale exception fails instead of lingering.
+- `computedSpecifiers`: what to do with a dynamic `import()` or `require()` whose specifier is built at runtime (`` import(`./${name}`) ``), which no restriction can match. `'ignore'` (the default) skips it; `'report'` reports it in every file the policy selects, so those files can only pull a module in by a specifier the policy can check.
 
-Specifiers follow [Specifier patterns](#specifier-patterns). The rule is syntactic and covers `import`, `import type`, `export ... from`, `export * from`, `import x = require()`, dynamic `import()` with a static string, `require()` with a static string that is not shadowed, and `import('x')` type queries. A specifier built at runtime cannot be judged and is skipped.
+Specifiers follow [Specifier patterns](#specifier-patterns). The rule is syntactic and covers `import`, `import type`, `export ... from`, `export * from`, `import x = require()`, dynamic `import()` with a string literal or a template with no substitutions, `require()` with such a string that is not shadowed, and `import('x')` type queries. A specifier built at runtime cannot be judged, so it is skipped unless the policy sets `computedSpecifiers: 'report'`.
 
 ESLint's core `no-restricted-imports` covers only the static forms (`import`, `export ... from`, `export * from` and `import x = require()`); it has no check for dynamic `import()`, `require()` or `import('x')` type queries, and `no-restricted-modules` is deprecated since ESLint 7. A preset compiled to `no-restricted-imports` blocks would also inherit flat config's rule-level override: when two policies select the same file, the later block's option list replaces the earlier one's, and an exception edge would have to restate every other restriction of the file. So the preset compiles to one block for a purpose-built rule instead, where every policy that selects a file applies to it. Files outside a policy's `files` are untouched.
+
+### Bans that dynamic `import()` bypasses
+
+A `no-restricted-imports` ban (core or `@typescript-eslint/no-restricted-imports`, which extends it) reports `import { createFake } from 'pkg/fake'` but not `await import('pkg/fake')` or `` await import(`pkg/fake`) ``, because the rule has no handler for dynamic imports. A lazy route or component is exactly where a test double or a heavy module tends to be pulled in, so a ban meant to keep it out of shipped code should be an import policy, which judges the static, dynamic and `require()` forms with the same options:
+
+```ts
+export default defineConfig(
+  ...exadevConfig(),
+  ...importPolicyConfig([
+    {
+      files: ['src/**'],
+      ignores: ['src/**/*.test.ts'],
+      deny: [{ specifiers: ['pkg/fake', 'src/testing'], message: 'test doubles stay out of shipped code; import them from tests only' }],
+      computedSpecifiers: 'report',
+    },
+  ]),
+);
+```
+
+The `no-restricted-imports` options map across as follows. A `paths` entry's `name` is a `specifiers` entry, except that a specifier also selects everything beneath it, so `pkg` covers `pkg/sub` as well. A `patterns` entry's `group` is a list of globs in the [specifier pattern](#specifier-patterns) dialect, with a leading `!` excluding. There is no `regex`: the glob dialect's `**`, `*`, `?`, `[...]`, braces and `!` excludes express the sets a ban needs, and a character class (`[Ff]ake`) stands in for case-insensitive matching. `importNames` and `message` carry over, `allowTypeImports` is the same flag, and a namespace import, dynamic import, `require()` or `export *` of a module whose `importNames` are banned is reported, since each takes every name. Avoid the `no-restricted-syntax` workaround (`ImportExpression > Literal[value=/.../]`): flat config replaces a rule's options when a later block sets the same rule for the same files, so that selector silently switches off any other `no-restricted-syntax` list the files already have.
 
 ## Pure modules
 
@@ -1512,7 +1533,7 @@ pnpm build
   export type { PlaywrightWiringOptions, PublishWiringOptions, RootTool, RootWiringOptions, StrykerWiringOptions, ToolConfigsWiringOptions, ToolingWiringOptions, VitestWiringOptions } from './tooling-wiring';
   export type { EffectiveSeverity, EslintSample, EslintViolation, EslintViolationKind, RequiredSeverity, VerifyEslintOptions } from './verify-eslint';
   export type { FileRequirement, PackageCondition, PackageRequirement, PackageRequirementsOptions } from './rules/package-requirements-options';
-  export type { ImportConfine, ImportDeny, ImportExceptEdge, ImportPolicy } from './rules/import-policy-options';
+  export type { ComputedSpecifierHandling, ImportConfine, ImportDeny, ImportExceptEdge, ImportPolicy } from './rules/import-policy-options';
   export type { FilenamePatternEntry } from './rules/filename-pattern';
   export type { RequiredHeading } from './rules/markdown-required-heading';
   export type { RequiredExportsEntry } from './rules/required-exports';

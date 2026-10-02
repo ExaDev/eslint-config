@@ -4,6 +4,7 @@ import { plugin } from './index';
 import { isRecord } from './is-record';
 import {
   buildViaDefensiveFallbackAllow,
+  buildViaDynamicImportBan,
   buildViaImportPolicy,
   buildViaManualRules,
   buildViaPluginConfigsReactAndNextjs,
@@ -112,6 +113,22 @@ describe('README defineConfig examples', () => {
     expect(options[0]).toBe('error');
     const policies = options[1];
     expect(Array.isArray(policies) ? policies.map((policy: { files: string[] }) => policy.files) : undefined).toStrictEqual([['src/worker/**'], ['src/**'], ['src/routes/**']]);
+  });
+
+  it('the dynamic import ban reports the static, dynamic and template forms of the banned specifier, and a computed one', async () => {
+    const policyBlocks = buildViaDynamicImportBan().filter((entry) => entry.rules?.['exadev/import-policy'] !== undefined);
+    const eslint = new ESLint({ overrideConfigFile: true, overrideConfig: policyBlocks, cwd: import.meta.dirname });
+    const lines = [
+      { code: "import { createFake } from 'pkg/fake';", messageId: 'restricted' },
+      { code: "const lazy = await import('pkg/fake');", messageId: 'restricted' },
+      { code: 'const template = await import(`pkg/fake`);', messageId: 'restricted' },
+      { code: 'const computed = await import(`./${createFake.name}`);', messageId: 'computed' },
+    ];
+    const code = lines.map((line) => line.code).join('\n');
+    const [result] = await eslint.lintText(code, { filePath: 'src/routes/lazy.js' });
+    expect(result?.messages.map((message) => [message.line, message.messageId])).toStrictEqual(lines.map((line, index) => [index + 1, line.messageId]));
+    const [inTest] = await eslint.lintText(code, { filePath: 'src/routes/lazy.test.ts' });
+    expect(inTest?.messages).toStrictEqual([]);
   });
 
   it('the pure modules examples wire the one rule, with the exclude as an ignore, and no-control-flow when asked for', () => {

@@ -110,6 +110,23 @@ export function buildViaImportPolicy(): DefinedConfig {
 }
 
 /**
+ * README's "Bans that dynamic import() bypasses" section: a test-double ban held over the static, dynamic and require forms, with computed specifiers reported.
+ */
+export function buildViaDynamicImportBan(): DefinedConfig {
+  return defineConfig(
+    ...exadevConfig({ react: false, nextjs: false }),
+    ...importPolicyConfig([
+      {
+        files: ['src/**'],
+        ignores: ['src/**/*.test.ts'],
+        deny: [{ specifiers: ['pkg/fake', 'src/testing'], message: 'test doubles stay out of shipped code; import them from tests only' }],
+        computedSpecifiers: 'report',
+      },
+    ]),
+  );
+}
+
+/**
  * README's "Pure modules" section: the standalone form, spread into defineConfig() alongside exadevConfig().
  */
 export function buildViaPureModules(): DefinedConfig {
