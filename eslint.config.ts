@@ -7,7 +7,7 @@ import { exadevConfig } from './src/index';
  */
 export default defineConfig(
   {
-    // src/rules/__fixtures__/workspace is a committed fixture tree of synthetic package.json/pnpm-workspace.yaml files (see workspace-graph.unit.test.ts's own real-filesystem cases), and src/__fixtures__/tooling-wiring holds the equally synthetic repositories tooling-wiring.unit.test.ts lints with ESLint's own API,, not real source or a real dependency manifest of this package's own: it is deliberately excluded the same way dist/coverage are, rather than made to satisfy this repo's own json-canonical/package-json-key-order rules for content that exists purely as test input.
+    // src/rules/__fixtures__/workspace is a committed fixture tree of synthetic package.json/pnpm-workspace.yaml files (see workspace-graph.unit.test.ts's own real-filesystem cases), and src/__fixtures__/tooling-wiring holds the equally synthetic repositories tooling-wiring.unit.test.ts lints with ESLint's own API. Neither holds real source or a real dependency manifest of this package's own, so both are excluded the same way dist/coverage are, rather than made to satisfy this repo's own json-canonical/package-json-key-order rules for content that exists purely as test input.
     ignores: ['dist', 'coverage', 'node_modules', '.turbo', 'src/rules/__fixtures__', 'src/__fixtures__'],
   },
   {
