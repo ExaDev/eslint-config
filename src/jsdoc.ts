@@ -30,12 +30,24 @@ const REQUIREMENTS_TIER_RULES = [
   'jsdoc/require-yields-type',
 ] as const;
 
+// eslint-plugin-jsdoc has no TSDoc tag vocabulary: `settings.jsdoc.mode` accepts only `jsdoc`, `typescript`, `closure` and `permissive` (confirmed against the installed `getTagNamesForMode`), and `flat/recommended-tsdoc-error` carries no `settings` key at all (confirmed at runtime), so left alone every tag is checked against JSDoc's vocabulary and `--fix` rewrites or deletes genuine TSDoc tags. Three TSDoc tags need an explicit preference mapping to themselves because the plugin either aliases them to a JSDoc tag (`@typeParam` to `@template`, `@virtual` to `@abstract`, the former then failing `tsdoc/syntax`) or does not know the camel-case spelling at all (`@defaultValue`, which JSDoc spells `@defaultvalue`). A `tagNamePreference` entry whose value equals its key makes the tag valid and stops the rewrite.
+const TSDOC_TAG_NAME_PREFERENCE = { defaultValue: 'defaultValue', typeParam: 'typeParam', virtual: 'virtual' } as const;
+
 const jsdocAndTsdoc: ConfigArrayValue = [
   {
     files: [JS_TS_FILE_PATTERNS],
     ...jsdocConfig,
+    settings: {
+      jsdoc: {
+        tagNamePreference: TSDOC_TAG_NAME_PREFERENCE,
+      },
+    },
     rules: {
       ...jsdocConfig.rules,
+      // The preset's `typed: true` treats `@public`, `@readonly` and (outside ambient contexts) `@override` as redundant when a type system is present and deletes them. They are real TSDoc modifier tags, and `tsdoc/syntax` below already rejects the JSDoc-only tags `typed` exists to strip (`@type`, `@typedef`, `@class`, `@enum`).
+      'jsdoc/check-tag-names': ['error', { typed: false }],
+      // Its fixer deletes any prose written after a modifier tag (`@internal`, `@override`, `@readonly`), silently losing text, and fights `check-tag-names` over `@override`. `jsdoc/valid-types` still reports that prose, with no fixer, so the author decides what to do with it.
+      'jsdoc/empty-tags': 'off',
       ...Object.fromEntries(REQUIREMENTS_TIER_RULES.map((rule) => [rule, 'off'])),
     },
   },
