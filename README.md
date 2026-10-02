@@ -1215,6 +1215,35 @@ export default exadevConfig({
 });
 ```
 
+### Reading the shared layout from @exadev/config
+
+A repository that describes its workspace once in [`@exadev/config`](https://github.com/ExaDev/config)'s `layout` section can feed the same description to these rules. The `layout` section's type is checked equal to `WorkspaceArchitectureOptions`, so the value `loadSection(layoutSection)` returns is passed to `workspaceArchitecture` as it is. In an ESM `eslint.config.ts`, read it with top-level `await`:
+
+```ts
+// eslint.config.ts
+import { layoutSection, loadSection } from '@exadev/config';
+import { exadevConfig } from '@exadev/eslint-config';
+import { defineConfig } from 'eslint/config';
+
+const layout = await loadSection(layoutSection, { cwd: import.meta.dirname });
+if (layout === undefined) throw new Error('exadev.config.ts defines no layout section');
+
+export default defineConfig(
+  {
+    languageOptions: {
+      parserOptions: { project: './tsconfig.json', tsconfigRootDir: import.meta.dirname },
+    },
+  },
+  ...exadevConfig({ workspaceArchitecture: layout }),
+);
+```
+
+`loadSection` resolves to `undefined` when no `layout` section is defined, hence the check. `cwd` is the directory holding `exadev.config.ts` (or `exadev.layout.config.ts`). A layout that fails the section's schema throws when the config loads, with the path and the rule that failed.
+
+The layout carries structure only: groups, ranks, slices, naming and isolated pairs. Policy stays here, so `allow`, `exemptTargetGroups`, `requiredFiles`, `devOnly` and `requiredScripts` are not part of it; add them with a spread (`workspaceArchitecture: { ...layout, allow: [...] }`).
+
+The ESLint config itself stays in `eslint.config.*`. Only the layout moves into `exadev.config.ts`: ESLint loads its own config file, and the unified file has no section for rules or plugins. Neither package depends on the other: install `@exadev/config` (and its `cosmiconfig` peer) in the repository, and `@exadev/eslint-config` takes the value structurally. This repository keeps `@exadev/config` as a dev dependency only, for the test that fails when either side's types drift apart.
+
 ## Turbo
 
 These rules keep a repository that uses [turbo](https://turborepo.dev) honest about what turbo actually runs. Turbo skips a task silently when no package has a script of that name, restores only a task's log when `outputs` is missing, and caches a task under a hash taken before the task runs; none of that shows up as an error. They share one options object, `TurboOptions`, and all are off unless the `turbo` option is given, since only a repository can say it uses turbo. Enable them through `exadevConfig({ turbo })` or the standalone `turboConfig(options)`, which returns the blocks to spread into `defineConfig(...)`:
