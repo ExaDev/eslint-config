@@ -94,6 +94,16 @@ describe('missingFiles', () => {
     expect(missingFiles([{ files: [entry] }], fs, '/pkg', { ...FACTS, setPaths: new Set([fieldPathKey(['config', 'syncpack'])]) })).toEqual(['one of syncpack.config.* (or a "syncpack" property)']);
   });
 
+  it('lists a requirement given as separate but equal objects once', () => {
+    const files = [{ files: [{ glob: 'nope.*', orFields: ['a', ['b', 'c']] }] }, { files: [{ glob: 'nope.*', orFields: ['a', ['b', 'c']] }] }];
+    expect(missingFiles(files, fs, '/pkg', FACTS)).toEqual(['one of nope.* (or a "a" or "b.c" property)']);
+  });
+
+  it('lists requirements that differ in their properties separately', () => {
+    const files = [{ files: [{ glob: 'nope.*', orFields: ['a'] }] }, { files: [{ glob: 'nope.*', orFields: ['b'] }] }];
+    expect(missingFiles(files, fs, '/pkg', FACTS)).toHaveLength(2);
+  });
+
   it('lists nothing for requirements without files', () => {
     expect(missingFiles([{ fields: ['a'] }], fs, '/pkg', FACTS)).toEqual([]);
   });
