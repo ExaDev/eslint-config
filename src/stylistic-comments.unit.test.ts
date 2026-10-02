@@ -15,8 +15,8 @@ describe('stylisticCommentsConfig', () => {
     expect(stylisticCommentsConfig).toHaveLength(EXPECTED_CONFIG_BLOCK_COUNT);
   });
 
-  it('the first block scopes the hand-picked comment/class-member/statement rules to every JS/TS file, with their exact options, and does not enable multiline-comment-style', () => {
-    // No `@stylistic/multiline-comment-style` key at all: see this file's own header comment on why it is deliberately withheld rather than merely turned `'off'` somewhere, which a mutant swapping an omission for an explicit `'off'` entry could otherwise slip past an object-shape check that only asserts the keys it expects are present.
+  it('the first block scopes the hand-picked comment/class-member/statement rules to every JS/TS file, with their exact options, enabling multiline-comment-style only through the exadev wrapper', () => {
+    // No `@stylistic/multiline-comment-style` key at all: the wrapper `exadev/multiline-comment-style` replaces it (see stylistic-comments.ts's own header comment), and enabling both would report every run twice with the upstream fixer still folding task markers.
     expect(stylisticCommentsConfig[0]).toEqual({
       files: ['**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}'],
       plugins: { '@stylistic': stylistic, exadev: plugin },
@@ -32,6 +32,7 @@ describe('stylisticCommentsConfig', () => {
           { blankLine: 'any', prev: ['cjs-import', 'import'], next: ['cjs-import', 'import'] },
           { blankLine: 'always', prev: '*', next: 'return' },
         ],
+        'exadev/multiline-comment-style': ['error', 'bare-block'],
         'exadev/prefer-doc-comment': 'error',
       },
     });
@@ -105,52 +106,26 @@ describe('spaced-comment (the # source-map and #region/#endregion line markers)'
   });
 });
 
-// A real --fix run, not just the config shape asserted above: proves multiline-comment-style is genuinely not enabled at all (see stylistic-comments.ts's own header comment on why), not merely scoped away from some files, by running the config against the shapes the rule's bare-block fixer would rewrite if it were on.
-describe('multiline-comment-style (deliberately not enabled, in any file)', () => {
+// A real --fix run of the bundled config, which enables `exadev/multiline-comment-style` at 'bare-block': ordinary runs are converted, every directive the upstream rule or `exadev/prefer-doc-comment` recognises survives as its own `//` line, and the doc-comment upgrade on an exported declaration is never lost to a merged block.
+describe('exadev/multiline-comment-style in the bundled config', () => {
   const linter = new LinterClass();
-  // The exact shape TypeScript itself generates for a Next.js project's own next-env.d.ts: two consecutive `/// <reference ... />` lines with no blank line between them, and nothing else above the statement they sit over.
-  const tripleSlashCode = '/// <reference types="node" />\n/// <reference lib="es2022" />\nexport const z = 1;\n';
-  // The real-world prettier-ignore repro this package's own review found against @stylistic/eslint-plugin 5.x: a prose comment immediately above the directive, on a NON-exported statement (so exadev/prefer-doc-comment, scoped to exported declarations only, never reports or fixes it either).
-  const prettierIgnoreCode = '// A lookup table laid out by hand.\n// prettier-ignore\nconst grid = [\n  [1, 0, 0],\n];\n';
 
   function fixedOutput(code: string, filename: string): string {
     return linter.verifyAndFix(code, REAL_LINTER_CONFIG, filename).output;
   }
 
-  it('leaves two consecutive triple-slash reference directives untouched in a .d.ts file', () => {
-    expect(fixedOutput(tripleSlashCode, 'next-env.d.ts')).toBe(tripleSlashCode);
-  });
-
-  it('leaves the identical two triple-slash directives untouched in an ordinary .ts file too, the shape a vite.config.ts following Vitest\'s own documented convention uses', () => {
-    expect(fixedOutput(tripleSlashCode, 'vite.config.ts')).toBe(tripleSlashCode);
-  });
-
-  it('leaves a prose comment directly above a prettier-ignore directive as two standalone `//` lines, never merged into one block that would swallow the directive', () => {
-    expect(fixedOutput(prettierIgnoreCode, 'table.ts')).toBe(prettierIgnoreCode);
-  });
-
-  it('leaves an ordinary run of `//` lines with no directive at all as standalone lines too, proving the rule is off rather than merely blind to directive-shaped input', () => {
-    const code = '// first line\n// second line\nconst x = 1;\n';
-    expect(fixedOutput(code, 'plain.ts')).toBe(code);
-  });
-});
-
-// A real --fix run of the bundled config with multiline-comment-style switched on at 'bare-block', recording exactly what the installed @stylistic/eslint-plugin release does to each shape stylistic-comments.ts's header comment names, so the decision to keep the rule off rests on observed behaviour and an upgrade that changes any of it fails here. The directives PR 1251 added to the plugin's shared isDirectiveComment survive and the rest of the run is still converted; TODO/FIXME, which the plugin does not treat as directives, are still folded, which is why the rule stays off (ExaDev/eslint-config#45).
-describe('multiline-comment-style at bare-block on the installed release (why it stays disabled)', () => {
-  const linter = new LinterClass();
-  const ENABLED_CONFIG: Linter.Config[] = [...REAL_LINTER_CONFIG, { files: ['**'], rules: { '@stylistic/multiline-comment-style': ['error', 'bare-block'] } }];
-
-  function fixedOutput(code: string, filename: string): string {
-    return linter.verifyAndFix(code, ENABLED_CONFIG, filename).output;
-  }
-
-  it('converts an ordinary run of `//` lines into one bare block, proving the rule is genuinely on in this block', () => {
+  it('converts an ordinary run of `//` lines into one bare block', () => {
     expect(fixedOutput('// first line\n// second line\nconst x = 1;\n', 'plain.ts')).toBe('/* first line\n   second line */\nconst x = 1;\n');
   });
 
-  it.each(['prettier-ignore', 'c8 ignore next', 'v8 ignore next', 'istanbul ignore next', '@ts-expect-error the next line is wrong on purpose', '@ts-ignore', '@ts-nocheck', '@ts-check'])('keeps `// %s` as its own line inside a prose run, converting only the prose after it', (directive) => {
+  it.each(['prettier-ignore', 'c8 ignore next', 'v8 ignore next', 'istanbul ignore next', '@ts-expect-error the next line is wrong on purpose', '@ts-ignore', '@ts-nocheck', '@ts-check'])('keeps the upstream directive `// %s` as its own line inside a prose run, converting only the prose after it', (directive) => {
     const code = `// Prose before the directive.\n// ${directive}\n// Prose line one.\n// Prose line two.\nconst x = 1;\n`;
     expect(fixedOutput(code, 'directive.ts')).toBe(`// Prose before the directive.\n// ${directive}\n/* Prose line one.\n   Prose line two. */\nconst x = 1;\n`);
+  });
+
+  it.each(['TODO: revisit this', 'FIXME later', 'todo: lower-case marker', 'fixme(scope): message', 'cspell:disable-next-line', 'biome-ignore lint/style: reason', '#region helpers'])('keeps `// %s` as its own line between two prose runs, converting each run on its own', (marker) => {
+    const code = `// Before one.\n// Before two.\n// ${marker}\n// After one.\n// After two.\nconst x = 1;\n`;
+    expect(fixedOutput(code, 'marker.ts')).toBe(`/* Before one.\n   Before two. */\n// ${marker}\n/* After one.\n   After two. */\nconst x = 1;\n`);
   });
 
   it.each(['next-env.d.ts', 'vite.config.ts'])('leaves two consecutive triple-slash reference directives untouched in %s, the case upstream issue 1285 reports', (filename) => {
@@ -163,19 +138,45 @@ describe('multiline-comment-style at bare-block on the installed release (why it
     expect(fixedOutput(code, 'amd.ts')).toBe(code);
   });
 
-  it.each(['TODO: revisit this', 'FIXME later'])('still folds `// %s` into the surrounding bare block: the remaining gap that keeps the rule disabled', (marker) => {
-    const code = `// Prose line one.\n// ${marker}\n// Prose line two.\nconst x = 1;\n`;
-    expect(fixedOutput(code, 'todo.ts')).toBe(`/* Prose line one.\n   ${marker}\n   Prose line two. */\nconst x = 1;\n`);
+  it('leaves a prose comment directly above a prettier-ignore directive as two standalone `//` lines on a non-exported statement', () => {
+    const code = '// A lookup table laid out by hand.\n// prettier-ignore\nconst grid = [\n  [1, 0, 0],\n];\n';
+    expect(fixedOutput(code, 'table.ts')).toBe(code);
   });
 
-  it('makes exadev/prefer-doc-comment lose an exported declaration\'s doc comment when a TODO sits in its leading run, the concrete regression enabling the rule would cause', () => {
+  it('still gives an exported declaration its doc comment when a TODO sits in its leading run: the prose below the marker becomes the doc comment and the prose above it a bare block', () => {
     const code = '// Explanation line one.\n// Explanation line two.\n// TODO: revisit\n// Detail line one.\n// Detail line two.\nexport function f() {}\n';
-    expect(linter.verifyAndFix(code, REAL_LINTER_CONFIG, 'todo.ts').output).toBe('// Explanation line one.\n// Explanation line two.\n// TODO: revisit\n/**\n * Detail line one.\n * Detail line two.\n */\nexport function f() {}\n');
-    expect(fixedOutput(code, 'todo.ts')).toBe('/* Explanation line one.\n   Explanation line two.\n   TODO: revisit\n   Detail line one.\n   Detail line two. */\nexport function f() {}\n');
+    expect(fixedOutput(code, 'todo.ts')).toBe('/* Explanation line one.\n   Explanation line two. */\n// TODO: revisit\n/**\n * Detail line one.\n * Detail line two.\n */\nexport function f() {}\n');
   });
 
-  it('writes a bare `\\n` inside the merged block in a CRLF file, leaving it with mixed line endings', () => {
+  it('converts an exported declaration\'s plain leading run straight to a doc comment, the bare block the stylistic fixer may produce first being upgraded by prefer-doc-comment', () => {
+    const code = '// Detail line one.\n// Detail line two.\nexport function f() {}\n';
+    expect(fixedOutput(code, 'doc.ts')).toBe('/**\n * Detail line one.\n * Detail line two.\n */\nexport function f() {}\n');
+  });
+
+  it('writes a bare `\\n` inside the merged block in a CRLF file, the upstream fixer\'s own behaviour, which the wrapper passes through unchanged', () => {
     expect(fixedOutput('// first line\r\n// second line\r\nconst x = 1;\r\n', 'crlf.ts')).toBe('/* first line\n   second line */\r\nconst x = 1;\r\n');
+  });
+
+  it('splits a CRLF run at a TODO exactly as an LF one, the merged block carrying the same bare `\\n`', () => {
+    expect(fixedOutput('// a\r\n// TODO x\r\n// b\r\n// c\r\nconst x = 1;\r\n', 'crlf-todo.ts')).toBe('// a\r\n// TODO x\r\n/* b\n   c */\r\nconst x = 1;\r\n');
+  });
+});
+
+// The upstream rule alone, against the shapes the wrapper exists for. Each case passing means upstream still folds that line into the merged block, so the wrapper is still needed for it. When a case fails, upstream now treats that line as a directive and it can be dropped from the reasons the wrapper exists; when every case fails, `exadev/multiline-comment-style` can be deleted and `@stylistic/multiline-comment-style` enabled at 'bare-block' in its place.
+describe('upstream @stylistic/multiline-comment-style alone (the wrapper is still needed while these pass)', () => {
+  const linter = new LinterClass();
+  const UPSTREAM_ONLY_CONFIG: Linter.Config[] = [{ files: ['**'], plugins: { '@stylistic': stylistic }, rules: { '@stylistic/multiline-comment-style': ['error', 'bare-block'] } }];
+
+  function upstreamFixedOutput(marker: string): string {
+    return linter.verifyAndFix(`// Prose line one.\n// ${marker}\n// Prose line two.\nconst x = 1;\n`, UPSTREAM_ONLY_CONFIG, 'upstream.ts').output;
+  }
+
+  it.each(['TODO: revisit this', 'FIXME later'])('still folds `// %s` into the merged block; if this fails, upstream now treats TODO and FIXME as directives (eslint-stylistic issue 1287) and the wrapper can be deleted once the other shapes below fail too', (marker) => {
+    expect(upstreamFixedOutput(marker)).toBe(`/* Prose line one.\n   ${marker}\n   Prose line two. */\nconst x = 1;\n`);
+  });
+
+  it.each(['todo: lower-case marker', 'cspell:disable-next-line', 'biome-ignore lint/style: reason', '#region helpers'])('still folds `// %s` into the merged block; if this fails, upstream now treats it as a directive and it no longer needs the wrapper', (marker) => {
+    expect(upstreamFixedOutput(marker)).toBe(`/* Prose line one.\n   ${marker}\n   Prose line two. */\nconst x = 1;\n`);
   });
 });
 

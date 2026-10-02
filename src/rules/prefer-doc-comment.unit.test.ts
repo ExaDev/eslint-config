@@ -4,6 +4,7 @@ import tseslint from 'typescript-eslint';
 import { describe, expect, it } from 'vitest';
 import jsdocAndTsdoc from '../jsdoc';
 import stylisticCommentsConfig from '../stylistic-comments';
+import plugin from '../plugin';
 import rule from './prefer-doc-comment';
 
 describe('rule metadata', () => {
@@ -744,10 +745,22 @@ describe('prefer-doc-comment + the real bundled jsdoc/tsdoc config', () => {
     return interactionLinter.verifyAndFix(code, REAL_JSDOC_INTERACTION_CONFIG, 'mode.ts');
   }
 
-  // Asserts the withholding's own full contract for one tag shape: the output is byte-for-byte the original source (nothing was converted at all, so there is nothing left for a sibling fixer to mangle), this rule itself still reports the violation (the comment is still substantial and un-upgraded), and neither a `jsdoc/*` nor a `tsdoc/*` rule ever fires, proving the withheld `//`/`/* */` comment was never even parsed as a doc comment in the first place, exactly as a genuinely plain comment never would be.
+  // The bundled exadev/multiline-comment-style alone, at the same 'bare-block' option stylistic-comments.ts sets: what a withheld comment is expected to become, since that rule still folds a plain `//` run into a bare block which prefer-doc-comment then leaves as it is.
+  const bareBlockOnlyLinter = new Linter();
+  const BARE_BLOCK_ONLY_CONFIG: Linter.Config[] = [
+    { files: ['**'], languageOptions: { sourceType: 'module', parser: tseslint.parser } },
+    { files: ['**'], plugins: { exadev: plugin }, rules: { 'exadev/multiline-comment-style': ['error', 'bare-block'] } },
+  ] as Linter.Config[];
+
+  function bareBlockOnly(code: string): string {
+    return bareBlockOnlyLinter.verifyAndFix(code, BARE_BLOCK_ONLY_CONFIG, 'mode.ts').output;
+  }
+
+  // Asserts the withholding's own full contract for one tag shape: the output is exactly what the bundled bare-block rule alone makes of the source and holds no doc comment (prefer-doc-comment converted nothing, so there is nothing left for a sibling fixer to mangle), this rule itself still reports the violation (the comment is still substantial and un-upgraded), and neither a `jsdoc/*` nor a `tsdoc/*` rule ever fires, proving the withheld comment was never even parsed as a doc comment in the first place, exactly as a genuinely plain comment never would be.
   function expectWithheld(code: string): void {
     const result = fixedOutput(code);
-    expect(result.output).toBe(code);
+    expect(result.output).toBe(bareBlockOnly(code));
+    expect(result.output).not.toContain('/**');
     expect(result.messages.some((message) => message.ruleId === 'exadev/prefer-doc-comment')).toBe(true);
     expect(result.messages.some((message) => message.ruleId?.startsWith('jsdoc/') === true)).toBe(false);
     expect(result.messages.some((message) => message.ruleId?.startsWith('tsdoc/') === true)).toBe(false);
@@ -756,7 +769,7 @@ describe('prefer-doc-comment + the real bundled jsdoc/tsdoc config', () => {
   it('never converts a markdown-bulleted // comment into a doc comment whose bullets the sibling no-multi-asterisks rule would otherwise strip', () => {
     const code = '// Supported modes:\n// * fast, skips validation\n// * safe, validates everything\nexport function mode(): void {}\n';
     const result = fixedOutput(code);
-    expect(result.output).toBe(code);
+    expect(result.output).toBe('/* Supported modes:\n   * fast, skips validation\n   * safe, validates everything */\nexport function mode(): void {}\n');
     expect(result.messages.some((message) => message.ruleId === 'exadev/prefer-doc-comment')).toBe(true);
     expect(result.messages.some((message) => message.ruleId === 'jsdoc/no-multi-asterisks')).toBe(false);
   });
