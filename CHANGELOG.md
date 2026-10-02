@@ -1,3 +1,10 @@
+# [2.32.0](https://github.com/ExaDev/eslint-config/compare/v2.31.2...v2.32.0) (2026-10-02)
+
+
+### Features
+
+* **workspace:** add selector-based dependency constraints ([1ed6664](https://github.com/ExaDev/eslint-config/commit/1ed6664ec9a24ca360277f0b743ed6f9ca17b7f2)), closes [#36](https://github.com/ExaDev/eslint-config/issues/36)
+
 ## [2.31.2](https://github.com/ExaDev/eslint-config/compare/v2.31.1...v2.31.2) (2026-10-02)
 
 ## [2.31.1](https://github.com/ExaDev/eslint-config/compare/v2.31.0...v2.31.1) (2026-10-02)
