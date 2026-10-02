@@ -1,3 +1,10 @@
+# [2.35.0](https://github.com/ExaDev/eslint-config/compare/v2.34.1...v2.35.0) (2026-10-02)
+
+
+### Features
+
+* **import-policy:** allow-list of import names on a deny entry ([bc388cf](https://github.com/ExaDev/eslint-config/commit/bc388cf82152ed51a39e61ae8caca297b82ab4e2))
+
 ## [2.34.1](https://github.com/ExaDev/eslint-config/compare/v2.34.0...v2.34.1) (2026-10-02)
 
 # [2.34.0](https://github.com/ExaDev/eslint-config/compare/v2.33.1...v2.34.0) (2026-10-02)
