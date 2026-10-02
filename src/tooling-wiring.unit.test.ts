@@ -218,6 +218,12 @@ describe('the wired config under ESLint', () => {
     ]);
   });
 
+  it('holds only the repository root to the root requirements, wherever ESLint runs from', async () => {
+    const options: ToolingWiringOptions = { publish: false, hooks: false, toolConfigs: false };
+    expect(await lint('monorepo', ['package.json', 'packages/lib/package.json'], options)).toEqual([]);
+    expect(await lint('monorepo/packages/lib', ['package.json'], options)).toEqual([]);
+  });
+
   it('reports the missing husky hook directory', async () => {
     const messages = await lint('unwired', ['package.json'], { publish: false, root: false });
     expect(messages.map((entry) => entry.message)).toEqual(['Package "unwired" is missing required file(s): .husky.', 'Script "prepare" in "unwired" must contain "husky", but is "echo ready".']);

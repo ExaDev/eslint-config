@@ -5,6 +5,7 @@ import { getMemberKeyName } from './json-member-key';
 import { readScripts, requireScriptEntry } from './manifest-scripts';
 import { applicableRequirements, collectScripts, missingFiles, unsetFields, type ManifestFacts } from './package-requirements-checks';
 import { packageRequirementsOptionsSchema, readPackageRequirementsOptions, type PackageRequirementsOptions } from './package-requirements-options';
+import { findRepositoryRoot } from './repository-root';
 import { readDeclaredName } from './workspace-json-helpers';
 import { realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
 import { checkScriptRequirements, type ScriptProblemKind } from './workspace-requirements';
@@ -33,6 +34,7 @@ function isSetValue(value: ObjectNode['members'][number]['value']): boolean {
 function readFacts(fs: WorkspaceFs, node: ObjectNode, location: { readonly filename: string; readonly cwd: string }): ManifestFacts {
   const declared = new Set<string>();
   const setFields = new Set<string>();
+  const packageDir = dirname(location.filename);
   let isPrivate = false;
   for (const member of node.members) {
     const key = getMemberKeyName(member);
@@ -45,7 +47,7 @@ function readFacts(fs: WorkspaceFs, node: ObjectNode, location: { readonly filen
 
   return {
     isPrivate,
-    isRoot: fs.realpathSync(dirname(location.filename)) === fs.realpathSync(location.cwd),
+    isRoot: fs.realpathSync(packageDir) === fs.realpathSync(findRepositoryRoot(fs, packageDir, location.cwd)),
     name: readDeclaredName(node)?.name,
     declared,
     setFields,

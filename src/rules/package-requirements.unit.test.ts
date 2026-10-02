@@ -8,7 +8,7 @@ import type { PackageRequirement } from './package-requirements-options';
 const CWD = process.cwd();
 
 // The files of a fabricated package directory under the working directory, so the root manifest is the one in CWD itself.
-const fs = createMemoryFs({ [`${CWD}/.husky/pre-commit`]: '', [`${CWD}/packages/lib/dist/index.js`]: '' });
+const fs = createMemoryFs({ [`${CWD}/pnpm-workspace.yaml`]: '', [`${CWD}/.husky/pre-commit`]: '', [`${CWD}/packages/lib/dist/index.js`]: '' });
 const rule = createPackageRequirementsRule(fs);
 const ruleTester = new RuleTester({ language: 'json/json', plugins: { json } });
 
