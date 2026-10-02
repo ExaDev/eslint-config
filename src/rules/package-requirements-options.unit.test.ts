@@ -8,7 +8,7 @@ describe('readPackageRequirementsOptions', () => {
     const requirement = {
       when: { private: false, root: true, namePattern: '^@scope/', declares: ['husky'] },
       scripts: ['build', { name: 'prepare', includes: ['husky'] }],
-      files: ['.husky', { glob: 'knip.{json,ts}', orField: 'knip' }],
+      files: ['.husky', { glob: 'knip.{json,ts}', orFields: ['knip', ['config', 'knip']] }],
       fields: ['engines'],
     };
     expect(read([requirement])).toEqual({ requirements: [requirement] });
@@ -44,9 +44,12 @@ describe('readPackageRequirementsOptions', () => {
     ['a path that climbs out of the package', () => read([{ files: ['../x'] }]), /path "\.\.\/x" must be relative/u],
     ['an unbalanced brace', () => read([{ files: ['a.{b'] }]), /has an unmatched "\{"/u],
     ['a files entry that is neither a string nor an object', () => read([{ files: [1] }]), /each "files" entry to be a path or an object/u],
-    ['a files object without orField', () => read([{ files: [{ glob: 'a' }] }]), /non-empty string "glob" and "orField"/u],
-    ['a files object with an empty glob', () => read([{ files: [{ glob: '', orField: 'a' }] }]), /non-empty string "glob" and "orField"/u],
-    ['a files object with an unknown key', () => read([{ files: [{ glob: 'a', orField: 'b', c: 1 }] }]), /unknown key "c"/u],
+    ['a files object without orFields', () => read([{ files: [{ glob: 'a' }] }]), /non-empty string "glob" and a non-empty "orFields" array/u],
+    ['a files object with an empty orFields list', () => read([{ files: [{ glob: 'a', orFields: [] }] }]), /non-empty "orFields" array/u],
+    ['a files object with an empty glob', () => read([{ files: [{ glob: '', orFields: ['a'] }] }]), /non-empty string "glob"/u],
+    ['an orFields entry that is neither a name nor a path', () => read([{ files: [{ glob: 'a', orFields: [1] }] }]), /each "orFields" entry/u],
+    ['an empty orFields path', () => read([{ files: [{ glob: 'a', orFields: [[]] }] }]), /each "orFields" entry/u],
+    ['a files object with an unknown key', () => read([{ files: [{ glob: 'a', orFields: ['b'], c: 1 }] }]), /unknown key "c"/u],
   ])('rejects %s', (_, run, message) => {
     expect(run).toThrow(message);
   });

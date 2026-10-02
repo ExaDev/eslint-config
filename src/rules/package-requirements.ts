@@ -3,7 +3,7 @@ import type { JSONRuleDefinition, JSONRuleVisitor } from '@eslint/json';
 import type { ObjectNode } from '@humanwhocodes/momoa';
 import { getMemberKeyName } from './json-member-key';
 import { readScripts, requireScriptEntry } from './manifest-scripts';
-import { applicableRequirements, collectScripts, missingFiles, unsetFields, type ManifestFacts } from './package-requirements-checks';
+import { applicableRequirements, collectScripts, fieldPathKey, missingFiles, unsetFields, type ManifestFacts } from './package-requirements-checks';
 import { packageRequirementsOptionsSchema, readPackageRequirementsOptions, type PackageRequirementsOptions } from './package-requirements-options';
 import { findRepositoryRoot } from './repository-root';
 import { readDeclaredName } from './workspace-json-helpers';
@@ -31,9 +31,19 @@ function isSetValue(value: ObjectNode['members'][number]['value']): boolean {
   return true;
 }
 
+function collectSetPaths(node: ObjectNode, prefix: readonly string[], setPaths: Set<string>): void {
+  for (const member of node.members) {
+    const path = [...prefix, getMemberKeyName(member)];
+    if (isSetValue(member.value)) setPaths.add(fieldPathKey(path));
+    if (member.value.type === 'Object') collectSetPaths(member.value, path, setPaths);
+  }
+}
+
 function readFacts(fs: WorkspaceFs, node: ObjectNode, location: { readonly filename: string; readonly cwd: string }): ManifestFacts {
   const declared = new Set<string>();
   const setFields = new Set<string>();
+  const setPaths = new Set<string>();
+  collectSetPaths(node, [], setPaths);
   const packageDir = dirname(location.filename);
   let isPrivate = false;
   for (const member of node.members) {
@@ -51,6 +61,7 @@ function readFacts(fs: WorkspaceFs, node: ObjectNode, location: { readonly filen
     name: readDeclaredName(node)?.name,
     declared,
     setFields,
+    setPaths,
   };
 }
 

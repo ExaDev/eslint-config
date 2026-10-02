@@ -1,0 +1,15 @@
+{
+  "name": "configured",
+  "version": "1.0.0",
+  "private": true,
+  "config": {
+    "syncpack": {
+      "versionGroups": []
+    }
+  },
+  "packageManager": "pnpm@12.4.1",
+  "scripts": {
+    "knip": "knip",
+    "syncpack": "syncpack lint"
+  }
+}

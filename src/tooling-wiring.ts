@@ -7,7 +7,7 @@ import plugin from './plugin';
 import { assertOnlyKeys, readRequiredStrings } from './rules/file-entry';
 import { readFileGlobs } from './rules/file-scope';
 import { readFileReference, type FileReference } from './rules/file-reference';
-import type { PackageRequirement } from './rules/package-requirements-options';
+import type { FieldPath, PackageRequirement } from './rules/package-requirements-options';
 import { PLAYWRIGHT_FILE_GLOBS } from './rules/playwright-config';
 import { STRYKER_FILE_GLOBS } from './rules/stryker-thresholds';
 import { VITEST_FILE_GLOBS } from './rules/vitest-test-objects';
@@ -30,12 +30,12 @@ export type RootTool = (typeof ROOT_TOOLS)[number];
 // The extensions a JavaScript or TypeScript tool config can carry. A tool config rule is wired only onto files with one of them, since the same names (`vitest.workspace.json`) can exist in a format the rules do not parse.
 const SCRIPT_EXTENSIONS = '**/*.{ts,mts,cts,js,mjs,cjs}';
 
-// Where each root tool reads its configuration from, taken from the tool's own source: knip's KNIP_CONFIG_LOCATIONS, and the file names the syncpack binary searches for. Either also reads a `knip` or `syncpack` property of package.json.
-const ROOT_TOOL_CONFIG: Readonly<Record<RootTool, { readonly glob: string; readonly orField: string }>> = {
-  knip: { glob: '{knip.json,knip.jsonc,.knip.json,.knip.jsonc,knip.ts,knip.js,knip.config.ts,knip.config.js}', orField: 'knip' },
+// Where each root tool reads its configuration from, taken from the tool's own source: knip's KNIP_CONFIG_LOCATIONS, and the file names the syncpack binary searches for. knip also reads a `knip` property of package.json, and syncpack a `syncpack` or `config.syncpack` one.
+const ROOT_TOOL_CONFIG: Readonly<Record<RootTool, { readonly glob: string; readonly orFields: readonly FieldPath[] }>> = {
+  knip: { glob: '{knip.json,knip.jsonc,.knip.json,.knip.jsonc,knip.ts,knip.js,knip.config.ts,knip.config.js}', orFields: ['knip'] },
   syncpack: {
     glob: '{.syncpackrc,.syncpackrc.json,.syncpackrc.yaml,.syncpackrc.yml,.syncpackrc.js,.syncpackrc.ts,.syncpackrc.mjs,.syncpackrc.cjs,syncpack.config.js,syncpack.config.ts,syncpack.config.mjs,syncpack.config.cjs}',
-    orField: 'syncpack',
+    orFields: ['syncpack', ['config', 'syncpack']],
   },
 };
 

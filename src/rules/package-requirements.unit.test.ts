@@ -54,11 +54,13 @@ ruleTester.run('package-requirements', rule, {
     // A required file that exists, and a glob that matches one.
     { code: manifest({ name: 'lib' }), filename: ROOT_FILE, options: options({ when: { root: true }, files: ['.husky', '.husky/*-commit'] }) },
     // A tool configured in package.json satisfies a file entry that accepts the field.
-    { code: manifest({ name: 'root', knip: { entry: ['src/index.ts'] } }), filename: ROOT_FILE, options: options({ files: [{ glob: 'knip.json', orField: 'knip' }] }) },
+    { code: manifest({ name: 'root', knip: { entry: ['src/index.ts'] } }), filename: ROOT_FILE, options: options({ files: [{ glob: 'knip.json', orFields: ['knip'] }] }) },
     // The root condition rejects a nested manifest.
     { code: manifest({ name: 'lib' }), filename: LIB_FILE, options: options({ when: { root: true }, fields: ['packageManager'] }) },
     // A nested object is not the manifest.
     { code: manifest({ name: 'lib', nested: { private: true } }), filename: LIB_FILE, options: options({ when: { private: false }, fields: ['name'] }) },
+    // A property set under a nested object satisfies a nested orFields path.
+    { code: manifest({ name: 'root', config: { syncpack: { versionGroups: [] } } }), filename: ROOT_FILE, options: options({ files: [{ glob: 'syncpack.json', orFields: ['syncpack', ['config', 'syncpack']] }] }) },
     // Dependencies in any of the four fields satisfy declares.
     { code: manifest({ name: 'lib', peerDependencies: { husky: '*' } }), filename: LIB_FILE, options: options({ when: { declares: ['husky'] }, fields: ['name'] }) },
     // A manifest without husky is not asked for its hook wiring.
@@ -110,8 +112,15 @@ ruleTester.run('package-requirements', rule, {
     {
       code: manifest({ name: 'root' }),
       filename: ROOT_FILE,
-      options: options({ when: { root: true }, files: ['.husky', 'knip.json', { glob: 'syncpack.config.*', orField: 'syncpack' }] }),
-      errors: [{ messageId: 'missingFiles', data: { name: 'root', files: 'knip.json, one of syncpack.config.* (or a "syncpack" property)' } }],
+      options: options({ when: { root: true }, files: ['.husky', 'knip.json', { glob: 'syncpack.config.*', orFields: ['syncpack', ['config', 'syncpack']] }] }),
+      errors: [{ messageId: 'missingFiles', data: { name: 'root', files: 'knip.json, one of syncpack.config.* (or a "syncpack" or "config.syncpack" property)' } }],
+    },
+    // A nested property is not the top-level field of the same name.
+    {
+      code: manifest({ name: 'root', config: { syncpack: {} } }),
+      filename: ROOT_FILE,
+      options: options({ files: [{ glob: 'syncpack.json', orFields: ['syncpack'] }] }),
+      errors: [{ messageId: 'missingFiles', data: { name: 'root', files: 'one of syncpack.json (or a "syncpack" property)' } }],
     },
     // A husky repo must wire the prepare script.
     {

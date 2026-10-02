@@ -33,8 +33,8 @@ describe('toolingRequirements', () => {
   it('accepts a root config under either its file names or its package.json property', () => {
     const files = toolingRequirements({ publish: false, hooks: false }).flatMap((requirement) => requirement.files ?? []);
     expect(files).toEqual([
-      expect.objectContaining({ orField: 'knip', glob: expect.stringContaining('.knip.jsonc') as string }),
-      expect.objectContaining({ orField: 'syncpack', glob: expect.stringContaining('.syncpackrc.yml') as string }),
+      expect.objectContaining({ orFields: ['knip'], glob: expect.stringContaining('.knip.jsonc') as string }),
+      expect.objectContaining({ orFields: ['syncpack', ['config', 'syncpack']], glob: expect.stringContaining('.syncpackrc.yml') as string }),
     ]);
   });
 
@@ -216,6 +216,10 @@ describe('the wired config under ESLint', () => {
       'Script "knip" in "stubbed" must contain "knip", but is "echo skip".',
       'Script "syncpack" in "stubbed" must contain "syncpack", but is "true".',
     ]);
+  });
+
+  it('accepts syncpack configured under the config.syncpack property of package.json', async () => {
+    expect(await lint('configured', ['package.json'], { publish: false, hooks: false, toolConfigs: false })).toEqual([]);
   });
 
   it('holds only the repository root to the root requirements, wherever ESLint runs from', async () => {
