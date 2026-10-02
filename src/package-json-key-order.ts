@@ -48,7 +48,7 @@ export function buildPackageJsonKeyOrderConfig(options: PackageJsonKeyOrderConfi
   if (options.enabled === false) return [];
   if (options.enabled === undefined && hasSyncpackConfig(cwd)) return [];
 
-  // @eslint/json is ESM-only, so this resolves synchronously only where Node's own require() can load an ESM module synchronously (stable since Node 22.12) — on an older supported Node (this package's own engines floor is >=20), resolution fails closed here exactly like a genuinely-absent package would, silently under auto-detect or with a clear thrown error under `enabled: true`, matching every other optional peer in this file's own family (see react.ts/nextjs.ts).
+  // @eslint/json is ESM-only, so this resolves synchronously only where Node's own require() can load an ESM module synchronously, which Node enables by default from 20.19 and 22.12, the releases this package's own engines range (`^20.19.0 || ^22.13.0 || >=24`) starts from. On a Node outside that range, resolution fails closed here exactly like a genuinely-absent package would, silently under auto-detect or with a clear thrown error under `enabled: true`, matching every other optional peer in this file's own family (see react.ts/nextjs.ts).
   const jsonPlugin = options.enabled === true ? requireJsonPlugin('package.json key ordering', options.requireFn) : tryResolveJsonPlugin(options.requireFn);
   if (jsonPlugin === undefined) return [];
 
