@@ -171,9 +171,9 @@ jobs:
       - name: Read pre-release version
         id: before
         run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
-      # Pinned instead of @latest so a newly published npm release cannot run in this job unreviewed. 11.5.1 is the first release with trusted publishing (OIDC); the pin is the newest 11.x release at least a week old when it was chosen, matching the age gate used for local installs. Raise it deliberately.
+      # Pinned instead of @latest so a newly published npm release cannot run in this job unreviewed. 11.5.1 is the first release with trusted publishing (OIDC); the pin is the newest 12.x release at least a week old when it was chosen, matching the age gate used for local installs. 12.x needs Node ^22.22.2 or later, which setup-node's floating '22' satisfies. Raise it deliberately.
       - name: Upgrade npm for OIDC trusted publishing (needs npm CLI >=11.5.1)
-        run: npm install -g npm@11.20.0
+        run: npm install -g npm@12.1.0
       # The only step that is given the deploy key, directly before semantic-release, so no action runs while the key is on disk. This does not stop code an earlier step left behind from running here (see the comment at the top of the job); BASH_ENV and ENV are blanked so a hook an earlier step registered through the runner's environment file cannot be sourced by this step's shell with the key in its environment. The secret reaches the shell through the step's environment, never a command line, and the file is under runner.temp, outside the workspace.
       - name: Provision release deploy key
         env:
