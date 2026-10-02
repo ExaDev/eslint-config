@@ -11,7 +11,7 @@ const OPTION_NAME = 'exadev/package-requirements';
 export interface PackageCondition {
   // `true`: the manifest sets `"private": true`. `false`: it does not, so the package can be published.
   readonly private?: boolean;
-  // `true`: the manifest sits in the directory ESLint runs from (the repository root). `false`: it sits anywhere else.
+  // `true`: the manifest sits at the repository root: the nearest ancestor holding a `pnpm-workspace.yaml`, a `package.json` listing `workspaces` or a `.git` entry, or the directory ESLint runs from when there is none. `false`: it sits anywhere else.
   readonly root?: boolean;
   // A regular expression the declared `name` must match. A manifest with no `name` never matches.
   readonly namePattern?: string;

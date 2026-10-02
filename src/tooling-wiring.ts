@@ -50,7 +50,7 @@ export interface PublishWiringOptions {
 }
 
 /**
- * What the repository root (the `package.json` in the directory ESLint runs from) is held to.
+ * What the repository root (the `package.json` at the nearest workspace or git root, wherever ESLint runs from) is held to.
  */
 export interface RootWiringOptions {
   // The tools that must have a configuration (a file, or a property of package.json) and a script of the same name. Defaults to every tool in `ROOT_TOOLS`.

@@ -10,7 +10,7 @@ import { anyPathMatchesGlob, expandBraces } from './workspace-glob';
  */
 export interface ManifestFacts {
   readonly isPrivate: boolean;
-  // Whether the manifest sits in the directory ESLint runs from.
+  // Whether the manifest sits at the repository root (see findRepositoryRoot).
   readonly isRoot: boolean;
   readonly name: string | undefined;
   // Every dependency name under dependencies, devDependencies, peerDependencies and optionalDependencies.
