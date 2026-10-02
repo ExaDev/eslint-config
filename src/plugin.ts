@@ -12,6 +12,7 @@ import filenamePattern from './rules/filename-pattern';
 import importPolicy from './rules/import-policy';
 import injectedTestHygiene from './rules/injected-test-hygiene';
 import markdownRequiredHeading from './rules/markdown-required-heading';
+import multilineCommentStyle from './rules/multiline-comment-style';
 import noArrayIsarrayMutation from './rules/no-array-isarray-mutation';
 import noBoundariesIgnore from './rules/no-boundaries-ignore';
 import noControlFlow from './rules/no-control-flow';
@@ -88,6 +89,7 @@ const plugin: TSESLint.FlatConfig.Plugin = {
     'import-policy': importPolicy,
     'injected-test-hygiene': injectedTestHygiene,
     'markdown-required-heading': markdownRequiredHeading,
+    'multiline-comment-style': multilineCommentStyle,
     'no-array-isarray-mutation': noArrayIsarrayMutation,
     'no-boundaries-ignore': noBoundariesIgnore,
     'no-control-flow': noControlFlow,
