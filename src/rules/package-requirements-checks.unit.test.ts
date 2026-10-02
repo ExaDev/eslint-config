@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appliesTo, applicableRequirements, collectScripts, missingFiles, unsetFields, type ManifestFacts } from './package-requirements-checks';
+import { appliesTo, applicableRequirements, collectScripts, fieldPathKey, missingFiles, unsetFields, type ManifestFacts } from './package-requirements-checks';
 import { createMemoryFs } from './memory-fs';
 
 const FACTS: ManifestFacts = {
@@ -8,6 +8,7 @@ const FACTS: ManifestFacts = {
   name: '@scope/pkg',
   declared: new Set(['husky', 'vitest']),
   setFields: new Set(['name', 'engines']),
+  setPaths: new Set([fieldPathKey('name'), fieldPathKey('engines'), fieldPathKey(['engines', 'node'])]),
 };
 
 describe('appliesTo', () => {
@@ -81,10 +82,16 @@ describe('missingFiles', () => {
   });
 
   it('accepts a set manifest field instead of the file, and names both when neither exists', () => {
-    const entry = { glob: 'syncpack.config.*', orField: 'syncpack' };
-    expect(missingFiles([{ files: [entry] }], fs, '/pkg', { ...FACTS, setFields: new Set(['syncpack']) })).toEqual([]);
-    expect(missingFiles([{ files: [entry] }], fs, '/pkg', FACTS)).toEqual(['one of syncpack.config.* (or a "syncpack" property)']);
-    expect(missingFiles([{ files: [{ glob: 'knip.json', orField: 'knip' }] }], fs, '/pkg', FACTS)).toEqual([]);
+    const entry = { glob: 'syncpack.config.*', orFields: ['syncpack', ['config', 'syncpack']] };
+    expect(missingFiles([{ files: [entry] }], fs, '/pkg', { ...FACTS, setPaths: new Set([fieldPathKey('syncpack')]) })).toEqual([]);
+    expect(missingFiles([{ files: [entry] }], fs, '/pkg', { ...FACTS, setPaths: new Set([fieldPathKey(['config', 'syncpack'])]) })).toEqual([]);
+    expect(missingFiles([{ files: [entry] }], fs, '/pkg', FACTS)).toEqual(['one of syncpack.config.* (or a "syncpack" or "config.syncpack" property)']);
+    expect(missingFiles([{ files: [{ glob: 'knip.json', orFields: ['knip'] }] }], fs, '/pkg', FACTS)).toEqual([]);
+  });
+
+  it('does not take a nested property for the top-level field of the same name', () => {
+    const entry = { glob: 'syncpack.config.*', orFields: ['syncpack'] };
+    expect(missingFiles([{ files: [entry] }], fs, '/pkg', { ...FACTS, setPaths: new Set([fieldPathKey(['config', 'syncpack'])]) })).toEqual(['one of syncpack.config.* (or a "syncpack" property)']);
   });
 
   it('lists nothing for requirements without files', () => {

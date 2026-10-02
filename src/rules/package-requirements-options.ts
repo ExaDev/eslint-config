@@ -20,9 +20,14 @@ export interface PackageCondition {
 }
 
 /**
- * A file requirement satisfied by a path alone (a literal path or a glob) or, for a tool whose configuration may also live in `package.json`, by that manifest field being set instead.
+ * A manifest property: a top-level field name, or the keys leading to a nested one (`['config', 'syncpack']`).
  */
-export type FileRequirement = string | { readonly glob: string; readonly orField: string };
+export type FieldPath = string | readonly string[];
+
+/**
+ * A file requirement satisfied by a path alone (a literal path or a glob) or, for a tool whose configuration may also live in `package.json`, by any one of the listed manifest properties being set instead.
+ */
+export type FileRequirement = string | { readonly glob: string; readonly orFields: readonly FieldPath[] };
 
 /**
  * One group of requirements and the packages it applies to. `when` is absent for every package.
@@ -48,8 +53,8 @@ const fileRequirementSchema = {
     { type: 'string', minLength: 1 },
     {
       type: 'object',
-      properties: { glob: { type: 'string', minLength: 1 }, orField: { type: 'string', minLength: 1 } },
-      required: ['glob', 'orField'],
+      properties: { glob: { type: 'string', minLength: 1 }, orFields: { type: 'array', minItems: 1, items: { oneOf: [{ type: 'string', minLength: 1 }, nonEmptyStringArray] } } },
+      required: ['glob', 'orFields'],
       additionalProperties: false,
     },
   ],
@@ -138,18 +143,24 @@ function readPath(path: string): string {
   return path;
 }
 
-const FILE_KEYS = ['glob', 'orField'] as const;
+function readFieldPath(value: unknown): FieldPath {
+  if (typeof value === 'string' && value.length > 0) return value;
+
+  return readStrings(value, 'each "orFields" entry (a field name or the keys leading to a nested one)');
+}
+
+const FILE_KEYS = ['glob', 'orFields'] as const;
 
 function readFileRequirement(value: unknown): FileRequirement {
   if (typeof value === 'string') return readPath(value);
-  if (!isRecord(value)) fail('needs each "files" entry to be a path or an object with "glob" and "orField".');
+  if (!isRecord(value)) fail('needs each "files" entry to be a path or an object with "glob" and "orFields".');
   assertOnlyKeys(value, FILE_KEYS, `${OPTION_NAME} files`);
-  const { glob, orField } = value;
-  if (typeof glob !== 'string' || glob.length === 0 || typeof orField !== 'string' || orField.length === 0) {
-    fail('needs a "files" object entry to have a non-empty string "glob" and "orField".');
+  const { glob, orFields } = value;
+  if (typeof glob !== 'string' || glob.length === 0 || !Array.isArray(orFields) || orFields.length === 0) {
+    fail('needs a "files" object entry to have a non-empty string "glob" and a non-empty "orFields" array.');
   }
 
-  return { glob: readPath(glob), orField };
+  return { glob: readPath(glob), orFields: orFields.map(readFieldPath) };
 }
 
 function readList<Item>(value: unknown, what: string, read: (item: unknown) => Item): readonly Item[] {
