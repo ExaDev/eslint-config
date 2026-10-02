@@ -61,8 +61,6 @@ ruleTester.run('package-requirements', rule, {
     { code: manifest({ name: 'lib', nested: { private: true } }), filename: LIB_FILE, options: options({ when: { private: false }, fields: ['name'] }) },
     // A property set under a nested object satisfies a nested orFields path.
     { code: manifest({ name: 'root', config: { syncpack: { versionGroups: [] } } }), filename: ROOT_FILE, options: options({ files: [{ glob: 'syncpack.json', orFields: ['syncpack', ['config', 'syncpack']] }] }) },
-    // Dependencies in any of the four fields satisfy declares.
-    { code: manifest({ name: 'lib', peerDependencies: { husky: '*' } }), filename: LIB_FILE, options: options({ when: { declares: ['husky'] }, fields: ['name'] }) },
     // A manifest without husky is not asked for its hook wiring.
     { code: manifest({ name: 'lib' }), filename: LIB_FILE, options: options({ when: { declares: ['husky'] }, scripts: [{ name: 'prepare', includes: ['husky'] }] }) },
     // A name pattern selects by the declared name.
@@ -115,6 +113,13 @@ ruleTester.run('package-requirements', rule, {
       options: options({ when: { root: true }, files: ['.husky', 'knip.json', { glob: 'syncpack.config.*', orFields: ['syncpack', ['config', 'syncpack']] }] }),
       errors: [{ messageId: 'missingFiles', data: { name: 'root', files: 'knip.json, one of syncpack.config.* (or a "syncpack" or "config.syncpack" property)' } }],
     },
+    // Dependencies in each of the four fields satisfy declares, so a missing prepare is reported for every one.
+    ...['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'].map((field) => ({
+      code: manifest({ name: 'lib', [field]: { husky: '*' }, scripts: { prepare: 'echo' } }),
+      filename: LIB_FILE,
+      options: options({ when: { declares: ['husky'] }, scripts: [{ name: 'prepare', includes: ['husky'] }] }),
+      errors: [{ messageId: 'missingFlag' as const }],
+    })),
     // A nested property is not the top-level field of the same name.
     {
       code: manifest({ name: 'root', config: { syncpack: {} } }),
