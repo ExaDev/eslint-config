@@ -56,4 +56,13 @@ describe('the shared layout read through @exadev/config', () => {
     expect(setting).toEqual(['error', layout]);
     expect(layout.groups.map((group) => group.name)).toEqual(['core', 'features', 'targets']);
   });
+
+  it('accepts policy options added beside the spread layout', async () => {
+    const layout = await loadSection(layoutSection, { cwd: makeProject(LAYOUT_FILE) });
+    if (layout === undefined) throw new Error('Unreachable: the project file defines a layout section.');
+
+    const config = exadevConfig({ react: false, nextjs: false, workspaceArchitecture: { ...layout, devOnly: [{ group: 'targets' }] } });
+    const entry = config.find((block) => block.rules?.['exadev/dev-dependency-only'] !== undefined);
+    expect(entry?.rules?.['exadev/dev-dependency-only']).toEqual(['error', expect.objectContaining({ groups: layout.groups })]);
+  });
 });
