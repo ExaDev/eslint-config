@@ -948,7 +948,7 @@ export default defineConfig(
 
 | Section | Held to | Applies to |
 | --- | --- | --- |
-| `publish` | `prepublishOnly` runs each of `tools` (default `publint` and `attw`), `engines` is set, and the optional `smokeProject` directory exists. | Every `package.json` that does not set `"private": true`. |
+| `publish` | `prepublishOnly` runs each of `tools` (default `publint` and `attw`), `engines` is set, and the optional `smokeProject` directory exists (only its presence is checked, not what it imports). | Every `package.json` that does not set `"private": true`. |
 | `root` | A configuration for each of `tools` (default `knip` and `syncpack`), a script of the same name that runs the tool, and `packageManager` is set. | The `package.json` at the repository root: the nearest ancestor of the manifest that holds a `pnpm-workspace.yaml`, a `package.json` listing `workspaces`, or a `.git` entry. |
 | `hooks` | `prepare` runs `husky` and the `.husky` directory exists. | Every `package.json` that declares `husky` under `dependencies`, `devDependencies`, `peerDependencies` or `optionalDependencies`. |
 | `toolConfigs` | The [tool config rules](#tool-config-files) for Vitest, Stryker and Playwright, each given the options of its tool (`forbidNumericMaxWorkers` and `coverageFiles`, `min` and `base`, `fullyParallel` and `workers`), or `false` to leave a tool out. | The JavaScript and TypeScript config files each rule scopes itself to. |
