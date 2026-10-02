@@ -5,7 +5,7 @@
   "dependencies": {
     "@eslint/js": "^10.0.1",
     "@microsoft/tsdoc": "0.17.0",
-    "@stylistic/eslint-plugin": "5.10.0",
+    "@stylistic/eslint-plugin": "6.0.0-beta.6",
     "@typescript-eslint/typescript-estree": "8.67.0",
     "@typescript-eslint/utils": "8.67.0",
     "eslint-plugin-jsdoc": "64.3.6",
@@ -51,7 +51,7 @@
     "vitest": "^4.1.10"
   },
   "engines": {
-    "node": ">=20"
+    "node": "^20.19.0 || ^22.13.0 || >=24"
   },
   "exports": {
     ".": {

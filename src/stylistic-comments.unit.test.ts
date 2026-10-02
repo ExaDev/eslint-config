@@ -183,7 +183,7 @@ describe('padding-line-between-statements (consecutive directives and imports st
   });
 });
 
-// A real --fix run pinning the confirmed, documented gap this file's own header comment describes: spaced-comment's own hard-coded exemption only recognises the SPACED triple-slash form (`/// <reference ... />`), never the no-space one, which is still valid TypeScript syntax. Both cases are pinned here, not only the broken one, so a future upstream fix (which would flip the second assertion) is caught by a real, visibly failing test rather than silently going unnoticed.
+// A real --fix run pinning spaced-comment's triple-slash exemption in both spellings TypeScript accepts: the spaced `/// <reference ... />` form and the no-space `///<reference ... />` form, which @stylistic/eslint-plugin before 6.0.0 rewrote into a broken `// /<reference ... />` comment (ExaDev/eslint-config#47). A regression in either is a visibly failing test, not a silently broken directive.
 describe('spaced-comment (triple-slash reference directive)', () => {
   const linter = new LinterClass();
 
@@ -196,8 +196,17 @@ describe('spaced-comment (triple-slash reference directive)', () => {
     expect(fixedOutput(code)).toBe(code);
   });
 
-  it('rewrites a no-space triple-slash reference directive, breaking it: the confirmed upstream gap tracked at ExaDev/eslint-config#47', () => {
+  it('leaves a no-space triple-slash reference directive untouched too, never rewritten into a broken `// /<reference` comment', () => {
     const code = '///<reference types="node" />\nexport const z = 1;\n';
-    expect(fixedOutput(code)).toBe('// /<reference types="node" />\nexport const z = 1;\n');
+    expect(fixedOutput(code)).toBe(code);
+  });
+
+  it('leaves a no-space triple-slash AMD directive untouched, the other directive family the exemption covers', () => {
+    const code = '///<amd-module name="x" />\nexport const z = 1;\n';
+    expect(fixedOutput(code)).toBe(code);
+  });
+
+  it('still rewrites an ordinary no-space `///` comment that is not a reference/AMD directive, proving the exemption is scoped to directives and does not disable the rule for triple-slash comments generally', () => {
+    expect(fixedOutput('///not a directive\nexport const z = 1;\n')).toBe('// /not a directive\nexport const z = 1;\n');
   });
 });
