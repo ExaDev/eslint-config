@@ -1490,7 +1490,7 @@ Conventional commits are enforced by a husky `commit-msg` hook and re-checked in
 
 ### Release
 
-Conventional commits drive [semantic-release](https://semantic-release.gitbook.io/semantic-release) on every push to `main`: version bump, `CHANGELOG.md`, GitHub Release, and npm publish via [OIDC trusted publishing](https://docs.npmjs.com/trusted-publishers) (no stored token). A second CI job republishes the identical build under the unscoped alias `exadev-eslint-config`.
+Conventional commits drive [semantic-release](https://semantic-release.gitbook.io/semantic-release) on every push to `main`: version bump, `CHANGELOG.md`, GitHub Release, and npm publish via [OIDC trusted publishing](https://docs.npmjs.com/trusted-publishers) (no stored token). The release commit and tag are pushed over SSH with a repository deploy key that bypasses the `main` ruleset; the key is written to the runner's temporary directory only for the semantic-release step (checkout does not receive it and persists no credentials) and removed afterwards. A second CI job republishes the identical build under the unscoped alias `exadev-eslint-config`.
 
 ## License
 

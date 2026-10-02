@@ -29,7 +29,7 @@ export const commitTypes: readonly CommitType[] = [
  */
 const config: Options = {
   branches: ['main'],
-  // Deliberately the SSH form, not package.json's own git+https:// repository field (that field stays https://; it's public consumer-facing metadata, unrelated to how this release pushes). semantic-release only embeds an x-access-token:$GITHUB_TOKEN@ credential into an https:// repositoryUrl; the default GITHUB_TOKEN it would embed has no way to bypass main's branch ruleset. An SSH URL skips that embedding entirely, so the push authenticates with the deploy key the Release job's checkout wires into core.sshCommand (checkout@v7 writes that config only while persist-credentials is true; see .github/workflows/ci.yml), which the ruleset lists as a DeployKey bypass actor.
+  // Deliberately the SSH form, not package.json's own git+https:// repository field (that field stays https://; it's public consumer-facing metadata, unrelated to how this release pushes). semantic-release first tries to push to repositoryUrl exactly as written, and the Release job's GIT_SSH_COMMAND (set only on the semantic-release step, pointing at a deploy key provisioned just before it; see .github/workflows/ci.yml) authenticates that push as a DeployKey bypass actor on main's ruleset. Only if that attempt fails does semantic-release embed x-access-token:$GITHUB_TOKEN into an https URL, which the ruleset rejects because the default GITHUB_TOKEN cannot bypass it; the workflow's preflight dry-run push makes a missing key fail before that fallback can be reached.
   repositoryUrl: 'git@github.com:ExaDev/eslint-config.git',
   plugins: [
     [
