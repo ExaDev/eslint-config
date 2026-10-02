@@ -1,3 +1,21 @@
+# [2.31.0](https://github.com/ExaDev/eslint-config/compare/v2.30.0...v2.31.0) (2026-10-02)
+
+
+### Bug Fixes
+
+* accept syncpack configured under config.syncpack in package.json ([c5c96b0](https://github.com/ExaDev/eslint-config/commit/c5c96b008a8eef51ddcf1070c43e1b991c0955fb))
+* find the repository root structurally instead of from the ESLint working directory ([9b19059](https://github.com/ExaDev/eslint-config/commit/9b1905908f9fe0abb3b2b3bed0e0f0d7e57fa96d))
+* list a file requirement once however many equal objects state it ([a08b6e9](https://github.com/ExaDev/eslint-config/commit/a08b6e9f723856c1f4d639465f2b48bf477b058a))
+* name every accepted spelling of a file requirement that allows a manifest field ([4e244f5](https://github.com/ExaDev/eslint-config/commit/4e244f5c9e6412b483edf06d002f1c301c2a8243))
+* require the root tool scripts to run the tool, not merely exist ([4053223](https://github.com/ExaDev/eslint-config/commit/40532237a2d443fbf289cc1ab07d292e611db832))
+
+
+### Features
+
+* add package-requirements rule for conditional manifest fields, files and scripts ([2213c41](https://github.com/ExaDev/eslint-config/commit/2213c41db3abf51ac2ec73e36fc2f67c73245a8c))
+* add the tooling wiring preset for publish checks, root tooling, hooks and tool configs ([022b4f6](https://github.com/ExaDev/eslint-config/commit/022b4f60243ab4739610d60fa86bb66c490ba031))
+* verify through ESLint's Node API that the config is applied to sample files ([e28562b](https://github.com/ExaDev/eslint-config/commit/e28562b91da9aaae428dd6f1d6d3fedf9c12f26c))
+
 # [2.30.0](https://github.com/ExaDev/eslint-config/compare/v2.29.0...v2.30.0) (2026-10-01)
 
 
