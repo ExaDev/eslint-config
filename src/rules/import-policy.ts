@@ -1,6 +1,6 @@
 import { AST_NODE_TYPES, ESLintUtils, type TSESLint, type TSESTree } from '@typescript-eslint/utils';
 import { createFileScope, relativeToCwd, type FileScope } from './file-scope';
-import { importPoliciesSchema, readImportPolicies, type ImportPolicy } from './import-policy-options';
+import { importPoliciesSchema, readImportPolicies, type ImportDeny, type ImportPolicy } from './import-policy-options';
 import { createSpecifierMatcher, type SpecifierMatcher } from './specifier-match';
 
 /**
@@ -106,19 +106,21 @@ interface CompiledPolicy {
   readonly reportsComputed: boolean;
 }
 
-function selectsNames(importNames: readonly string[] | undefined, referenceNames: readonly string[]): boolean {
+// Whether a reference takes a name the deny entry bans. A whole-module reference takes every name and carries `*`, which no allow list names and every ban list selects.
+function takesBannedName(deny: ImportDeny, referenceNames: readonly string[]): boolean {
+  const { importNames, allowImportNames } = deny;
+  if (allowImportNames !== undefined) return referenceNames.some((name) => !allowImportNames.includes(name));
   if (importNames === undefined) return true;
 
   return referenceNames.includes('*') || referenceNames.some((name) => importNames.includes(name));
 }
 
 function compilePolicy(policy: ImportPolicy): CompiledPolicy {
-  const deny = (policy.deny ?? []).map(({ specifiers, importNames, allowTypeImports = false, message }): CompiledRestriction => ({
-    matches: createSpecifierMatcher(specifiers),
-    allowTypeImports,
-    forbids: (reference) => selectsNames(importNames, reference.names),
-    message,
-  }));
+  const deny = (policy.deny ?? []).map((entry): CompiledRestriction => {
+    const { specifiers, allowTypeImports = false, message } = entry;
+
+    return { matches: createSpecifierMatcher(specifiers), allowTypeImports, forbids: (reference) => takesBannedName(entry, reference.names), message };
+  });
   const confine = (policy.confine ?? []).map(({ specifiers, onlyIn, allowTypeImports = false, message }): CompiledRestriction => {
     const allowedHere = createFileScope(onlyIn);
 

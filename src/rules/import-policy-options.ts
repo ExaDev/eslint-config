@@ -5,19 +5,19 @@ import { createSpecifierMatcher } from './specifier-match';
 
 const OPTION_NAME = 'importPolicies';
 
-/**
- * Specifiers that the files of a policy may not import.
- */
-export interface ImportDeny {
+interface ImportDenyBase {
   // Specifier patterns. Each also selects everything beneath it, and `node:` is ignored, so `fs` selects `node:fs` and `fs/promises`.
   readonly specifiers: readonly string[];
-  // Restricts the ban to these imported names (`default` for a default import). A namespace import, a dynamic import, a `require` call and `export *` take every name, so they are still reported.
-  readonly importNames?: readonly string[];
   // Leaves `import type`, `export type ... from`, all-inline-`type` specifier lists and `import("x")` type queries alone.
   readonly allowTypeImports?: boolean;
   // Names the requirement, not the rule: why the import is forbidden and what to do instead.
   readonly message: string;
 }
+
+/**
+ * Specifiers that the files of a policy may not import. `importNames` narrows the ban to the names it lists; `allowImportNames` inverts it, banning every imported name except the ones it lists. The two cannot be combined. A namespace import, a dynamic import, a `require` call and `export *` take every name, so either way they are reported.
+ */
+export type ImportDeny = ImportDenyBase & ({ readonly importNames?: readonly string[]; readonly allowImportNames?: never } | { readonly allowImportNames: readonly string[]; readonly importNames?: never });
 
 /**
  * Specifiers that the files of a policy may import only in the files `onlyIn` selects.
@@ -77,8 +77,9 @@ export const importPoliciesSchema: JSONSchema4 = {
         type: 'array',
         items: {
           type: 'object',
-          properties: { specifiers: stringList, importNames: stringList, allowTypeImports: { type: 'boolean' }, message: { type: 'string', minLength: 1 } },
+          properties: { specifiers: stringList, importNames: stringList, allowImportNames: stringList, allowTypeImports: { type: 'boolean' }, message: { type: 'string', minLength: 1 } },
           required: ['specifiers', 'message'],
+          not: { type: 'object', required: ['importNames', 'allowImportNames'] },
           additionalProperties: false,
         },
       },
@@ -133,16 +134,21 @@ function readComputedSpecifiers(entry: Readonly<Record<string, unknown>>, name: 
 }
 
 function readDeny(entry: Readonly<Record<string, unknown>>, name: string): ImportDeny {
-  assertOnlyKeys(entry, ['specifiers', 'importNames', 'allowTypeImports', 'message'], name);
+  assertOnlyKeys(entry, ['specifiers', 'importNames', 'allowImportNames', 'allowTypeImports', 'message'], name);
   const importNames = entry['importNames'] === undefined ? undefined : readRequiredStrings(entry, 'importNames', name);
+  const allowImportNames = entry['allowImportNames'] === undefined ? undefined : readRequiredStrings(entry, 'allowImportNames', name);
   const allowTypeImports = readBoolean(entry, 'allowTypeImports', name);
-
-  return {
+  const base = {
     specifiers: readRequiredStrings(entry, 'specifiers', name),
-    ...(importNames !== undefined && { importNames }),
     ...(allowTypeImports !== undefined && { allowTypeImports }),
     message: readRequiredString(entry, 'message', name),
   };
+  if (allowImportNames === undefined) return { ...base, ...(importNames !== undefined && { importNames }) };
+  if (importNames !== undefined) {
+    throw new Error(`@exadev/eslint-config: "${name}" takes "importNames" or "allowImportNames", not both: the first lists the names it bans, the second the only names it permits.`);
+  }
+
+  return { ...base, allowImportNames };
 }
 
 function readConfine(entry: Readonly<Record<string, unknown>>, name: string): ImportConfine {

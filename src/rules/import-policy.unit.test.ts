@@ -19,6 +19,10 @@ const REPORT_COMPUTED: readonly [readonly ImportPolicy[]] = [
   [{ files: ['src/worker/**'], deny: [{ specifiers: ['fs', 'path'], message: WORKER_MESSAGE }], computedSpecifiers: 'report' }],
 ];
 const computed = { messageId: 'computed' as const };
+const ONLY_PROTECTED_MESSAGE = 'handlers are built from protectedProcedure';
+const ONLY_PROTECTED: readonly [readonly ImportPolicy[]] = [
+  [{ files: ['src/server/routers/**'], deny: [{ specifiers: ['src/server/procedures'], allowImportNames: ['router', 'protectedProcedure'], allowTypeImports: true, message: ONLY_PROTECTED_MESSAGE }] }],
+];
 
 function isProgram(node: unknown): node is TSESTree.Program {
   return typeof node === 'object' && node !== null && 'type' in node && node.type === AST_NODE_TYPES.Program;
@@ -147,6 +151,12 @@ ruleTester.run('import-policy', rule, {
       options: [[{ files: ['src/**'], deny: [{ specifiers: ['fs'], importNames: ['writeFile'], message: 'no writes' }] }]],
     },
     { code: "import 'fs';", filename: WORKER_FILE, options: [[{ files: ['src/**'], deny: [{ specifiers: ['fs'], importNames: ['writeFile'], message: 'no writes' }] }]] },
+    // allowImportNames permits only those names: an import of nothing but them, a side-effect import and, with allowTypeImports, a type-only import pass.
+    {
+      code: "import { router, protectedProcedure } from '../procedures';\nimport '../procedures';\nimport type { Context } from '../procedures';\nexport { protectedProcedure } from '../procedures';",
+      filename: 'src/server/routers/orders.ts',
+      options: ONLY_PROTECTED,
+    },
     // allowTypeImports exempts every erased form and nothing else.
     {
       code: "import type { A } from 'fs';\nimport { type B } from 'fs';\nexport type { C } from 'fs';\ntype D = import('fs').D;\nimport type E = require('fs');",
@@ -264,6 +274,28 @@ ruleTester.run('import-policy', rule, {
       filename: WORKER_FILE,
       options: [[{ files: ['src/**'], deny: [{ specifiers: ['fs'], importNames: ['default'], message: 'no default' }] }]],
       errors: [restricted('fs', 'no default')],
+    },
+    // allowImportNames: any other name, a default import, and every whole-module form (namespace, dynamic import, require, export *) are reported, each once.
+    {
+      code: [
+        "import { publicProcedure } from '../procedures';",
+        "import { router, publicProcedure as open } from '../procedures';",
+        "import procedures from '../procedures';",
+        "import * as procedures from '../procedures';",
+        "const lazy = await import('../procedures');",
+        "const required = require('../procedures');",
+        "export * from '../procedures';",
+        "export { publicProcedure } from '../procedures';",
+      ].join('\n'),
+      filename: 'src/server/routers/orders.ts',
+      options: ONLY_PROTECTED,
+      errors: Array.from({ length: 8 }, (_, index) => ({ ...restricted('../procedures', ONLY_PROTECTED_MESSAGE), line: index + 1 })),
+    },
+    {
+      code: "import type { Context } from '../procedures';",
+      filename: 'src/server/routers/orders.ts',
+      options: [[{ files: ['src/server/routers/**'], deny: [{ specifiers: ['src/server/procedures'], allowImportNames: ['protectedProcedure'], message: ONLY_PROTECTED_MESSAGE }] }]],
+      errors: [restricted('../procedures', ONLY_PROTECTED_MESSAGE)],
     },
     // allowTypeImports does not exempt a value import alongside a type one.
     {
