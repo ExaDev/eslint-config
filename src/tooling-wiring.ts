@@ -162,7 +162,7 @@ function publishRequirement(section: Section): PackageRequirement {
 function rootRequirement(section: Section): PackageRequirement {
   const tools = readRootTools(section);
 
-  return { when: { root: true }, scripts: [...tools], files: tools.map((tool) => ROOT_TOOL_CONFIG[tool]), fields: ['packageManager'] };
+  return { when: { root: true }, scripts: tools.map((tool) => ({ name: tool, includes: [tool] })), files: tools.map((tool) => ROOT_TOOL_CONFIG[tool]), fields: ['packageManager'] };
 }
 
 /**

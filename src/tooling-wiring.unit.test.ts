@@ -16,7 +16,10 @@ describe('toolingRequirements', () => {
     expect(rest).toEqual([]);
     expect(publish).toEqual({ when: { private: false }, scripts: [{ name: 'prepublishOnly', includes: ['publint', 'attw'] }], fields: ['engines'] });
     expect(root?.when).toEqual({ root: true });
-    expect(root?.scripts).toEqual(['knip', 'syncpack']);
+    expect(root?.scripts).toEqual([
+      { name: 'knip', includes: ['knip'] },
+      { name: 'syncpack', includes: ['syncpack'] },
+    ]);
     expect(root?.fields).toEqual(['packageManager']);
     expect(root?.files).toHaveLength(2);
     expect(hooks).toEqual({ when: { declares: ['husky'] }, scripts: [{ name: 'prepare', includes: ['husky'] }], files: ['.husky'] });
@@ -50,7 +53,7 @@ describe('toolingRequirements', () => {
 
   it('takes a subset of the root tools', () => {
     const [root] = toolingRequirements({ publish: false, hooks: false, root: { tools: ['knip'] } });
-    expect(root?.scripts).toEqual(['knip']);
+    expect(root?.scripts).toEqual([{ name: 'knip', includes: ['knip'] }]);
     expect(root?.files).toHaveLength(1);
   });
 
@@ -204,6 +207,14 @@ describe('the wired config under ESLint', () => {
       { file: 'package.json', rule: 'exadev/package-requirements', message: 'Script "prepare" in "unwired" must contain "husky", but is "echo ready".' },
       { file: 'package.json', rule: 'exadev/package-requirements', message: 'Script "prepublishOnly" in "unwired" must contain "attw", but is "tsdown && publint".' },
       { file: 'vitest.config.js', rule: 'exadev/vitest-config', message: expect.stringContaining('passWithNoTests') as string },
+    ]);
+  });
+
+  it('reports a root whose tool scripts do not run the tool', async () => {
+    const messages = await lint('stubbed', ['package.json'], { publish: false, hooks: false, toolConfigs: false });
+    expect(messages.map((entry) => entry.message)).toEqual([
+      'Script "knip" in "stubbed" must contain "knip", but is "echo skip".',
+      'Script "syncpack" in "stubbed" must contain "syncpack", but is "true".',
     ]);
   });
 
