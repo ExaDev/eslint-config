@@ -1,3 +1,11 @@
+# [2.34.0](https://github.com/ExaDev/eslint-config/compare/v2.33.1...v2.34.0) (2026-10-02)
+
+
+### Features
+
+* add multiline-comment-style wrapper that keeps directives standalone ([f48ba38](https://github.com/ExaDev/eslint-config/commit/f48ba3810be601c17e64d03ae5ffb433d6048b1a)), closes [eslint-stylistic/eslint-stylistic#1287](https://github.com/eslint-stylistic/eslint-stylistic/issues/1287) [#region](https://github.com/ExaDev/eslint-config/issues/region) [#45](https://github.com/ExaDev/eslint-config/issues/45)
+* enable multiline-comment-style at bare-block through the wrapper ([966a97c](https://github.com/ExaDev/eslint-config/commit/966a97cc636c5c0eaf80f6226ba027fd0b779353)), closes [#region](https://github.com/ExaDev/eslint-config/issues/region) [eslint-stylistic/eslint-stylistic#1287](https://github.com/eslint-stylistic/eslint-stylistic/issues/1287) [#45](https://github.com/ExaDev/eslint-config/issues/45)
+
 ## [2.33.1](https://github.com/ExaDev/eslint-config/compare/v2.33.0...v2.33.1) (2026-10-02)
 
 
