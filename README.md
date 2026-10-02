@@ -558,6 +558,163 @@ export default defineConfig(
 
 The `no-restricted-imports` options map across as follows. A `paths` entry's `name` is a `specifiers` entry, except that a specifier also selects everything beneath it, so `pkg` covers `pkg/sub` as well. A `patterns` entry's `group` is a list of globs in the [specifier pattern](#specifier-patterns) dialect, with a leading `!` excluding. There is no `regex`: the glob dialect's `**`, `*`, `?`, `[...]`, braces and `!` excludes express the sets a ban needs, and a character class (`[Ff]ake`) stands in for case-insensitive matching. `importNames`, `allowImportNames` and `message` carry over, `allowTypeImports` is the same flag, and a namespace import, dynamic import, `require()` or `export *` of a module whose `importNames` are banned, or whose names are limited by `allowImportNames`, is reported, since each takes every name. Avoid the `no-restricted-syntax` workaround (`ImportExpression > Literal[value=/.../]`): flat config replaces a rule's options when a later block sets the same rule for the same files, so that selector silently switches off any other `no-restricted-syntax` list the files already have.
 
+### Import-policy recipes
+
+Repository conventions that come up again and again, each written as the config to place after `...exadevConfig()` in `defineConfig(...)`. Every recipe is linted by [`src/import-policy-recipes.unit.test.ts`](src/import-policy-recipes.unit.test.ts), against [`src/import-policy-recipes.ts`](src/import-policy-recipes.ts), which holds the same configs, so a recipe that stops reporting what this section says fails a test. Paths and package names are placeholders. Policies for different conventions can share one `importPolicyConfig([...])` call or sit in several; either way every policy that selects a file applies to it.
+
+#### A vendor SDK behind its adapter
+
+The vendor SDK is imported only in its adapter directory, and deterministic code (here, workflow code that is replayed) imports neither the SDK nor the adapter:
+
+```ts
+...importPolicyConfig([
+  {
+    files: ['src/**'],
+    ignores: ['src/**/*.test.ts'],
+    confine: [{ specifiers: ['@vendor/model-sdk'], onlyIn: ['src/adapters/model/**'], message: 'call the model through src/adapters/model, which owns the vendor SDK' }],
+  },
+  {
+    files: ['src/workflows/**'],
+    deny: [
+      {
+        specifiers: ['@vendor/model-sdk', 'src/adapters/model'],
+        allowTypeImports: true,
+        message: 'workflow code is replayed and must be deterministic; call the model from an activity',
+      },
+    ],
+  },
+]),
+```
+
+`confine` covers subpaths and every import form, so `await import('@vendor/model-sdk/streaming')` in a feature is reported as well. The deny's `src/adapters/model` pattern matches the relative specifier a workflow writes (`../adapters/model/summarise`) by the path it resolves to. `allowTypeImports` lets workflow code name the adapter's types, which are erased before it runs; the confine has no such flag, so even a type import of the SDK outside the adapter is reported, keeping vendor types from leaking into domain code. A workflow importing the SDK breaks both policies and is reported once for each, with each message.
+
+#### Test doubles, fixtures and conformance kits stay out of shipped code
+
+One deny list over every shipped file, extending [Bans that dynamic `import()` bypasses](#bans-that-dynamic-import-bypasses):
+
+```ts
+...importPolicyConfig([
+  {
+    files: ['src/**'],
+    ignores: ['src/**/*.test.ts', 'src/**/*.fake.ts', 'src/testing/**'],
+    deny: [
+      {
+        specifiers: ['src/testing', 'src/**/__fixtures__', 'src/**/*.fake{,.js}', '@scope/*/testing', '@scope/*/conformance'],
+        message: 'test doubles, fixtures and conformance kits stay out of shipped code; import them from tests only',
+      },
+    ],
+    computedSpecifiers: 'report',
+  },
+]),
+```
+
+The relative patterns select a shared testing directory, a fixtures directory at any depth and a fake beside the code it stands in for, written with or without the `.js` extension that `NodeNext` resolution needs. The package patterns select the testing and conformance entry points of every package in the scope, so `@scope/orders-contract/conformance` is reported in shipped code while `@scope/orders-contract` is not. The test files, the fakes themselves and the testing directory are ignored, since they are where these modules belong. `computedSpecifiers: 'report'` closes the gap a lazy `` import(`./plugins/${name}`) `` would otherwise leave, at the price of every computed specifier in shipped code being reported.
+
+#### Handlers built only from the authenticated procedure
+
+Every request handler is built from the procedure that requires a signed-in caller. Listing the names a router may import, rather than the ones it may not, keeps a builder the procedures module adds later out of the routers until it is listed:
+
+```ts
+...importPolicyConfig([
+  {
+    files: ['src/server/routers/**'],
+    deny: [
+      {
+        specifiers: ['src/server/procedures'],
+        allowImportNames: ['router', 'protectedProcedure'],
+        allowTypeImports: true,
+        message: 'every handler requires a signed-in caller; build it from protectedProcedure',
+      },
+      { specifiers: ['@scope/rpc-server'], allowTypeImports: true, message: 'procedures are built in src/server/procedures, not in a router' },
+    ],
+    exceptEdges: [{ file: 'src/server/routers/health.ts', specifier: '../procedures', reason: 'the health check answers before sign-in' }],
+  },
+]),
+```
+
+`import { publicProcedure } from '../procedures'` is reported, and so is `import * as procedures from '../procedures'`, since a namespace takes every name. The second entry stops a router building its own procedure from the RPC library. The exception lets `health.ts`, and no other router, import any name from the procedures module; the RPC server package stays banned there too, since the exception names only the `../procedures` specifier.
+
+#### Model constructors in one module
+
+The models are constructed in one module, which pins their settings, while the SDK's other exports (error classes, types) stay importable wherever the SDK is:
+
+```ts
+...importPolicyConfig([
+  {
+    files: ['src/**'],
+    ignores: ['src/adapters/model/models.ts'],
+    deny: [{ specifiers: ['@vendor/model-sdk'], importNames: ['ChatModel', 'EmbeddingModel'], message: 'models are constructed once, in src/adapters/model/models.ts' }],
+  },
+]),
+```
+
+A renamed import (`EmbeddingModel as Embedder`) is matched by the name it imports, and a namespace import is reported because it reaches the constructors. Combined with the vendor SDK recipe above, which confines the SDK to `src/adapters/model/**`, the two narrow the constructors to the one file.
+
+#### Syntax bans scoped to a set of files
+
+Some conventions are about what a file does rather than what it imports. A scoped [`no-restricted-syntax`](https://eslint.org/docs/latest/rules/no-restricted-syntax) ([latest archived copy](https://web.archive.org/web/https://eslint.org/docs/latest/rules/no-restricted-syntax)) block states those, with an [esquery selector](https://eslint.org/docs/latest/extend/selectors) ([latest archived copy](https://web.archive.org/web/https://eslint.org/docs/latest/extend/selectors)) per entry. Provider keys are not read in browser files, roles are not compared inline in handlers, and telemetry content recording is switched on or off only in its settings module:
+
+```ts
+const telemetryContentFlags = [
+  {
+    selector: 'ObjectExpression > Property:matches([key.name=/^record(Inputs|Outputs)$/], [key.value=/^record(Inputs|Outputs)$/])',
+    message: 'telemetry content recording is set in src/telemetry/settings.ts only',
+  },
+];
+const providerKeyReads = [
+  {
+    selector: "MemberExpression[object.object.name='process'][object.property.name='env']:matches([property.name=/_(API_KEY|SECRET|TOKEN)$/], [property.value=/_(API_KEY|SECRET|TOKEN)$/])",
+    message: 'browser code is shipped to the user, so provider keys are read on the server only',
+  },
+  {
+    selector: "VariableDeclarator[init.object.name='process'][init.property.name='env'] > ObjectPattern > Property:matches([key.name=/_(API_KEY|SECRET|TOKEN)$/], [key.value=/_(API_KEY|SECRET|TOKEN)$/])",
+    message: 'browser code is shipped to the user, so provider keys are read on the server only',
+  },
+];
+const inlineRoleChecks = [
+  { selector: "BinaryExpression[operator=/^[!=]==?$/] > MemberExpression[property.name='role']", message: 'check permissions through the can() policy helper, not by comparing roles in a handler' },
+  { selector: "SwitchStatement > MemberExpression.discriminant[property.name='role']", message: 'check permissions through the can() policy helper, not by comparing roles in a handler' },
+  { selector: "CallExpression[callee.property.name='includes'] > MemberExpression.arguments[property.name='role']", message: 'check permissions through the can() policy helper, not by comparing roles in a handler' },
+];
+
+export default defineConfig(
+  ...exadevConfig(),
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/telemetry/settings.ts'],
+    rules: { 'no-restricted-syntax': ['error', ...telemetryContentFlags] },
+  },
+  {
+    files: ['src/client/**/*.{ts,tsx}'],
+    rules: { 'no-restricted-syntax': ['error', ...telemetryContentFlags, ...providerKeyReads] },
+  },
+  {
+    files: ['src/server/routers/**/*.ts'],
+    rules: { 'no-restricted-syntax': ['error', ...telemetryContentFlags, ...inlineRoleChecks] },
+  },
+);
+```
+
+**The flat-config trap.** When two blocks set the same rule for the same file, the later block's options replace the earlier block's; they are not merged. A router file is selected by both the `src/**` block and the routers block, so if the routers block listed only `inlineRoleChecks`, the telemetry ban would silently stop applying to every router. Hence each block restates the entries of every broader block that also selects its files, built from shared constants so the lists cannot drift. `exadevConfig()` sets no `no-restricted-syntax` list of its own, so the only lists to restate are the repository's own; a repository that already has one for these files adds it to every block in the same way. Import bans do not have this problem, which is why they belong in `importPolicyConfig` rather than in `no-restricted-syntax` or `no-restricted-imports` blocks.
+
+How the selectors read, confirmed by the tests:
+
+- The key reads match `process.env.MODEL_API_KEY`, `process.env['WEBHOOK_SECRET']` (`property.value` is the string key, `property.name` the identifier) and `const { SEARCH_TOKEN } = process.env`. A name built at runtime (`process.env[name]`), an alias of `process.env`, or a framework's own environment object is not matched, so pair the ban with keeping the module that reads secrets out of browser code, as an import policy deny.
+- The role checks match `ctx.user.role === 'admin'` with the property on either side, `switch (user.role)` and `roles.includes(user.role)`. A role read into a local first (`const { role } = user`) is not matched; the selector judges the syntax of one expression.
+- The telemetry flag matches a `recordInputs` or `recordOutputs` key in an object literal, quoted or not, whatever its value, so setting it to `false` elsewhere is reported too: where it is set is the convention. `ObjectExpression >` keeps destructuring (`const { recordInputs } = options`) out of it.
+
+#### Conventions that are not per-file lint rules
+
+A lint rule sees one file. A convention whose correctness depends on another file's contents cannot be stated as one, and a recipe that approximated it would pass code that breaks the convention. These go elsewhere:
+
+| Convention | Why one file is not enough | Where it goes |
+| --- | --- | --- |
+| Types derived from a schema, never hand-written beside it | Whether a type duplicates a schema depends on the schema, declared in another file or package. | [`workspace-conformance`](https://github.com/ExaDev/workspace-conformance): its `command-types` check requires every exported command type to be inferred from a Standard Schema; other kinds of type need the same type-graph check over their files. |
+| Codec pairs | An encoder and its decoder live in different files, and they agree only if one undoes the other. | That every encoder has a decoder is a type-graph check for `workspace-conformance`, in the shape of its `aggregate-mappers` check; that they round-trip is a property test. |
+| Row types derived from the table schema | The row type is right only if it is inferred from the table definition in another file. | A type-graph check in `workspace-conformance`. `command-types` recognises Standard Schema inference, which a table builder's own inference is not. |
+| Error-channel schemas | Whether every error a contract can raise has a schema needs the contract's error union and the schema module together. | A type-graph check in `workspace-conformance`. |
+| Pagination slicing | A page is correct only if the slice a repository returns agrees with the cursor and limit the contract declares, and `.slice()` on an array is ordinary code everywhere else. | Catalogue-only: a conformance suite that every repository implementation runs, which [`required-imports`](#required-imports) can require each adapter's tests to wire in. |
+
 ## Pure modules
 
 A functional core should not touch I/O, read the clock, roll dice or wait on anything. `pureModulesConfig` (or `exadevConfig({ pureModules })`) wires `exadev/pure-module` onto the files that must stay pure:
