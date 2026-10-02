@@ -41,6 +41,11 @@ export interface ImportExceptEdge {
 }
 
 /**
+ * What a policy does with a dynamic `import()` or a `require()` whose specifier is not a static string (a variable, a concatenation, or a template with a substitution), which no restriction can match: `ignore` it (the default), or `report` it, so the files the policy selects can only pull modules in by a specifier it can check.
+ */
+export type ComputedSpecifierHandling = 'ignore' | 'report';
+
+/**
  * Import restrictions for the files `files` selects and `ignores` does not. At least one of `deny` and `confine` is required.
  */
 export interface ImportPolicy {
@@ -49,7 +54,10 @@ export interface ImportPolicy {
   readonly deny?: readonly ImportDeny[];
   readonly confine?: readonly ImportConfine[];
   readonly exceptEdges?: readonly ImportExceptEdge[];
+  readonly computedSpecifiers?: ComputedSpecifierHandling;
 }
+
+const COMPUTED_SPECIFIER_HANDLINGS: readonly ComputedSpecifierHandling[] = ['ignore', 'report'];
 
 const GLOB_CHARACTERS = /[*?[\]{}]/u;
 
@@ -92,6 +100,7 @@ export const importPoliciesSchema: JSONSchema4 = {
           additionalProperties: false,
         },
       },
+      computedSpecifiers: { type: 'string', enum: [...COMPUTED_SPECIFIER_HANDLINGS] },
     },
     required: ['files'],
     additionalProperties: false,
@@ -110,6 +119,17 @@ function readBoolean(entry: Readonly<Record<string, unknown>>, field: string, na
   if (value !== undefined && typeof value !== 'boolean') throw new Error(`@exadev/eslint-config: "${name}" needs "${field}" to be a boolean.`);
 
   return value;
+}
+
+function isComputedSpecifierHandling(value: unknown): value is ComputedSpecifierHandling {
+  return COMPUTED_SPECIFIER_HANDLINGS.some((handling) => handling === value);
+}
+
+function readComputedSpecifiers(entry: Readonly<Record<string, unknown>>, name: string): ComputedSpecifierHandling | undefined {
+  const value = entry['computedSpecifiers'];
+  if (value === undefined || isComputedSpecifierHandling(value)) return value;
+
+  throw new Error(`@exadev/eslint-config: "${name}" needs "computedSpecifiers" to be one of ${COMPUTED_SPECIFIER_HANDLINGS.map((handling) => `"${handling}"`).join(', ')}.`);
 }
 
 function readDeny(entry: Readonly<Record<string, unknown>>, name: string): ImportDeny {
@@ -167,22 +187,23 @@ function assertEdgeIsLive(edge: ImportExceptEdge, policy: Pick<ImportPolicy, 'fi
 }
 
 /**
- * Validates and normalises an import-policy option value at runtime, for the rule and for `importPolicyConfig` alike. Beyond the schema it requires: at least one include glob in `files`; at least one of `deny` and `confine` per policy; no unknown key; and that every exception edge names a file the policy selects and a specifier one of its restrictions forbids in that file (a confine entry forbids nothing in the files of its `onlyIn`). The edge's `file` is stored in its normalised, forward-slash form. Throws naming the offending field.
+ * Validates and normalises an import-policy option value at runtime, for the rule and for `importPolicyConfig` alike. Beyond the schema it requires: `computedSpecifiers`, when given, to be `ignore` or `report`; at least one include glob in `files`; at least one of `deny` and `confine` per policy; no unknown key; and that every exception edge names a file the policy selects and a specifier one of its restrictions forbids in that file (a confine entry forbids nothing in the files of its `onlyIn`). The edge's `file` is stored in its normalised, forward-slash form. Throws naming the offending field.
  */
 export function readImportPolicies(value: unknown): readonly ImportPolicy[] {
   return readEntryRecords(value, OPTION_NAME).map((entry) => {
-    assertOnlyKeys(entry, ['files', 'ignores', 'deny', 'confine', 'exceptEdges'], OPTION_NAME);
+    assertOnlyKeys(entry, ['files', 'ignores', 'deny', 'confine', 'exceptEdges', 'computedSpecifiers'], OPTION_NAME);
     const files = readFileGlobs(entry['files'], `${OPTION_NAME}.files`);
     const ignores = entry['ignores'] === undefined ? undefined : readFileGlobs(entry['ignores'], `${OPTION_NAME}.ignores`);
     const deny = readOptionalList(entry, 'deny', OPTION_NAME, readDeny);
     const confine = readOptionalList(entry, 'confine', OPTION_NAME, readConfine);
     const exceptEdges = readOptionalList(entry, 'exceptEdges', OPTION_NAME, readExceptEdge);
+    const computedSpecifiers = readComputedSpecifiers(entry, OPTION_NAME);
     if ((deny === undefined || deny.length === 0) && (confine === undefined || confine.length === 0)) {
       throw new Error(`@exadev/eslint-config: "${OPTION_NAME}" needs every policy to have at least one "deny" or "confine" entry.`);
     }
     const policy = { files, ...(ignores !== undefined && { ignores }), ...(deny !== undefined && { deny }), ...(confine !== undefined && { confine }) };
     for (const edge of exceptEdges ?? []) assertEdgeIsLive(edge, policy);
 
-    return { ...policy, ...(exceptEdges !== undefined && { exceptEdges }) };
+    return { ...policy, ...(exceptEdges !== undefined && { exceptEdges }), ...(computedSpecifiers !== undefined && { computedSpecifiers }) };
   });
 }

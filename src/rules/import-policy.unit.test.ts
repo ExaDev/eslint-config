@@ -2,7 +2,7 @@ import { RuleTester } from '@typescript-eslint/rule-tester';
 import { AST_NODE_TYPES, type TSESTree } from '@typescript-eslint/utils';
 import tseslint from 'typescript-eslint';
 import { describe, expect, it } from 'vitest';
-import rule, { moduleReferenceOf } from './import-policy';
+import rule, { hasComputedSpecifier, moduleReferenceOf } from './import-policy';
 import type { ImportPolicy } from './import-policy-options';
 
 const ruleTester = new RuleTester({
@@ -15,6 +15,10 @@ const NODE_ONLY: readonly [readonly ImportPolicy[]] = [
 ];
 const WORKER_FILE = 'src/worker/main.ts';
 const restricted = (specifier: string, message = WORKER_MESSAGE) => ({ messageId: 'restricted' as const, data: { specifier, message } });
+const REPORT_COMPUTED: readonly [readonly ImportPolicy[]] = [
+  [{ files: ['src/worker/**'], deny: [{ specifiers: ['fs', 'path'], message: WORKER_MESSAGE }], computedSpecifiers: 'report' }],
+];
+const computed = { messageId: 'computed' as const };
 
 function isProgram(node: unknown): node is TSESTree.Program {
   return typeof node === 'object' && node !== null && 'type' in node && node.type === AST_NODE_TYPES.Program;
@@ -34,6 +38,28 @@ function firstNode(code: string): TSESTree.Node {
 
   return statement.type === AST_NODE_TYPES.ExpressionStatement ? statement.expression : statement;
 }
+
+describe('hasComputedSpecifier', () => {
+  const computedAt = (code: string, isRequireGlobal = true) => hasComputedSpecifier(firstNode(code), () => isRequireGlobal);
+
+  it('is true for a dynamic import or a global require whose specifier is not a static string', () => {
+    expect(computedAt('import(name);')).toBe(true);
+    expect(computedAt('import(`./${name}`);')).toBe(true);
+    expect(computedAt("import('./' + name);")).toBe(true);
+    expect(computedAt('require(name);')).toBe(true);
+    expect(computedAt('require(...names);')).toBe(true);
+  });
+
+  it('is false for a static specifier, a call that is not require, and a require that is not the global', () => {
+    expect(computedAt("import('m');")).toBe(false);
+    expect(computedAt('import(`m`);')).toBe(false);
+    expect(computedAt("require('m');")).toBe(false);
+    expect(computedAt('load(name);')).toBe(false);
+    expect(computedAt('require(a, b);')).toBe(false);
+    expect(computedAt('require(name);', false)).toBe(false);
+    expect(computedAt('const x = 1;')).toBe(false);
+  });
+});
 
 describe('import-policy metadata', () => {
   it('names its docs page after the rule file', () => {
@@ -131,6 +157,11 @@ ruleTester.run('import-policy', rule, {
     { code: 'import(name);\nrequire(name);', filename: WORKER_FILE, options: NODE_ONLY },
     { code: "function f(require: (s: string) => void) { require('fs'); }", filename: WORKER_FILE, options: NODE_ONLY },
     { code: "const require = (s: string) => s;\nrequire('fs');", filename: WORKER_FILE, options: NODE_ONLY },
+    // computedSpecifiers: 'ignore' is the default, a static specifier is judged as before, and 'report' applies only to the files its policy selects.
+    { code: 'import(name);', filename: WORKER_FILE, options: [[{ files: ['src/worker/**'], deny: [{ specifiers: ['fs'], message: WORKER_MESSAGE }], computedSpecifiers: 'ignore' }]] },
+    { code: "import('zod');\nrequire('zod');", filename: WORKER_FILE, options: REPORT_COMPUTED },
+    { code: 'import(name);', filename: 'src/server/main.ts', options: REPORT_COMPUTED },
+    { code: 'const require = (s: string) => s;\nrequire(name);', filename: WORKER_FILE, options: REPORT_COMPUTED },
     // confine: allowed inside onlyIn, including type imports when allowed.
     {
       code: "import Anthropic from '@anthropic-ai/sdk';",
@@ -183,6 +214,24 @@ ruleTester.run('import-policy', rule, {
     { code: 'const fs = await import(`fs`);', filename: WORKER_FILE, options: NODE_ONLY, errors: [restricted('fs')] },
     { code: "const fs = require('fs');", filename: WORKER_FILE, options: NODE_ONLY, errors: [restricted('fs')] },
     { code: "type T = import('fs').Stats;", filename: WORKER_FILE, options: NODE_ONLY, errors: [restricted('fs')] },
+    // computedSpecifiers: 'report' reports each specifier no restriction can judge, once even when several policies select the file.
+    {
+      code: 'const a = await import(name);\nconst b = await import(`./${name}`);\nconst c = require(name);',
+      filename: WORKER_FILE,
+      options: REPORT_COMPUTED,
+      errors: [computed, computed, computed].map((error, index) => ({ ...error, line: index + 1 })),
+    },
+    {
+      code: "import(name);\nimport('fs');",
+      filename: WORKER_FILE,
+      options: [
+        [
+          { files: ['src/**'], deny: [{ specifiers: ['path'], message: 'from src' }], computedSpecifiers: 'report' },
+          { files: ['src/worker/**'], deny: [{ specifiers: ['fs'], message: WORKER_MESSAGE }], computedSpecifiers: 'report' },
+        ],
+      ],
+      errors: [{ ...computed, line: 1 }, { ...restricted('fs'), line: 2 }],
+    },
     // Several violations in one file each report, in source order.
     {
       code: "import fs from 'fs';\nimport path from 'path';",

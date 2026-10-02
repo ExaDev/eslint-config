@@ -67,11 +67,28 @@ export function moduleReferenceOf(node: TSESTree.Node, isRequireGlobal: (call: T
   }
   if (node.type === AST_NODE_TYPES.ImportExpression) return wholeModule(node, staticString(node.source), false);
   if (node.type === AST_NODE_TYPES.TSImportType) return wholeModule(node, node.source.value, true);
+  const argument = requireArgument(node, isRequireGlobal);
+
+  return argument === undefined ? undefined : wholeModule(node, staticString(argument), false);
+}
+
+// The single argument of a call to the module-system `require`, or `undefined` when the node is not one.
+function requireArgument(node: TSESTree.Node, isRequireGlobal: (call: TSESTree.CallExpression) => boolean): TSESTree.CallExpressionArgument | undefined {
   if (node.type !== AST_NODE_TYPES.CallExpression) return undefined;
   const [argument] = node.arguments;
   if (node.callee.type !== AST_NODE_TYPES.Identifier || node.callee.name !== 'require' || node.arguments.length !== 1 || argument === undefined || !isRequireGlobal(node)) return undefined;
 
-  return wholeModule(node, staticString(argument), false);
+  return argument;
+}
+
+/**
+ * Whether the node pulls a module in by a specifier that is not a static string, so no specifier pattern can judge it: a dynamic `import()` or a global `require()` whose argument is anything but a string literal or a substitution-free template. The static-specifier forms are `moduleReferenceOf`'s; a node is never both.
+ */
+export function hasComputedSpecifier(node: TSESTree.Node, isRequireGlobal: (call: TSESTree.CallExpression) => boolean): boolean {
+  if (node.type === AST_NODE_TYPES.ImportExpression) return staticString(node.source) === undefined;
+  const argument = requireArgument(node, isRequireGlobal);
+
+  return argument !== undefined && staticString(argument) === undefined;
 }
 
 interface CompiledRestriction {
@@ -86,6 +103,7 @@ interface CompiledPolicy {
   readonly inScope: FileScope;
   readonly restrictions: readonly CompiledRestriction[];
   readonly exceptEdges: readonly { readonly file: string; readonly specifier: string }[];
+  readonly reportsComputed: boolean;
 }
 
 function selectsNames(importNames: readonly string[] | undefined, referenceNames: readonly string[]): boolean {
@@ -116,6 +134,7 @@ function compilePolicy(policy: ImportPolicy): CompiledPolicy {
     inScope: createFileScope([...policy.files, ...(policy.ignores ?? []).map((glob) => `!${glob}`)]),
     restrictions: [...deny, ...confine],
     exceptEdges: policy.exceptEdges ?? [],
+    reportsComputed: policy.computedSpecifiers === 'report',
   };
 }
 
@@ -130,7 +149,7 @@ function isShadowed(sourceCode: Readonly<TSESLint.SourceCode>, call: TSESTree.Ca
 
 const createRule = ESLintUtils.RuleCreator((name) => `https://github.com/ExaDev/eslint-config/blob/main/src/rules/${name}.ts`);
 
-const importPolicy = createRule<[unknown], 'restricted'>({
+const importPolicy = createRule<[unknown], 'restricted' | 'computed'>({
   name: 'import-policy',
   meta: {
     type: 'problem',
@@ -140,6 +159,7 @@ const importPolicy = createRule<[unknown], 'restricted'>({
     schema: [importPoliciesSchema],
     messages: {
       restricted: '"{{ specifier }}" cannot be imported here: {{ message }}',
+      computed: 'This module specifier is computed at runtime, so the import policy for this file cannot check it. Write it as a string literal.',
     },
   },
   defaultOptions: [[]],
@@ -150,9 +170,16 @@ const importPolicy = createRule<[unknown], 'restricted'>({
       .filter((policy) => policy.inScope(filename, cwd));
     if (policies.length === 0) return {};
     const relativePath = relativeToCwd(filename, cwd);
+    const reportsComputed = policies.some((policy) => policy.reportsComputed);
+    const isRequireGlobal = (call: TSESTree.CallExpression): boolean => !isShadowed(sourceCode, call);
 
     const check = (node: TSESTree.Node): void => {
-      const reference = moduleReferenceOf(node, (call) => !isShadowed(sourceCode, call));
+      if (reportsComputed && hasComputedSpecifier(node, isRequireGlobal)) {
+        context.report({ node, messageId: 'computed' });
+
+        return;
+      }
+      const reference = moduleReferenceOf(node, isRequireGlobal);
       if (reference === undefined) return;
       for (const policy of policies) {
         if (policy.exceptEdges.some((edge) => edge.file === relativePath && edge.specifier === reference.specifier)) continue;
