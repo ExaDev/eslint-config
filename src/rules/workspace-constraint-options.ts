@@ -1,4 +1,4 @@
-// The opt-in constraint options of the shared workspace-architecture options object: per-edge exceptions (allow), group-level edge exemptions (exemptTargetGroups), and the three per-package requirement lists (requiredFiles, devOnly, requiredScripts). Each is validated here, at the option boundary, so a malformed entry fails loudly and names the option rather than surfacing later as a confusing crash or a silently ignored requirement. The README's "Workspace architecture" section carries the option-by-option reasoning.
+// The opt-in constraint options of the shared workspace-architecture options object: per-edge exceptions (allow), group-level edge exemptions (exemptTargetGroups), selector-based dependency constraints (dependencyConstraints), and the three per-package requirement lists (requiredFiles, devOnly, requiredScripts). Each is validated here, at the option boundary, so a malformed entry fails loudly and names the option rather than surfacing later as a confusing crash or a silently ignored requirement. The README's "Workspace architecture" section carries the option-by-option reasoning.
 
 import { assertIsError, regExpConstructorContext } from './workspace-errors';
 import { tokenizeCommand } from './command-tokens';
@@ -31,6 +31,17 @@ export interface ExemptTargetGroup {
   readonly group: string;
   readonly fields: readonly string[];
 }
+
+interface DependencyConstraintFields {
+  readonly packages: PackageSelector;
+  readonly reason: string;
+}
+
+/**
+ * Limits which workspace packages the packages `packages` selects may depend on. With `allow`, every workspace dependency must match at least one of its selectors; with `deny`, none may match any of its selectors; with both, a dependency must match an `allow` selector and no `deny` selector. At least one of the two is required, and `reason` must be non-empty, so a constraint always says why it exists.
+ */
+export type DependencyConstraint = DependencyConstraintFields &
+  ({ readonly allow: readonly PackageSelector[]; readonly deny?: readonly PackageSelector[] } | { readonly allow?: never; readonly deny: readonly PackageSelector[] });
 
 export interface RequiredFiles {
   readonly packages: PackageSelector;
@@ -105,6 +116,21 @@ export const workspaceConstraintOptionsSchema = {
       type: 'object',
       properties: { group: { type: 'string' }, fields: nonEmptyStringArray },
       required: ['group', 'fields'],
+      additionalProperties: false,
+    },
+  },
+  dependencyConstraints: {
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: {
+        packages: selectorSchema,
+        allow: { type: 'array', items: selectorSchema, minItems: 1 },
+        deny: { type: 'array', items: selectorSchema, minItems: 1 },
+        reason: { type: 'string', minLength: 1 },
+      },
+      required: ['packages', 'reason'],
+      anyOf: [{ required: ['allow'] }, { required: ['deny'] }],
       additionalProperties: false,
     },
   },
@@ -242,6 +268,31 @@ export function readExemptTargetGroups(value: unknown, context: ConstraintContex
     }
 
     return { group, fields: exemptFields };
+  });
+}
+
+const CONSTRAINT_KEYS = ['packages', 'allow', 'deny', 'reason'] as const;
+const CONSTRAINTS_OPTION = 'dependencyConstraints';
+
+function readSelectorList(value: unknown, what: string, context: ConstraintContext): readonly PackageSelector[] {
+  const selectors = readArray(value, CONSTRAINTS_OPTION);
+  if (selectors.length === 0) fail(CONSTRAINTS_OPTION, `${what} must not be empty.`);
+
+  return selectors.map((selector) => readSelector(selector, CONSTRAINTS_OPTION, context));
+}
+
+export function readDependencyConstraints(value: unknown, context: ConstraintContext): readonly DependencyConstraint[] {
+  return readArray(value, CONSTRAINTS_OPTION).map((entry) => {
+    const fields = readEntry(entry, CONSTRAINTS_OPTION, CONSTRAINT_KEYS);
+    if (fields['packages'] === undefined) fail(CONSTRAINTS_OPTION, 'entries must select their source packages with "packages".');
+    const packages = readSelector(fields['packages'], CONSTRAINTS_OPTION, context);
+    const reason = readNonEmptyString(fields['reason'], CONSTRAINTS_OPTION, '"reason" (a constraint must say why it exists)');
+    const { allow, deny } = fields;
+    const denied = deny === undefined ? undefined : readSelectorList(deny, '"deny"', context);
+    if (allow !== undefined) return { packages, allow: readSelectorList(allow, '"allow"', context), ...(denied !== undefined && { deny: denied }), reason };
+    if (denied === undefined) fail(CONSTRAINTS_OPTION, 'entries must list "allow", "deny", or both.');
+
+    return { packages, deny: denied, reason };
   });
 }
 

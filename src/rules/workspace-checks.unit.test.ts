@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyAllowList, checkDependencies, dependencyPathExists, exemptDependencyNames, expectedPackageName, last, matchesSelector, type WorkspaceViolation } from './workspace-checks';
+import { applyAllowList, checkDependencies, checkDependencyConstraints, dependencyPathExists, exemptDependencyNames, expectedPackageName, last, matchesSelector, type WorkspaceViolation } from './workspace-checks';
 import type { WorkspacePackageInfo } from './workspace-graph';
 import type { GroupSpec } from './workspace-options';
 
@@ -379,6 +379,85 @@ describe('applyAllowList', () => {
       ['gone', 'undeclared'],
       ['c', 'unneeded'],
     ]);
+  });
+});
+
+describe('checkDependencyConstraints', () => {
+  const contract = pkg({ name: 'kv-contract', group: 'core' });
+  const adapter = pkg({ name: 'kv-adapter-db', group: 'core' });
+  const feature = pkg({ name: 'store-feature', group: 'features' });
+  const product = pkg({ name: 'store-product', group: 'product' });
+  const graph = new Map([contract, adapter, feature, product].map((entry) => [entry.name, entry]));
+  const reason = 'documented constraint';
+  const target = { displayName: 'store-cli', group: 'targets', name: 'store-cli' };
+
+  it('reports nothing when no constraints are configured', () => {
+    expect(checkDependencyConstraints(target, ['kv-adapter-db'], { graph, constraints: undefined })).toEqual([]);
+  });
+
+  it('reports every dependency an allow list does not match, and passes the ones it does', () => {
+    const constraints = [{ packages: { group: 'targets' }, allow: [{ group: 'product' }], reason }];
+    expect(checkDependencyConstraints(target, ['store-product', 'kv-contract'], { graph, constraints })).toEqual([
+      { dependencyName: 'kv-contract', messageId: 'constraintNotAllowed', data: { self: 'store-cli', dependency: 'kv-contract', dependencyGroup: 'core', reason } },
+    ]);
+  });
+
+  it('passes a dependency matching any one of several allowed selectors', () => {
+    const constraints = [{ packages: { group: 'targets' }, allow: [{ group: 'product' }, '-contract$'], reason }];
+    expect(checkDependencyConstraints(target, ['store-product', 'kv-contract'], { graph, constraints })).toEqual([]);
+  });
+
+  it('reports a dependency a deny list matches and passes one it does not', () => {
+    const constraints = [{ packages: { group: 'targets' }, deny: [{ group: 'core', namePattern: '-adapter-' }], reason }];
+    expect(checkDependencyConstraints(target, ['kv-contract', 'kv-adapter-db'], { graph, constraints })).toEqual([
+      { dependencyName: 'kv-adapter-db', messageId: 'constraintDenied', data: { self: 'store-cli', dependency: 'kv-adapter-db', dependencyGroup: 'core', reason } },
+    ]);
+  });
+
+  it('with both lists, requires an allowed target that is not denied', () => {
+    const constraints = [{ packages: { group: 'targets' }, allow: [{ group: 'core' }], deny: ['-adapter-'], reason }];
+    const violations = checkDependencyConstraints(target, ['kv-contract', 'kv-adapter-db', 'store-feature'], { graph, constraints });
+    expect(violations.map(({ dependencyName, messageId }) => [dependencyName, messageId])).toEqual([
+      ['kv-adapter-db', 'constraintDenied'],
+      ['store-feature', 'constraintNotAllowed'],
+    ]);
+  });
+
+  it('applies only the constraints whose source selector matches the linted package', () => {
+    const constraints = [
+      { packages: { group: 'features' }, deny: [{ group: 'core' }], reason },
+      { packages: '^other-', deny: [{ group: 'core' }], reason },
+    ];
+    expect(checkDependencyConstraints(target, ['kv-contract'], { graph, constraints })).toEqual([]);
+  });
+
+  it('matches a source name pattern against the declared name, never against a package that declares none', () => {
+    const constraints = [{ packages: '^store-', deny: [{ group: 'core' }], reason }];
+    expect(checkDependencyConstraints(target, ['kv-contract'], { graph, constraints })).toHaveLength(1);
+    expect(checkDependencyConstraints({ displayName: 'targets/x', group: 'targets', name: undefined }, ['kv-contract'], { graph, constraints })).toEqual([]);
+    expect(
+      checkDependencyConstraints({ displayName: 'targets/x', group: 'targets', name: undefined }, ['kv-contract'], { graph, constraints: [{ packages: { group: 'targets' }, deny: [{ group: 'core' }], reason }] }),
+    ).toHaveLength(1);
+  });
+
+  it('reports one violation per constraint that rules a dependency out, each with its own reason', () => {
+    const constraints = [
+      { packages: { group: 'targets' }, allow: [{ group: 'product' }], reason: 'first' },
+      { packages: '^store-', deny: ['-adapter-'], reason: 'second' },
+    ];
+    expect(checkDependencyConstraints(target, ['kv-adapter-db'], { graph, constraints }).map((violation) => violation.data['reason'])).toEqual(['first', 'second']);
+  });
+
+  it('skips a non-workspace dependency and an exempt target', () => {
+    const constraints = [{ packages: { group: 'targets' }, allow: [{ group: 'product' }], reason }];
+    expect(checkDependencyConstraints(target, ['zod'], { graph, constraints })).toEqual([]);
+    expect(checkDependencyConstraints(target, ['kv-contract'], { graph, constraints, exemptTargets: new Set(['kv-contract']) })).toEqual([]);
+    expect(checkDependencyConstraints(target, ['kv-contract'], { graph, constraints, exemptTargets: new Set(['other']) })).toHaveLength(1);
+  });
+
+  it('matches a target selector against the dependency name and its group', () => {
+    const constraints = [{ packages: { group: 'targets' }, deny: [{ group: 'features', namePattern: '^store-' }], reason }];
+    expect(checkDependencyConstraints(target, ['store-feature', 'store-product'], { graph, constraints }).map((violation) => violation.dependencyName)).toEqual(['store-feature']);
   });
 });
 

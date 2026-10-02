@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   readAllow,
+  readDependencyConstraints,
   readDevOnly,
   readExemptTargetGroups,
   readRequiredFiles,
@@ -147,6 +148,69 @@ describe('selectors, through readDevOnly', () => {
   });
 });
 
+describe('readDependencyConstraints', () => {
+  const reason = 'targets ship product code only';
+
+  it('returns allow-only, deny-only and combined entries with their selectors validated', () => {
+    const value = [
+      { packages: { group: 'core' }, allow: [{ group: 'core' }, '-contract$'], reason },
+      { packages: '^runtime-', deny: [{ group: 'test', namePattern: '-adapter-' }], reason },
+      { packages: { namePattern: 'x' }, allow: [{ group: 'core' }], deny: ['-adapter-'], reason },
+    ];
+    expect(readDependencyConstraints(value, CONTEXT)).toEqual(value);
+  });
+
+  it('keeps an absent allow or deny absent', () => {
+    const [allowOnly, denyOnly] = readDependencyConstraints(
+      [
+        { packages: 'x', allow: ['a'], reason },
+        { packages: 'x', deny: ['a'], reason },
+      ],
+      CONTEXT,
+    );
+    expect(allowOnly).not.toHaveProperty('deny');
+    expect(denyOnly).not.toHaveProperty('allow');
+  });
+
+  it('accepts an empty list of constraints', () => {
+    expect(readDependencyConstraints([], CONTEXT)).toEqual([]);
+  });
+
+  it('rejects a non-array, a malformed entry and an unknown key', () => {
+    expect(() => readDependencyConstraints({}, CONTEXT)).toThrow('@exadev/eslint-config: "dependencyConstraints" must be an array.');
+    expect(() => readDependencyConstraints(['x'], CONTEXT)).toThrow('"dependencyConstraints" entries must be objects with only the keys "packages", "allow", "deny", "reason".');
+    expect(() => readDependencyConstraints([{ packages: 'x', deny: ['a'], reason, to: 'y' }], CONTEXT)).toThrow('"dependencyConstraints" entries must be objects');
+  });
+
+  it('rejects an entry without packages, naming the missing key', () => {
+    expect(() => readDependencyConstraints([{ deny: ['a'], reason }], CONTEXT)).toThrow('@exadev/eslint-config: "dependencyConstraints" entries must select their source packages with "packages".');
+  });
+
+  it('rejects an entry with neither allow nor deny', () => {
+    expect(() => readDependencyConstraints([{ packages: 'x', reason }], CONTEXT)).toThrow('@exadev/eslint-config: "dependencyConstraints" entries must list "allow", "deny", or both.');
+  });
+
+  it('rejects an empty or missing reason, naming why one is needed', () => {
+    expect(() => readDependencyConstraints([{ packages: 'x', deny: ['a'], reason: '' }], CONTEXT)).toThrow('@exadev/eslint-config: "dependencyConstraints" "reason" (a constraint must say why it exists) must be a non-empty string.');
+    expect(() => readDependencyConstraints([{ packages: 'x', deny: ['a'] }], CONTEXT)).toThrow('"reason" (a constraint must say why it exists)');
+  });
+
+  it('rejects an empty or non-array allow or deny list', () => {
+    expect(() => readDependencyConstraints([{ packages: 'x', allow: [], reason }], CONTEXT)).toThrow('@exadev/eslint-config: "dependencyConstraints" "allow" must not be empty.');
+    expect(() => readDependencyConstraints([{ packages: 'x', deny: [], reason }], CONTEXT)).toThrow('@exadev/eslint-config: "dependencyConstraints" "deny" must not be empty.');
+    expect(() => readDependencyConstraints([{ packages: 'x', allow: ['a'], deny: [], reason }], CONTEXT)).toThrow('"deny" must not be empty.');
+    expect(() => readDependencyConstraints([{ packages: 'x', allow: 'a', reason }], CONTEXT)).toThrow('"dependencyConstraints" must be an array.');
+  });
+
+  it('validates the source selector and every target selector, naming the option', () => {
+    expect(() => readDependencyConstraints([{ packages: { group: 'nope' }, deny: ['a'], reason }], CONTEXT)).toThrow('"dependencyConstraints" selector names a group not declared in "groups" ("nope").');
+    expect(() => readDependencyConstraints([{ packages: 'x', allow: [{ group: 'nope' }], reason }], CONTEXT)).toThrow('selector names a group not declared in "groups" ("nope").');
+    expect(() => readDependencyConstraints([{ packages: 'x', deny: [{ group: 'core' }, '('], reason }], CONTEXT)).toThrow(/^@exadev\/eslint-config: "dependencyConstraints" pattern "\(" is not a valid regular expression: /u);
+    expect(() => readDependencyConstraints([{ packages: '(', deny: ['a'], reason }], CONTEXT)).toThrow('"dependencyConstraints" pattern "(" is not a valid regular expression');
+    expect(() => readDependencyConstraints([{ packages: 'x', allow: [{}], reason }], CONTEXT)).toThrow('"dependencyConstraints" selectors must name a "group", a "namePattern", or both.');
+  });
+});
+
 describe('readRequiredFiles', () => {
   it('returns valid entries with selectors validated', () => {
     expect(readRequiredFiles([{ packages: '-contract$', files: ['src/errors.ts', 'src/**/*.conformance.ts'] }], CONTEXT)).toEqual([
@@ -235,7 +299,17 @@ describe('readRequiredScripts', () => {
 });
 
 describe('workspaceConstraintOptionsSchema', () => {
-  it('declares exactly the five constraint options', () => {
-    expect(Object.keys(workspaceConstraintOptionsSchema).sort()).toEqual(['allow', 'devOnly', 'exemptTargetGroups', 'requiredFiles', 'requiredScripts']);
+  it('declares exactly the six constraint options', () => {
+    expect(Object.keys(workspaceConstraintOptionsSchema).sort()).toEqual(['allow', 'dependencyConstraints', 'devOnly', 'exemptTargetGroups', 'requiredFiles', 'requiredScripts']);
+  });
+
+  it('requires a dependency constraint to carry packages, a reason and at least one of allow or deny', () => {
+    const { items } = workspaceConstraintOptionsSchema.dependencyConstraints;
+    expect(items.required).toEqual(['packages', 'reason']);
+    expect(items.anyOf).toEqual([{ required: ['allow'] }, { required: ['deny'] }]);
+    expect(items.additionalProperties).toBe(false);
+    expect(items.properties.reason).toEqual({ type: 'string', minLength: 1 });
+    expect(items.properties.allow.minItems).toBe(1);
+    expect(items.properties.deny.minItems).toBe(1);
   });
 });

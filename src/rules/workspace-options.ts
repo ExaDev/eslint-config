@@ -5,12 +5,14 @@ import { isRecord } from '../is-record';
 import { hasOnlyKeys } from './option-keys';
 import {
   readAllow,
+  readDependencyConstraints,
   readDevOnly,
   readExemptTargetGroups,
   readRequiredFiles,
   readRequiredScripts,
   workspaceConstraintOptionsSchema,
   type AllowedEdge,
+  type DependencyConstraint,
   type ExemptTargetGroup,
   type PackageSelector,
   type RequiredFiles,
@@ -84,6 +86,8 @@ export interface WorkspaceArchitectureOptions {
   readonly allow?: readonly AllowedEdge[];
   // Groups whose incoming edges are exempt from no-uphill-dependency's checks when declared under the listed dependency fields (a shared test-database package consumed as a devDependency by every layer, say).
   readonly exemptTargetGroups?: readonly ExemptTargetGroup[];
+  // Selector-based limits on which workspace packages a selected source package may depend on, checked by no-uphill-dependency beside the rank, slice and isolation checks and excused per edge by `allow` like them.
+  readonly dependencyConstraints?: readonly DependencyConstraint[];
   // Enables package-has-files: files that must exist in every package the selector matches.
   readonly requiredFiles?: readonly RequiredFiles[];
   // Enables dev-dependency-only: packages that may appear only under devDependencies of other workspace packages.
@@ -164,7 +168,7 @@ function fail(): never {
 }
 
 // Every key this reader recognises at each level it validates, checked against the object's own actual keys so an unknown or misspelled one (a typo'd "rankskip" alongside, or instead of, the real "rankSkip") fails loudly here rather than being silently dropped by the whitelisted reconstruction below and never reaching ESLint's own schema at all (workspaceArchitectureConfig builds its rule options by calling this reader on the caller's raw object BEFORE that validation ever sees it; see readWorkspaceArchitectureOptions' own doc comment).
-const TOP_LEVEL_KEYS = ['root', 'packages', 'dependencyFields', 'groups', 'nameRanks', 'defaultRank', 'rankSkip', 'isolatedGroups', 'naming', 'allow', 'exemptTargetGroups', 'requiredFiles', 'devOnly', 'requiredScripts'] as const;
+const TOP_LEVEL_KEYS = ['root', 'packages', 'dependencyFields', 'groups', 'nameRanks', 'defaultRank', 'rankSkip', 'isolatedGroups', 'naming', 'allow', 'exemptTargetGroups', 'dependencyConstraints', 'requiredFiles', 'devOnly', 'requiredScripts'] as const;
 const GROUP_KEYS = ['name', 'path', 'rank', 'slice', 'naming'] as const;
 const RANK_RULE_KEYS = ['pattern', 'rank'] as const;
 const RANK_SKIP_KEYS = ['maxDistance', 'exemptRanks'] as const;
@@ -345,7 +349,7 @@ export function readWorkspaceArchitectureOptions(options: unknown): WorkspaceArc
   const isolatedGroups = asOptionalIsolatedGroups(options['isolatedGroups']);
   const naming = asOptionalNaming(options['naming']);
   const constraintContext = { groupNames: new Set(groups.map((group) => group.name)), dependencyFields: dependencyFields ?? DEFAULT_DEPENDENCY_FIELDS };
-  const { allow, exemptTargetGroups, requiredFiles, devOnly, requiredScripts } = options;
+  const { allow, exemptTargetGroups, dependencyConstraints, requiredFiles, devOnly, requiredScripts } = options;
 
   if (isolatedGroups !== undefined) {
     const groupNames = new Set(groups.map((group) => group.name));
@@ -374,6 +378,7 @@ export function readWorkspaceArchitectureOptions(options: unknown): WorkspaceArc
     ...(naming !== undefined && { naming }),
     ...(allow !== undefined && { allow: readAllow(allow) }),
     ...(exemptTargetGroups !== undefined && { exemptTargetGroups: readExemptTargetGroups(exemptTargetGroups, constraintContext) }),
+    ...(dependencyConstraints !== undefined && { dependencyConstraints: readDependencyConstraints(dependencyConstraints, constraintContext) }),
     ...(requiredFiles !== undefined && { requiredFiles: readRequiredFiles(requiredFiles, constraintContext) }),
     ...(devOnly !== undefined && { devOnly: readDevOnly(devOnly, constraintContext) }),
     ...(requiredScripts !== undefined && { requiredScripts: readRequiredScripts(requiredScripts, constraintContext) }),

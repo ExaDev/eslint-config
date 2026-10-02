@@ -2,7 +2,7 @@ import type { JSONRuleDefinition, JSONRuleVisitor } from '@eslint/json';
 import type { ObjectNode } from '@humanwhocodes/momoa';
 import { findLintedPackage, loadWorkspaceGraph, manifestRelativeDir, type WorkspaceRuleDeps } from './workspace-graph';
 import { readWorkspaceArchitectureOptions, resolveDependencyFields, workspaceArchitectureOptionsSchema, type WorkspaceArchitectureOptions } from './workspace-options';
-import { applyAllowList, checkDependencies, exemptDependencyNames, type StaleAllowedEdge } from './workspace-checks';
+import { applyAllowList, checkDependencies, checkDependencyConstraints, exemptDependencyNames, type StaleAllowedEdge } from './workspace-checks';
 import { collectTopLevelDependencies, readDeclaredName, type NamedDependency } from './workspace-json-helpers';
 import { realWorkspaceFs } from './workspace-fs';
 
@@ -18,7 +18,7 @@ export function findDependencyEntry(dependencies: readonly NamedDependency[], na
   return entry;
 }
 
-export type NoUphillDependencyMessageIds = 'uphillRank' | 'rankSkip' | 'crossSlice' | 'isolatedGroup' | 'allowUndeclared' | 'allowUnneeded' | 'allowSourceGone';
+export type NoUphillDependencyMessageIds = 'uphillRank' | 'rankSkip' | 'crossSlice' | 'isolatedGroup' | 'constraintNotAllowed' | 'constraintDenied' | 'allowUndeclared' | 'allowUnneeded' | 'allowSourceGone';
 
 export type NoUphillDependencyRuleDefinition = JSONRuleDefinition<{
   RuleOptions: [WorkspaceArchitectureOptions];
@@ -40,7 +40,7 @@ export function createNoUphillDependencyRule(deps: WorkspaceRuleDeps = {}): NoUp
       schema: [workspaceArchitectureOptionsSchema],
       docs: {
         recommended: false,
-        description: 'Disallow a workspace package depending on another package ranked strictly above it, on a non-exempt-rank package more than the configured distance below it, on a package in a different slice of the same or another group, or on a package in a group this workspace declares isolated from its own.',
+        description: 'Disallow a workspace package depending on another package ranked strictly above it, on a non-exempt-rank package more than the configured distance below it, on a package in a different slice of the same or another group, on a package in a group this workspace declares isolated from its own, or on a package a configured dependency constraint rules out.',
         url: 'https://github.com/ExaDev/eslint-config/blob/main/src/rules/no-uphill-dependency.ts',
       },
       messages: {
@@ -52,6 +52,9 @@ export function createNoUphillDependencyRule(deps: WorkspaceRuleDeps = {}): NoUp
           'Illegal dependency: "{{self}}" (slice "{{selfSlice}}") depends on "{{dependency}}" (slice "{{dependencySlice}}"). A package may depend on another in the same slice, but not a different one.',
         isolatedGroup:
           'Illegal dependency: "{{self}}" (group "{{selfGroup}}") depends on "{{dependency}}" (group "{{dependencyGroup}}"), and this workspace declares these two groups isolated from each other.',
+        constraintNotAllowed:
+          'Illegal dependency: "{{self}}" depends on "{{dependency}}" (group "{{dependencyGroup}}"), which matches none of the targets a dependency constraint allows it ({{reason}}).',
+        constraintDenied: 'Illegal dependency: "{{self}}" depends on "{{dependency}}" (group "{{dependencyGroup}}"), which a dependency constraint denies it ({{reason}}).',
         allowUndeclared:
           'Stale "allow" entry: "{{from}}" no longer declares a dependency on "{{to}}" ({{reason}}). Remove the entry.',
         allowUnneeded:
@@ -85,19 +88,26 @@ export function createNoUphillDependencyRule(deps: WorkspaceRuleDeps = {}): NoUp
           const dependencies = collectTopLevelDependencies(node, resolveDependencyFields(options));
           // De-duplicated by name: checkDependencies works from names alone, and a name declared under more than one configured dependencyField (dependencies and devDependencies, say) would otherwise be checked, and reported, once per field. findDependencyEntry below always resolves the FIRST such entry, so without de-duplication here two identical violations would both land on that same first location, a duplicate diagnostic rather than two genuinely distinct ones.
           const dependencyNames = [...new Set(dependencies.map((dependency) => dependency.name))];
+          const exemptTargets = exemptDependencyNames(dependencies, graph.packagesByName, options.exemptTargetGroups);
           const found = checkDependencies(
             self.name,
             self,
             dependencyNames,
             {
               graph: graph.packagesByName,
-              exemptTargets: exemptDependencyNames(dependencies, graph.packagesByName, options.exemptTargetGroups),
+              exemptTargets,
               ...(options.rankSkip !== undefined && { rankSkip: options.rankSkip }),
               ...(options.isolatedGroups !== undefined && { isolatedGroups: options.isolatedGroups }),
             },
           );
-          // The allow list suppresses direction and isolation violations only; no-dependency-cycle never reads it, so an allowed edge can still be reported there.
-          const { violations, stale } = applyAllowList(self.name, { violations: found, dependencyNames }, options.allow ?? []);
+          // Constraints select the linted package by its declared name, so a package that declares none is matched by group only, as every other selector option matches it.
+          const constrained = checkDependencyConstraints({ displayName: self.name, group: self.group, name: declared?.name }, dependencyNames, {
+            graph: graph.packagesByName,
+            constraints: options.dependencyConstraints,
+            exemptTargets,
+          });
+          // The allow list suppresses this rule's violations only, constraint violations included, and an entry that suppresses only a constraint violation is not stale; no-dependency-cycle never reads it, so an allowed edge can still be reported there.
+          const { violations, stale } = applyAllowList(self.name, { violations: [...found, ...constrained], dependencyNames }, options.allow ?? []);
 
           for (const violation of violations) {
             const entry = findDependencyEntry(dependencies, violation.dependencyName);

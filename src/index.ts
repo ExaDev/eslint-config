@@ -22,6 +22,7 @@ export type { RequiredImportsEntry } from './rules/required-imports';
 export type { GroupSpec, NamingOptions, RankRule, RankSkipOptions, SliceSpec, WorkspaceArchitectureOptions } from './rules/workspace-options';
 export type {
   AllowedEdge,
+  DependencyConstraint,
   ExemptTargetGroup,
   PackageSelector,
   PackageSelectorFields,
