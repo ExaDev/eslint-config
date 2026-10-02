@@ -74,6 +74,11 @@ function describeFile(requirement: FileRequirement): string {
   return typeof requirement === 'string' ? requirement : `one of ${expandBraces(requirement.glob).join(', ')} (or a ${requirement.orFields.map((path) => `"${describeFieldPath(path)}"`).join(' or ')} property)`;
 }
 
+// Two requirements naming the same path or the same glob and property are one requirement, whichever object literal they came from.
+function fileKey(requirement: FileRequirement): string {
+  return typeof requirement === 'string' ? requirement : JSON.stringify([requirement.glob, requirement.orFields.map(fieldPathKey)]);
+}
+
 function fileIsMissing(requirement: FileRequirement, fs: WorkspaceFs, packageDir: string, facts: ManifestFacts): boolean {
   if (typeof requirement === 'string') return !anyPathMatchesGlob(fs, packageDir, requirement);
 
@@ -84,7 +89,9 @@ function fileIsMissing(requirement: FileRequirement, fs: WorkspaceFs, packageDir
  * The required paths the package directory `packageDir` lacks, across the given requirements, in declaration order without repeats. An entry that also accepts a manifest field counts as present when that field is set.
  */
 export function missingFiles(requirements: readonly PackageRequirement[], fs: WorkspaceFs, packageDir: string, facts: ManifestFacts): readonly string[] {
-  return unique(requirements.flatMap((requirement) => requirement.files ?? []))
+  const files = new Map(requirements.flatMap((requirement) => requirement.files ?? []).map((requirement) => [fileKey(requirement), requirement]));
+
+  return [...files.values()]
     .filter((requirement) => fileIsMissing(requirement, fs, packageDir, facts))
     .map(describeFile);
 }
