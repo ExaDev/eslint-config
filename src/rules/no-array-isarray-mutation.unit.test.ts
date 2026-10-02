@@ -32,12 +32,12 @@ ruleTester.run('no-array-isarray-mutation', rule, {
     // Narrowed via Array.isArray but only read, never mutated — pop/slice/map are not in the mutating-insertion set.
     'function f(input: readonly number[] | number): void { if (Array.isArray(input)) { input.pop(); input.slice(0, 1); input.map((x) => x); } }',
     'function f(input: ReadonlyArray<number> | number): void { if (Array.isArray(input)) { input.slice(0, 1); } }',
-    // Mutated, but with no Array.isArray guard anywhere in scope — out of scope for THIS rule specifically. This snippet would not actually type-check under tsc (input.push is not callable on an un-narrowed
-    // `readonly number[] | number` union), but detection here is guard-gated regardless of whether the call site
-    // itself compiles. no-mutable-union-array-param.ts does not cover this shape either: its own isUnionArrayType
-    // helper only matches a union at the ARRAY ELEMENT type (`(string | number)[]` / `Array<string | number>`),
-    // never a union at the parameter's own top level (`readonly number[] | number`) — so an un-narrowed mutation
-    // on this parameter shape is a genuine, unaddressed gap between the two rules, not double-covered.
+    /* Mutated, but with no Array.isArray guard anywhere in scope — out of scope for THIS rule specifically. This snippet would not actually type-check under tsc (input.push is not callable on an un-narrowed
+       `readonly number[] | number` union), but detection here is guard-gated regardless of whether the call site
+       itself compiles. no-mutable-union-array-param.ts does not cover this shape either: its own isUnionArrayType
+       helper only matches a union at the ARRAY ELEMENT type (`(string | number)[]` / `Array<string | number>`),
+       never a union at the parameter's own top level (`readonly number[] | number`) — so an un-narrowed mutation
+       on this parameter shape is a genuine, unaddressed gap between the two rules, not double-covered. */
     'function f(input: readonly number[] | number): void { input.push(1); }',
     // Guarded, but the mutating call targets a differently-named variable, not the narrowed parameter itself.
     'function f(input: readonly number[] | number): void { if (Array.isArray(input)) { const other: number[] = []; other.push(1); } }',

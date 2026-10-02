@@ -31,9 +31,9 @@ ruleTester.run('no-set-instanceof-mutation', rule, {
     'function f(input: Set<number>): void { if (input instanceof Set) { input.add(1); } }',
     // Narrowed via instanceof Set but only read, never mutated — has/forEach/values are not in the mutating set.
     'function f(input: ReadonlySet<number> | number): void { if (input instanceof Set) { input.has(1); input.forEach((x) => x); input.values(); } }',
-    // Mutated, but with no instanceof Set guard anywhere in scope — out of scope for THIS rule specifically. This snippet would not actually type-check under tsc (input.add is not callable on an un-narrowed
-    // `ReadonlySet<number> | number` union), but detection here is guard-gated regardless of whether the call site
-    // itself compiles.
+    /* Mutated, but with no instanceof Set guard anywhere in scope — out of scope for THIS rule specifically. This snippet would not actually type-check under tsc (input.add is not callable on an un-narrowed
+       `ReadonlySet<number> | number` union), but detection here is guard-gated regardless of whether the call site
+       itself compiles. */
     'function f(input: ReadonlySet<number> | number): void { input.add(1); }',
     // Guarded, but the mutating call targets a differently-named variable, not the narrowed parameter itself.
     'function f(input: ReadonlySet<number> | number): void { if (input instanceof Set) { const other: Set<number> = new Set(); other.add(1); } }',

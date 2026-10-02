@@ -291,8 +291,8 @@ ruleTester.run('no-uphill-dependency allow list and group exemptions', rule, {
       filename: selfFilename('checkout-vertical'),
       options: [{ groups: ALLOW_GROUPS, isolatedGroups: [['features', 'verticals']], allow: [{ from: 'checkout-vertical', to: 'store-api-router', reason: REASON }] }],
     },
-    // Only the named target is excused: a second, unlisted violation is still reported (see the invalid cases), and an entry for one source does not excuse the same target from another.
-    // An entry naming another package is not stale for THIS manifest: it is that package's own manifest that judges it.
+    /* Only the named target is excused: a second, unlisted violation is still reported (see the invalid cases), and an entry for one source does not excuse the same target from another.
+       An entry naming another package is not stale for THIS manifest: it is that package's own manifest that judges it. */
     {
       code: manifest('kv-adapter-memory', { 'kv-contract': 'workspace:*' }),
       filename: selfFilename('kv-adapter-memory'),
