@@ -159,7 +159,7 @@ jobs:
         with:
           # semantic-release analyses the full commit history since the last release.
           fetch-depth: 0
-          # No ssh-key and no persisted credentials: checkout fetches with its own token and then removes it (src/git-auth-helper.ts writes the token extraheader and core.sshCommand only when persist-credentials is true), so nothing in .git/config authenticates a later step. The push key is provisioned separately, just before semantic-release.
+          # No ssh-key and no persisted credentials: checkout fetches with its own token and then removes it again (it calls removeAuth at the end of the step when persist-credentials is false), so nothing in .git/config authenticates a later step. The push key is provisioned separately, just before semantic-release.
           persist-credentials: false
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
