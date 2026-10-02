@@ -4,6 +4,8 @@
 
 > A real ESLint plugin (not a shareable config) exposing custom rules shared across ExaDev projects. Also published under the unscoped alias `exadev-eslint-config`.
 
+[![npm downloads chart, log scale](https://shieldcn.dev/chart/npm/@exadev/eslint-config.svg?bg=transparent&logo=false&yScale=log)](https://www.npmjs.com/package/@exadev/eslint-config)
+
 **Contents:** [Why](#why) · [Getting started](#getting-started) · [The lighter option](#the-lighter-option-the-plugin-named-export) · [Optional features](#optional-features) · [Rules](#rules) · [Barrel policy](#barrel-policy) · [Tool config files](#tool-config-files) · [Tooling wiring](#tooling-wiring) · [Verifying ESLint is applied](#verifying-eslint-is-applied) · [Workspace architecture](#workspace-architecture) · [Turbo](#turbo) · [Development](#development) · [License](#license)
 
 ## Why
