@@ -1,3 +1,10 @@
+## [2.32.1](https://github.com/ExaDev/eslint-config/compare/v2.32.0...v2.32.1) (2026-10-02)
+
+
+### Bug Fixes
+
+* **jsdoc:** validate doc comment tags against TSDoc's vocabulary ([34f5f00](https://github.com/ExaDev/eslint-config/commit/34f5f0072ac494847d94b7e62d52c906f2f536a6)), closes [#49](https://github.com/ExaDev/eslint-config/issues/49)
+
 # [2.32.0](https://github.com/ExaDev/eslint-config/compare/v2.31.2...v2.32.0) (2026-10-02)
 
 
