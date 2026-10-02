@@ -1,3 +1,10 @@
+# [2.33.0](https://github.com/ExaDev/eslint-config/compare/v2.32.1...v2.33.0) (2026-10-02)
+
+
+### Features
+
+* **import-policy:** optionally report computed import specifiers ([efdcf29](https://github.com/ExaDev/eslint-config/commit/efdcf2913ddf8cd61c8fda4e326c316c39bc40d4)), closes [#88](https://github.com/ExaDev/eslint-config/issues/88)
+
 ## [2.32.1](https://github.com/ExaDev/eslint-config/compare/v2.32.0...v2.32.1) (2026-10-02)
 
 
