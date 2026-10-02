@@ -51,6 +51,7 @@ const FIXED_GRAPH: WorkspaceGraph = {
       pkg('billing-contract', 'features', 0, 'billing'),
       pkg('store-api-router', 'features', 1, 'store'),
       pkg('store-application-context', 'product', PRODUCT_RANK, 'store'),
+      pkg('store-runtime-node', 'product', PRODUCT_RANK, 'store'),
       pkg('store-cli', 'targets', TARGETS_RANK, 'store'),
       pkg('checkout-vertical', 'verticals', 1, 'checkout'),
       { name: NAMELESS_RELATIVE_DIR, relativeDir: NAMELESS_RELATIVE_DIR, group: 'core', rank: 0, slice: undefined },
@@ -74,7 +75,17 @@ function selfFilename(name: string): string {
 
 describe('createNoUphillDependencyRule meta', () => {
   it('declares the message ids the rule can report', () => {
-    expect(Object.keys(rule.meta?.messages ?? {}).sort()).toEqual(['allowSourceGone', 'allowUndeclared', 'allowUnneeded', 'crossSlice', 'isolatedGroup', 'rankSkip', 'uphillRank']);
+    expect(Object.keys(rule.meta?.messages ?? {}).sort()).toEqual([
+      'allowSourceGone',
+      'allowUndeclared',
+      'allowUnneeded',
+      'constraintDenied',
+      'constraintNotAllowed',
+      'crossSlice',
+      'isolatedGroup',
+      'rankSkip',
+      'uphillRank',
+    ]);
   });
 
   it('words each stale allow-list message exactly', () => {
@@ -90,7 +101,7 @@ describe('createNoUphillDependencyRule meta', () => {
     expect(meta.languages).toEqual(['json/json', 'json/jsonc']);
     expect(meta.docs?.recommended).toBe(false);
     expect(meta.docs?.description).toBe(
-      'Disallow a workspace package depending on another package ranked strictly above it, on a non-exempt-rank package more than the configured distance below it, on a package in a different slice of the same or another group, or on a package in a group this workspace declares isolated from its own.',
+      'Disallow a workspace package depending on another package ranked strictly above it, on a non-exempt-rank package more than the configured distance below it, on a package in a different slice of the same or another group, on a package in a group this workspace declares isolated from its own, or on a package a configured dependency constraint rules out.',
     );
     expect(meta.docs?.url).toBe('https://github.com/ExaDev/eslint-config/blob/main/src/rules/no-uphill-dependency.ts');
     expect(meta.messages?.uphillRank).toBe(
@@ -102,6 +113,10 @@ describe('createNoUphillDependencyRule meta', () => {
     expect(meta.messages?.crossSlice).toBe(
       'Illegal dependency: "{{self}}" (slice "{{selfSlice}}") depends on "{{dependency}}" (slice "{{dependencySlice}}"). A package may depend on another in the same slice, but not a different one.',
     );
+    expect(meta.messages?.constraintNotAllowed).toBe(
+      'Illegal dependency: "{{self}}" depends on "{{dependency}}" (group "{{dependencyGroup}}"), which matches none of the targets a dependency constraint allows it ({{reason}}).',
+    );
+    expect(meta.messages?.constraintDenied).toBe('Illegal dependency: "{{self}}" depends on "{{dependency}}" (group "{{dependencyGroup}}"), which a dependency constraint denies it ({{reason}}).');
     expect(meta.messages?.isolatedGroup).toBe(
       'Illegal dependency: "{{self}}" (group "{{selfGroup}}") depends on "{{dependency}}" (group "{{dependencyGroup}}"), and this workspace declares these two groups isolated from each other.',
     );
@@ -398,6 +413,135 @@ ruleTester.run('no-uphill-dependency allow list and group exemptions', rule, {
       filename: selfFilename('kv-contract'),
       options: [{ groups: ALLOW_GROUPS, dependencyFields: DEV_FIELDS, exemptTargetGroups: [{ group: 'test', fields: ['devDependencies'] }] }],
       errors: [{ messageId: 'uphillRank' }],
+    },
+  ],
+});
+
+const TARGETS_ONLY_PRODUCT = { packages: { group: 'targets' }, allow: [{ group: 'product' }], reason: 'a target ships product code only' };
+const CONTEXT_TARGETS = { packages: '^store-application-context$', allow: ['-contract$', { group: 'features' }, { group: 'verticals' }], reason: 'the application context composes contracts, features and verticals' };
+const NO_CORE_ADAPTER = { packages: { group: 'product' }, deny: [{ group: 'core', namePattern: '-adapter-' }], reason: 'product code reaches core adapters through a runtime package' };
+// "Only runtime packages may import core adapters": every package whose name does not contain "runtime-" is denied core adapters.
+const ONLY_RUNTIME_IMPORTS_ADAPTERS = { packages: { namePattern: '^(?!.*runtime-)' }, deny: [{ group: 'core', namePattern: '-adapter-' }], reason: 'only runtime packages wire adapters' };
+
+ruleTester.run('no-uphill-dependency dependency constraints', rule, {
+  valid: [
+    // An allow list passes a target it matches.
+    {
+      code: manifest('store-cli', { 'store-application-context': 'workspace:*' }),
+      filename: selfFilename('store-cli'),
+      options: [{ groups: ALLOW_GROUPS, dependencyConstraints: [TARGETS_ONLY_PRODUCT] }],
+    },
+    // Any one matching allowed selector is enough.
+    {
+      code: manifest('store-application-context', { 'store-api-router': 'workspace:*', 'kv-contract': 'workspace:*' }),
+      filename: selfFilename('store-application-context'),
+      options: [{ groups: ALLOW_GROUPS, dependencyConstraints: [CONTEXT_TARGETS] }],
+    },
+    // A deny list passes a target it does not match.
+    {
+      code: manifest('store-application-context', { 'kv-contract': 'workspace:*' }),
+      filename: selfFilename('store-application-context'),
+      options: [{ groups: ALLOW_GROUPS, dependencyConstraints: [NO_CORE_ADAPTER, ONLY_RUNTIME_IMPORTS_ADAPTERS] }],
+    },
+    // A runtime package is outside the "only runtime packages" constraint's source selector, so it may import a core adapter.
+    {
+      code: manifest('store-runtime-node', { 'kv-adapter-memory': 'workspace:*' }),
+      filename: selfFilename('store-runtime-node'),
+      options: [{ groups: ALLOW_GROUPS, dependencyConstraints: [ONLY_RUNTIME_IMPORTS_ADAPTERS] }],
+    },
+    // A constraint whose source selector does not match the linted package does not apply to it.
+    {
+      code: manifest('kv-adapter-memory', { 'kv-contract': 'workspace:*' }),
+      filename: selfFilename('kv-adapter-memory'),
+      options: [{ groups: ALLOW_GROUPS, dependencyConstraints: [TARGETS_ONLY_PRODUCT, NO_CORE_ADAPTER] }],
+    },
+    // A non-workspace dependency is never constrained.
+    {
+      code: manifest('store-cli', { zod: '^3' }),
+      filename: selfFilename('store-cli'),
+      options: [{ groups: ALLOW_GROUPS, dependencyConstraints: [TARGETS_ONLY_PRODUCT] }],
+    },
+    // A per-edge allow entry excuses a constraint violation, and is not stale for doing so.
+    {
+      code: manifest('store-cli', { 'kv-contract': 'workspace:*' }),
+      filename: selfFilename('store-cli'),
+      options: [{ groups: ALLOW_GROUPS, dependencyConstraints: [TARGETS_ONLY_PRODUCT], allow: [{ from: 'store-cli', to: 'kv-contract', reason: REASON }] }],
+    },
+    // One allow entry excuses the edge from every check at once, rank and constraint alike.
+    {
+      code: manifest('kv-contract', { 'store-cli': 'workspace:*' }),
+      filename: selfFilename('kv-contract'),
+      options: [
+        {
+          groups: ALLOW_GROUPS,
+          dependencyConstraints: [{ packages: { group: 'core' }, deny: [{ group: 'targets' }], reason: REASON }],
+          allow: [{ from: 'kv-contract', to: 'store-cli', reason: REASON }],
+        },
+      ],
+    },
+    // An exempt target group is exempt from constraints too.
+    {
+      code: JSON.stringify({ name: 'kv-contract', devDependencies: { 'store-cli': 'workspace:*' } }, null, 2),
+      filename: selfFilename('kv-contract'),
+      options: [
+        {
+          groups: ALLOW_GROUPS,
+          dependencyFields: DEV_FIELDS,
+          exemptTargetGroups: [{ group: 'targets', fields: ['devDependencies'] }],
+          dependencyConstraints: [{ packages: { group: 'core' }, deny: [{ group: 'targets' }], reason: REASON }],
+        },
+      ],
+    },
+  ],
+  invalid: [
+    // Targets may depend only on product packages.
+    {
+      code: manifest('store-cli', { 'store-application-context': 'workspace:*', 'kv-contract': 'workspace:*' }),
+      filename: selfFilename('store-cli'),
+      options: [{ groups: ALLOW_GROUPS, dependencyConstraints: [TARGETS_ONLY_PRODUCT] }],
+      errors: [{ messageId: 'constraintNotAllowed', line: 5, data: { self: 'store-cli', dependency: 'kv-contract', dependencyGroup: 'core', reason: TARGETS_ONLY_PRODUCT.reason } }],
+    },
+    // The application context may depend on contracts, features and verticals, and nothing else.
+    {
+      code: manifest('store-application-context', { 'kv-adapter-memory': 'workspace:*' }),
+      filename: selfFilename('store-application-context'),
+      options: [{ groups: ALLOW_GROUPS, dependencyConstraints: [CONTEXT_TARGETS] }],
+      errors: [{ messageId: 'constraintNotAllowed', data: { self: 'store-application-context', dependency: 'kv-adapter-memory', dependencyGroup: 'core', reason: CONTEXT_TARGETS.reason } }],
+    },
+    // Product code may never depend on a core adapter.
+    {
+      code: manifest('store-application-context', { 'kv-adapter-memory': 'workspace:*' }),
+      filename: selfFilename('store-application-context'),
+      options: [{ groups: ALLOW_GROUPS, dependencyConstraints: [NO_CORE_ADAPTER] }],
+      errors: [{ messageId: 'constraintDenied', data: { self: 'store-application-context', dependency: 'kv-adapter-memory', dependencyGroup: 'core', reason: NO_CORE_ADAPTER.reason } }],
+    },
+    // Only runtime packages may import core adapters.
+    {
+      code: manifest('store-application-context', { 'kv-adapter-memory': 'workspace:*' }),
+      filename: selfFilename('store-application-context'),
+      options: [{ groups: ALLOW_GROUPS, dependencyConstraints: [ONLY_RUNTIME_IMPORTS_ADAPTERS] }],
+      errors: [{ messageId: 'constraintDenied', data: { self: 'store-application-context', dependency: 'kv-adapter-memory', dependencyGroup: 'core', reason: ONLY_RUNTIME_IMPORTS_ADAPTERS.reason } }],
+    },
+    // Each constraint that rules an edge out reports it, beside any rank violation on the same edge.
+    {
+      code: manifest('kv-contract', { 'store-cli': 'workspace:*' }),
+      filename: selfFilename('kv-contract'),
+      options: [{ groups: ALLOW_GROUPS, dependencyConstraints: [{ packages: { group: 'core' }, deny: [{ group: 'targets' }], reason: REASON }] }],
+      errors: [{ messageId: 'uphillRank' }, { messageId: 'constraintDenied', data: { self: 'kv-contract', dependency: 'store-cli', dependencyGroup: 'targets', reason: REASON } }],
+    },
+    // An allow entry for another target does not excuse a constraint violation.
+    {
+      code: manifest('store-cli', { 'kv-contract': 'workspace:*', 'store-application-context': 'workspace:*' }),
+      filename: selfFilename('store-cli'),
+      options: [{ groups: ALLOW_GROUPS, dependencyConstraints: [TARGETS_ONLY_PRODUCT], allow: [{ from: 'store-cli', to: 'store-application-context', reason: REASON }] }],
+      errors: [{ messageId: 'constraintNotAllowed', line: 4 }, { messageId: 'allowUnneeded', line: 5 }],
+    },
+    // A package that declares no name is selected by its group and reported by its directory.
+    {
+      code: JSON.stringify({ dependencies: { 'kv-adapter-memory': 'workspace:*' } }),
+      filename: `${FIXED_GRAPH.root}/${NAMELESS_RELATIVE_DIR}/package.json`,
+      options: [{ groups: ALLOW_GROUPS, dependencyConstraints: [{ packages: { group: 'core' }, deny: ['-adapter-'], reason: REASON }] }],
+      errors: [{ messageId: 'uphillRank' }, { messageId: 'constraintDenied', data: { self: NAMELESS_RELATIVE_DIR, dependency: 'kv-adapter-memory', dependencyGroup: 'core', reason: REASON } }],
     },
   ],
 });

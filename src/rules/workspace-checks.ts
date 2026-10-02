@@ -1,11 +1,13 @@
 import type { WorkspacePackageInfo } from './workspace-graph';
-import type { AllowedEdge, ExemptTargetGroup, PackageSelector } from './workspace-constraint-options';
+import type { AllowedEdge, DependencyConstraint, ExemptTargetGroup, PackageSelector } from './workspace-constraint-options';
 import type { GroupSpec, NamingOptions, NamingStrategy, RankSkipOptions } from './workspace-options';
 import { splitPathSegments } from './workspace-path';
 
 // The pure decisions every workspace-architecture rule reports, kept independent of ESLint/momoa so each can be unit-tested directly against fabricated graph data, matching the split the monorepo-template and hive originals already used (their own checkDependencies, dependencyPathExists, expectedPackageName).
 
-export type WorkspaceViolationMessageId = 'uphillRank' | 'rankSkip' | 'crossSlice' | 'isolatedGroup';
+export type WorkspaceViolationMessageId = 'uphillRank' | 'rankSkip' | 'crossSlice' | 'isolatedGroup' | ConstraintViolationMessageId;
+
+export type ConstraintViolationMessageId = 'constraintNotAllowed' | 'constraintDenied';
 
 export interface WorkspaceViolation {
   readonly dependencyName: string;
@@ -93,6 +95,49 @@ export function checkDependencies(
   return violations;
 }
 
+export interface DependencyConstraintContext {
+  readonly graph: ReadonlyMap<string, WorkspacePackageInfo>;
+  // Undefined when the option is not configured, which rules nothing out.
+  readonly constraints: readonly DependencyConstraint[] | undefined;
+  // Dependency names exempt from the constraints, as decided by exemptDependencyNames, the same set checkDependencies skips.
+  readonly exemptTargets?: ReadonlySet<string>;
+}
+
+/** The linted package as the constraint check sees it: the name its diagnostics use, plus the group and declared name (undefined for a package that declares none) its selectors are matched against. */
+export interface ConstraintSource {
+  readonly displayName: string;
+  readonly group: string;
+  readonly name: string | undefined;
+}
+
+function constraintVerdict(constraint: DependencyConstraint, target: { readonly group: string; readonly name: string }): ConstraintViolationMessageId | undefined {
+  if (constraint.allow !== undefined && !constraint.allow.some((selector) => matchesSelector(selector, target))) return 'constraintNotAllowed';
+  if (constraint.deny?.some((selector) => matchesSelector(selector, target)) === true) return 'constraintDenied';
+
+  return undefined;
+}
+
+/**
+ * Every workspace dependency of `self` that a `dependencyConstraints` entry selecting `self` rules out: `constraintNotAllowed` when the entry has an `allow` list and the dependency matches none of it, otherwise `constraintDenied` when it matches a `deny` selector. Each constraint is judged on its own, so a dependency two constraints rule out yields two violations, each carrying its own constraint's reason. A non-workspace dependency and an exempt target are skipped, as checkDependencies skips them.
+ */
+export function checkDependencyConstraints(self: ConstraintSource, dependencyNames: readonly string[], context: DependencyConstraintContext): readonly WorkspaceViolation[] {
+  if (context.constraints === undefined) return [];
+  const applicable = context.constraints.filter((constraint) => matchesSelector(constraint.packages, self));
+
+  return dependencyNames.flatMap((dependencyName) => {
+    const dependency = context.graph.get(dependencyName);
+    if (dependency === undefined || context.exemptTargets?.has(dependencyName) === true) return [];
+    const target = { group: dependency.group, name: dependencyName };
+
+    return applicable.flatMap((constraint): readonly WorkspaceViolation[] => {
+      const messageId = constraintVerdict(constraint, target);
+      if (messageId === undefined) return [];
+
+      return [{ dependencyName, messageId, data: { self: self.displayName, dependency: dependencyName, dependencyGroup: dependency.group, reason: constraint.reason } }];
+    });
+  });
+}
+
 /**
  * The dependency names whose edges an `exemptTargetGroups` entry exempts: a workspace package in an exempt group, every occurrence of which is declared under one of that group's exempt fields. A name that also appears under any other configured field is not exempt, so a package cannot hide a runtime edge behind a devDependencies entry of the same name.
  */
@@ -126,7 +171,7 @@ export interface AllowListResult {
 }
 
 /**
- * Applies the `allow` list to the violations `selfName` produced: a violation on an edge from `selfName` to an allowed target is dropped, and every entry naming `selfName` as its source that suppressed nothing is returned as stale, either because the dependency is no longer declared or because the checks would have passed it anyway.
+ * Applies the `allow` list to the violations `selfName` produced (the rank, slice and isolation violations and the dependency constraint violations alike): a violation on an edge from `selfName` to an allowed target is dropped, and every entry naming `selfName` as its source that suppressed nothing is returned as stale, either because the dependency is no longer declared or because the checks would have passed it anyway.
  */
 export function applyAllowList(
   selfName: string,

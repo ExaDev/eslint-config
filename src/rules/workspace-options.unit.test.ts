@@ -62,7 +62,7 @@ describe('readWorkspaceArchitectureOptions', () => {
     expect(result).not.toHaveProperty('rankSkip');
     expect(result).not.toHaveProperty('isolatedGroups');
     expect(result).not.toHaveProperty('naming');
-    for (const option of ['allow', 'exemptTargetGroups', 'requiredFiles', 'devOnly', 'requiredScripts']) expect(result).not.toHaveProperty(option);
+    for (const option of ['allow', 'exemptTargetGroups', 'dependencyConstraints', 'requiredFiles', 'devOnly', 'requiredScripts']) expect(result).not.toHaveProperty(option);
   });
 
   it('throws for an unknown top-level property, even one that only misspells a real one ("rankskip" for "rankSkip")', () => {
@@ -389,6 +389,7 @@ describe('readWorkspaceArchitectureOptions constraint options', () => {
     const constraints = {
       allow: [edge],
       exemptTargetGroups: [{ group: 'test', fields: ['devDependencies'] }],
+      dependencyConstraints: [{ packages: { group: 'core' }, deny: [{ group: 'test' }], reason: 'core never reaches test code' }],
       requiredFiles: [{ packages: 'x', files: ['src/errors.ts'] }],
       devOnly: [{ group: 'test' }],
       requiredScripts: [{ match: 'x', scripts: ['typecheck'] }],
@@ -404,6 +405,7 @@ describe('readWorkspaceArchitectureOptions constraint options', () => {
     expect(() => readWorkspaceArchitectureOptions({ groups: GROUPS, allow: [{ from: 'a', to: 'b', reason: '' }] })).toThrow('"allow"');
     expect(() => readWorkspaceArchitectureOptions({ groups: GROUPS, requiredFiles: [{ packages: 'x', files: [] }] })).toThrow('"requiredFiles"');
     expect(() => readWorkspaceArchitectureOptions({ groups: GROUPS, devOnly: [{ group: 'nope' }] })).toThrow('"devOnly"');
+    expect(() => readWorkspaceArchitectureOptions({ groups: GROUPS, dependencyConstraints: [{ packages: 'x', allow: [], reason: 'r' }] })).toThrow('"dependencyConstraints"');
     expect(() => readWorkspaceArchitectureOptions({ groups: GROUPS, requiredScripts: [{ match: 'x', scripts: [] }] })).toThrow('"requiredScripts"');
   });
 
@@ -414,6 +416,9 @@ describe('readWorkspaceArchitectureOptions constraint options', () => {
 
   it('resolves selector and exemption groups against the declared groups', () => {
     expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'core' }], devOnly: [{ group: 'test' }] })).toThrow('not declared in "groups"');
+    expect(() => readWorkspaceArchitectureOptions({ groups: [{ name: 'core' }], dependencyConstraints: [{ packages: { group: 'core' }, deny: [{ group: 'test' }], reason: 'r' }] })).toThrow(
+      '"dependencyConstraints" selector names a group not declared in "groups" ("test").',
+    );
   });
 });
 
@@ -468,7 +473,7 @@ describe('workspaceArchitectureOptionsSchema', () => {
   });
 
   it('declares every constraint option so the shared schema accepts it', () => {
-    for (const option of ['allow', 'exemptTargetGroups', 'requiredFiles', 'devOnly', 'requiredScripts']) {
+    for (const option of ['allow', 'exemptTargetGroups', 'dependencyConstraints', 'requiredFiles', 'devOnly', 'requiredScripts']) {
       expect(workspaceArchitectureOptionsSchema.properties).toHaveProperty(option);
     }
   });
