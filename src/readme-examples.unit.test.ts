@@ -4,6 +4,7 @@ import { plugin } from './index';
 import { isRecord } from './is-record';
 import {
   buildViaDefensiveFallbackAllow,
+  buildViaDependAllowsReact,
   buildViaDynamicImportBan,
   buildViaImportPolicy,
   buildViaManualRules,
@@ -113,6 +114,21 @@ describe('README defineConfig examples', () => {
     expect(options[0]).toBe('error');
     const policies = options[1];
     expect(Array.isArray(policies) ? policies.map((policy: { files: string[] }) => policy.files) : undefined).toStrictEqual([['src/worker/**'], ['src/**'], ['src/routes/**']]);
+  });
+
+  it('the ban-dependencies example allows eslint-plugin-react, which the rule otherwise reports, and still reports other banned packages', async () => {
+    const reactPeers = ['eslint-plugin-react', 'eslint-plugin-react-hooks', 'eslint-plugin-jsx-a11y', '@next/eslint-plugin-next'];
+    const manifest = JSON.stringify({ name: 'consumer', devDependencies: Object.fromEntries([...reactPeers, 'eslint-plugin-import'].map((name) => [name, '*'])) });
+    const bannedIn = async (config: readonly Linter.Config[]): Promise<unknown[]> => {
+      const eslint = new ESLint({ overrideConfigFile: true, overrideConfig: [...config], cwd: import.meta.dirname });
+      const [result] = await eslint.lintText(manifest, { filePath: 'package.json' });
+      if (result === undefined) throw new Error('Unreachable: lintText returns one result per text.');
+
+      return result.messages.filter((message) => message.ruleId === 'depend/ban-dependencies').map((message) => message.message.split('"')[1]);
+    };
+    const allowing = buildViaDependAllowsReact();
+    expect(await bannedIn(allowing)).toStrictEqual(['eslint-plugin-import']);
+    expect(await bannedIn([...allowing, { files: ['package.json'], rules: { 'depend/ban-dependencies': ['error', {}] } }])).toStrictEqual(['eslint-plugin-react', 'eslint-plugin-import']);
   });
 
   it('the dynamic import ban reports the static, dynamic and template forms of the banned specifier, and a computed one', async () => {
