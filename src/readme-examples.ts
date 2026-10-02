@@ -1,4 +1,5 @@
 import { defineConfig } from 'eslint/config';
+import depend from 'eslint-plugin-depend';
 import tseslint from 'typescript-eslint';
 import { exadevConfig, importPolicyConfig, plugin, pureModulesConfig, workspaceArchitectureConfig } from './index';
 
@@ -107,6 +108,17 @@ export function buildViaImportPolicy(): DefinedConfig {
       },
     ]),
   );
+}
+
+/**
+ * README's "Optional React and Next.js support" section: allowing eslint-plugin-react in eslint-plugin-depend's ban-dependencies, which lints package.json under the json/json language exadevConfig() already sets for it.
+ */
+export function buildViaDependAllowsReact(): DefinedConfig {
+  return defineConfig(...exadevConfig({ react: false, nextjs: false }), {
+    files: ['package.json'],
+    plugins: { depend },
+    rules: { 'depend/ban-dependencies': ['error', { allowed: ['eslint-plugin-react'] }] },
+  });
 }
 
 /**

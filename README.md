@@ -233,6 +233,19 @@ React/hooks/a11y and Next.js rule blocks fold in automatically, with no separate
    pnpm add -D @next/eslint-plugin-next                                               # Next.js support
    ```
    If none of these resolve, `@exadev/eslint-config`'s default export is byte-for-byte identical to the plain TypeScript ruleset — nothing about the base package changes.
+
+   If you run [`eslint-plugin-depend`](https://github.com/es-tooling/eslint-plugin-depend)'s `ban-dependencies` on your `package.json`, it reports `eslint-plugin-react`, which the [module-replacements](https://github.com/es-tooling/module-replacements) `preferred` preset lists with a [suggested alternative](https://github.com/es-tooling/module-replacements/blob/main/docs/modules/eslint-plugin-react.md); the other React and Next.js peers are not listed. This package's React support is built on `eslint-plugin-react`, and it does not bundle `eslint-plugin-depend`, so allow the package in your own block. `allowed` takes exact package names, and the block needs no `language` of its own because `exadevConfig()` already lints `package.json` as `json/json`:
+   ```ts
+   import { defineConfig } from 'eslint/config';
+   import depend from 'eslint-plugin-depend';
+   import { exadevConfig } from '@exadev/eslint-config';
+
+   export default defineConfig(...exadevConfig(), {
+     files: ['package.json'],
+     plugins: { depend },
+     rules: { 'depend/ban-dependencies': ['error', { allowed: ['eslint-plugin-react'] }] },
+   });
+   ```
 2. **For React specifically, the file must actually be `.jsx`/`.tsx`.** The React/hooks/a11y rule block is scoped to `files: ['**/*.jsx', '**/*.tsx']`, so even if `eslint-plugin-react` is resolvable only incidentally (e.g. hoisted as a transitive dependency of something unrelated in a monorepo, with zero real JSX anywhere in the linted project), its rules never match a file that isn't JSX. `@next/eslint-plugin-next`'s own block carries no such glob: its own presence is already an unambiguous signal (nothing installs it except a real Next.js project). The [server component boundary](#server-component-boundary) rules added beside it are scoped to the same JSX files.
 
 React support pairs `eslint-plugin-react`'s `flat/recommended` with its own `flat/jsx-runtime` config, turning [`react/react-in-jsx-scope`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/react-in-jsx-scope.md) and [`react/jsx-uses-react`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-uses-react.md) back off. `flat/recommended` alone assumes the classic runtime, where every file using JSX needs `import React` in scope; the automatic JSX runtime (the default since React 17, and the only mode Next.js's own compiler supports) needs no such import. Without this pairing, a consumer on the automatic runtime would see `react/react-in-jsx-scope` fire on every JSX file.
