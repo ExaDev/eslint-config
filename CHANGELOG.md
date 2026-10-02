@@ -1,3 +1,10 @@
+## [2.33.1](https://github.com/ExaDev/eslint-config/compare/v2.33.0...v2.33.1) (2026-10-02)
+
+
+### Bug Fixes
+
+* **deps:** upgrade @stylistic/eslint-plugin to 6.0.0-beta.6 ([3fffbc7](https://github.com/ExaDev/eslint-config/commit/3fffbc7e0ef6c7f138a900ee5cbc6958cb786ad2))
+
 # [2.33.0](https://github.com/ExaDev/eslint-config/compare/v2.32.1...v2.33.0) (2026-10-02)
 
 
