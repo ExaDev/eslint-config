@@ -199,6 +199,7 @@ jobs:
           # Blanked, not omitted -- an inherited NPM_TOKEN/NODE_AUTH_TOKEN would otherwise be used in preference to the OIDC exchange.
           NPM_TOKEN: ''
           NODE_AUTH_TOKEN: ''
+      # Deletes without overwriting: the runner is ephemeral and discarded after the job, so the cleanup only keeps the key out of later steps, not off the disk.
       - name: Remove release deploy key
         if: always()
         run: rm -f "$RUNNER_TEMP/release_deploy_key" "$RUNNER_TEMP/release_known_hosts"
