@@ -1,5 +1,6 @@
+import { Linter } from 'eslint';
 import { describe, expect, it } from 'vitest';
-import { readImportPolicies } from './import-policy-options';
+import { importPoliciesSchema, readImportPolicies } from './import-policy-options';
 
 const DENY = { specifiers: ['fs'], message: 'not in workers' };
 
@@ -65,6 +66,12 @@ describe('readImportPolicies', () => {
     expect(() => readImportPolicies([{ files: ['a'], confine: [{ specifiers: ['x'], onlyIn: ['!a'] }] }])).toThrow(/does not start with "!"/u);
   });
 
+  it('keeps allowImportNames, validates it, and rejects it alongside importNames', () => {
+    expect(readImportPolicies([{ files: ['a'], deny: [{ ...DENY, allowImportNames: ['readFile'] }] }])).toStrictEqual([{ files: ['a'], deny: [{ specifiers: ['fs'], allowImportNames: ['readFile'], message: 'not in workers' }] }]);
+    expect(() => readImportPolicies([{ files: ['a'], deny: [{ ...DENY, allowImportNames: [] }] }])).toThrow(/"allowImportNames"/u);
+    expect(() => readImportPolicies([{ files: ['a'], deny: [{ ...DENY, importNames: ['writeFile'], allowImportNames: ['readFile'] }] }])).toThrow(/"importNames" or "allowImportNames", not both/u);
+  });
+
   it('accepts computedSpecifiers as ignore or report and rejects anything else', () => {
     expect(readImportPolicies([{ files: ['a'], deny: [DENY], computedSpecifiers: 'ignore' }])).toStrictEqual([{ files: ['a'], deny: [DENY], computedSpecifiers: 'ignore' }]);
     expect(() => readImportPolicies([{ files: ['a'], deny: [DENY], computedSpecifiers: 'warn' }])).toThrow(/"computedSpecifiers" to be one of "ignore", "report"/u);
@@ -107,5 +114,17 @@ describe('readImportPolicies', () => {
       expect(() => readImportPolicies(policy({ file: 'src/skip/a.ts', specifier: 'fs', reason: 'r' }))).toThrow(/names a file the policy's files do not select/u);
       expect(() => readImportPolicies(policy({ file: 'src/a.ts', specifier: 'path', reason: 'r' }))).toThrow(/not forbidden there by any deny entry/u);
     });
+  });
+});
+
+describe('importPoliciesSchema', () => {
+  // ESLint validates a rule's options against its meta.schema before the rule runs, so a hand-wired rule rejects the combination too.
+  const verifyWith = (options: unknown) =>
+    new Linter().verify('', [{ plugins: { t: { rules: { r: { meta: { schema: [importPoliciesSchema] }, create: () => ({}) } } } }, rules: { 't/r': ['error', options] } }]);
+
+  it('accepts allowImportNames or importNames on a deny entry, and rejects both together', () => {
+    expect(verifyWith([{ files: ['a'], deny: [{ ...DENY, allowImportNames: ['readFile'] }] }])).toEqual([]);
+    expect(verifyWith([{ files: ['a'], deny: [{ ...DENY, importNames: ['writeFile'] }] }])).toEqual([]);
+    expect(() => verifyWith([{ files: ['a'], deny: [{ ...DENY, importNames: ['writeFile'], allowImportNames: ['readFile'] }] }])).toThrow(/"allowImportNames":\["readFile"\]\} should NOT be valid/u);
   });
 });
