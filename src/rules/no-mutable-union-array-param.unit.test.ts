@@ -18,9 +18,9 @@ describe('rule metadata', () => {
   });
 });
 
-// This rule is built with ESLintUtils.RuleCreator (needed for typed TSESTree node access), which plain eslint's own RuleTester cannot type-check a rule against — see
-// @typescript-eslint/rule-tester's own docs. No type information is actually needed at lint time
-// for THIS rule (it never touches the type checker), so parserOptions.project/projectService is deliberately omitted here.
+/* This rule is built with ESLintUtils.RuleCreator (needed for typed TSESTree node access), which plain eslint's own RuleTester cannot type-check a rule against — see
+   @typescript-eslint/rule-tester's own docs. No type information is actually needed at lint time
+   for THIS rule (it never touches the type checker), so parserOptions.project/projectService is deliberately omitted here. */
 const ruleTester = new RuleTester({
   languageOptions: { parser: tseslint.parser, sourceType: 'module' },
 });

@@ -43,8 +43,8 @@ export function invokedTurboWords(command: string): readonly string[] {
   });
 }
 
-// Package manager flags that take no value, so the word after one is still the script (or `run`). A flag that takes a value (`--filter boundaries`) must not be skipped: the command line does not say which flags those are, and skipping them would read the flag's value as the script.
-// The list is built per call, not held in a module constant: a module-level mutation is a static mutant that a test runner cannot switch on and off per test.
+/* Package manager flags that take no value, so the word after one is still the script (or `run`). A flag that takes a value (`--filter boundaries`) must not be skipped: the command line does not say which flags those are, and skipping them would read the flag's value as the script.
+   The list is built per call, not held in a module constant: a module-level mutation is a static mutant that a test runner cannot switch on and off per test. */
 function isValuelessManagerFlag(token: string): boolean {
   return ['-s', '--silent', '-q', '--quiet', '--if-present', '-w', '--workspace-root'].includes(token);
 }
