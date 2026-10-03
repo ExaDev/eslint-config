@@ -24,11 +24,11 @@ jobs:
     runs-on: ${{ fromJson(needs.determine-runner.outputs.selected-runner) }}
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
           cache: pnpm
@@ -57,13 +57,13 @@ jobs:
     runs-on: ${{ fromJson(needs.determine-runner.outputs.selected-runner) }}
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
           cache: pnpm
-      - uses: actions/cache@v6
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .eslintcache
           # eslint.config.ts and pnpm-lock.yaml both invalidate the cache: a rule change or a dependency bump can change lint results even for files whose own content didn't change.
@@ -78,9 +78,9 @@ jobs:
     runs-on: ${{ fromJson(needs.determine-runner.outputs.selected-runner) }}
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
           cache: pnpm
@@ -98,16 +98,16 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # Content-diff based (Stryker's IncrementalDiffer text-diffs stored vs current source, never hash/mtime/git-ref), so restoring from an unrelated prior run is always safe: a mismatch only means bigger diffs and more reruns, never a wrongly-skipped mutant. restore-keys' broad prefix is what actually matches, since the exact key (this run's own id) never hits on lookup, only on save. See https://stryker-mutator.io/docs/stryker-js/incremental/.
       - name: Restore Stryker incremental result cache
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: reports/stryker-incremental.json
           key: stryker-incremental-${{ github.run_id }}
@@ -117,7 +117,7 @@ jobs:
       - run: pnpm test:mutation${{ github.ref == 'refs/heads/main' && ' -- --force' || '' }}
       - name: Save Stryker incremental result cache
         if: always()
-        uses: actions/cache/save@v6
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: reports/stryker-incremental.json
           key: stryker-incremental-${{ github.run_id }}
@@ -155,14 +155,14 @@ jobs:
       version: ${{ steps.after.outputs.version }}
     steps:
       # main's own ruleset requires the "Required Checks" status and blocks direct pushes, and the default GITHUB_TOKEN has no way to bypass a repository ruleset (GitHub doesn't support naming the github-actions[bot] identity as a bypass actor at all), so semantic-release's own release-commit/tag push needs a bypass identity. A deploy key with write access, added as a DeployKey bypass actor on the ruleset, is the lightest-weight one: repo-scoped, no GitHub App installation to manage, no personal/org-admin credential involved. The key is a durable credential that can push straight to main. It is written to disk only by the "Provision release deploy key" step, so the actions and install steps before it never receive it. That narrows the exposure but does not isolate the key: an earlier step that runs compromised code (a moved action tag, a poisoned install artifact) can leave behind anything a later step executes (BASH_ENV or PATH entries written to the runner's environment files, a background process), and semantic-release and its plugins run from node_modules in the Release step while the key is on disk. Mitigations in place: every action in this job is pinned to a full commit SHA, and the Provision and Release steps blank BASH_ENV and ENV. Not closed: a PATH entry or background process planted by an earlier step, and node_modules code in the Release step. Closing it needs a credential that does not outlive the job (for example a short-lived GitHub App installation token as the ruleset bypass actor) or a job that runs no third-party code before the key exists.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # semantic-release analyses the full commit history since the last release.
           fetch-depth: 0
           # No ssh-key and no persisted credentials: checkout fetches with its own token and then removes it again (it calls removeAuth at the end of the step when persist-credentials is false), so nothing in .git/config authenticates a later step. The push key is provisioned separately, just before semantic-release.
           persist-credentials: false
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
           cache: pnpm
@@ -224,11 +224,11 @@ jobs:
         include:
           - { name: exadev-eslint-config }
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main # the release commit semantic-release just pushed
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
           cache: pnpm
