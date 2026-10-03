@@ -1,3 +1,5 @@
+## [2.35.2](https://github.com/ExaDev/eslint-config/compare/v2.35.1...v2.35.2) (2026-10-03)
+
 ## [2.35.1](https://github.com/ExaDev/eslint-config/compare/v2.35.0...v2.35.1) (2026-10-03)
 
 # [2.35.0](https://github.com/ExaDev/eslint-config/compare/v2.34.1...v2.35.0) (2026-10-02)
