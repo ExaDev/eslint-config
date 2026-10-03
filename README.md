@@ -1752,7 +1752,7 @@ pnpm build
 
 ### Contributing
 
-Conventional commits are enforced by a husky `commit-msg` hook and re-checked in CI. CI runs commitlint, lint and typecheck+test+build+attw on every pull request, on push to `main`, and on manual dispatch; mutation testing (Stryker) runs on manual dispatch only and gates nothing; the release job runs only on `main` (push or manual dispatch), after the three automatic jobs pass.
+Conventional commits are enforced by a husky `commit-msg` hook and re-checked in CI. CI runs commitlint, lint, typecheck+test+build+attw, and the workflow linters [actionlint](https://github.com/rhysd/actionlint) and [zizmor](https://docs.zizmor.sh) (configured in `.github/actionlint.yaml` and `.github/zizmor.yml`) on every pull request, on push to `main`, and on manual dispatch, all of them joined into the Required Checks status; mutation testing (Stryker) runs on manual dispatch only and gates nothing; the release job runs only on `main` (push or manual dispatch), after the three automatic jobs pass.
 
 ### Release
 

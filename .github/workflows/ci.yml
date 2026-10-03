@@ -95,6 +95,68 @@ jobs:
       - run: pnpm build
       - run: pnpm exec attw --pack
 
+  actionlint:
+    name: Actionlint
+    needs: determine-runner
+    runs-on: ${{ fromJson(needs.determine-runner.outputs.selected-runner) }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # actionlint and the shellcheck it runs on every `run:` script, each at an exact version and each archive checked against the SHA-256 committed here before it is unpacked. The digests match actionlint's release checksums file and the asset digests GitHub records for both releases. shellcheck is installed rather than taken from the runner, because the fleet image has none and actionlint silently skips script checks without it. The fleet is linux/arm64 and Blacksmith linux/x64, so the archive follows the runner.
+      - name: Install actionlint and shellcheck
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+          SHELLCHECK_VERSION: 0.11.0
+        run: |
+          case "$RUNNER_ARCH" in
+            X64)
+              actionlint_arch=amd64 actionlint_sha256=8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+              shellcheck_arch=x86_64 shellcheck_sha256=b7af85e41cc99489dcc21d66c6d5f3685138f06d34651e6d34b42ec6d54fe6f6
+              ;;
+            ARM64)
+              actionlint_arch=arm64 actionlint_sha256=325e971b6ba9bfa504672e29be93c24981eeb1c07576d730e9f7c8805afff0c6
+              shellcheck_arch=aarch64 shellcheck_sha256=68a8133197a50beb8803f8d42f9908d1af1c5540d4bb05fdfca8c1fa47decefc
+              ;;
+            *)
+              echo "::error::No pinned actionlint or shellcheck build for runner architecture $RUNNER_ARCH"
+              exit 1
+              ;;
+          esac
+          tools="$RUNNER_TEMP/workflow-linters"
+          mkdir -p "$tools"
+          cd "$tools"
+          actionlint_archive="actionlint_${ACTIONLINT_VERSION}_linux_${actionlint_arch}.tar.gz"
+          shellcheck_archive="shellcheck-v${SHELLCHECK_VERSION}.linux.${shellcheck_arch}.tar.gz"
+          curl -fsSLo "$actionlint_archive" "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${actionlint_archive}"
+          curl -fsSLo "$shellcheck_archive" "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/${shellcheck_archive}"
+          printf '%s  %s\n' "$actionlint_sha256" "$actionlint_archive" "$shellcheck_sha256" "$shellcheck_archive" | sha256sum --check --strict
+          tar -xzf "$actionlint_archive" actionlint
+          tar -xzf "$shellcheck_archive" --strip-components=1 "shellcheck-v${SHELLCHECK_VERSION}/shellcheck"
+          echo "$tools" >> "$GITHUB_PATH"
+      # With no file arguments actionlint lints every workflow in the repository's own .github/workflows.
+      - name: Lint every workflow
+        run: actionlint -config-file .github/actionlint.yaml
+
+  zizmor:
+    name: Zizmor
+    needs: determine-runner
+    runs-on: ${{ fromJson(needs.determine-runner.outputs.selected-runner) }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # uvx rather than zizmorcore/zizmor-action: the action runs zizmor's container image and fails without a Docker daemon, which the fleet's runner pods do not have. setup-uv checks the uv download against its published checksum, and uv fetches a Python for zizmor's environment if the runner has none.
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: 0.12.19
+          enable-cache: false
+      # Offline, so the result never depends on whether a token happens to be in the environment: the online audits (impostor commits, known-vulnerable actions, ref confusion) only run with one. Every workflow, composite action and the Dependabot configuration in the repository is audited.
+      - name: Audit every workflow and action
+        run: uvx zizmor@1.30.1 --offline --config .github/zizmor.yml --no-progress .
+
   mutation:
     name: Mutation
     # Manual only: run it from the Actions tab (workflow_dispatch) when a change warrants a full mutation pass. It is not a required check and does not gate a release.
@@ -131,7 +193,7 @@ jobs:
 
   required-checks:
     name: Required Checks
-    needs: [determine-runner, commitlint, lint, typecheck]
+    needs: [determine-runner, commitlint, lint, typecheck, actionlint, zizmor]
     # Always runs, even if a dependency failed, so it can report that failure itself rather than being skipped -- a required check that's silently absent blocks a PR indefinitely instead of failing it visibly.
     if: always()
     runs-on: ${{ fromJson(needs.determine-runner.outputs.selected-runner) }}
@@ -183,7 +245,8 @@ jobs:
         run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
       # Pinned instead of @latest so a newly published npm release cannot run in this job unreviewed. 11.5.1 is the first release with trusted publishing (OIDC); the pin is the newest 12.x release at least a week old when it was chosen, matching the age gate used for local installs. 12.x needs Node ^22.22.2 or later, which setup-node's floating '22' satisfies. Raise it deliberately.
       - name: Upgrade npm for OIDC trusted publishing (needs npm CLI >=11.5.1)
-        run: npm install -g npm@12.1.0
+        # zizmor's adhoc-packages audit flags any install outside a lockfile; this one is a single exact version, chosen and raised deliberately as the comment above says, so it is ignored here rather than in the whole repository.
+        run: npm install -g npm@12.1.0 # zizmor: ignore[adhoc-packages]
       # The only step that is given the deploy key, directly before semantic-release, so no action runs while the key is on disk. This does not stop code an earlier step left behind from running here (see the comment at the top of the job); BASH_ENV and ENV are blanked so a hook an earlier step registered through the runner's environment file cannot be sourced by this step's shell with the key in its environment. The secret reaches the shell through the step's environment, never a command line, and the file is under runner.temp, outside the workspace.
       - name: Provision release deploy key
         env:
