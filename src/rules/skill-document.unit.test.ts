@@ -45,7 +45,33 @@ describe('extractFrontmatter', () => {
   });
 });
 
+// Each level lists the previous level's anchor ten times, so the expansion grows tenfold per level, past the alias limit of the YAML library.
+function aliasBomb(): string {
+  const levels = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+  const lines = ['a: &a [x, x, x, x, x, x, x, x, x, x]'];
+  levels.forEach((level, index) => {
+    const next = levels[index + 1];
+    if (next !== undefined) lines.push(`${next}: &${next} [${Array.from({ length: 10 }, () => `*${level}`).join(', ')}]`);
+  });
+
+  return `${lines.join('\n')}\n`;
+}
+
 describe('parseFrontmatter', () => {
+  it.each([
+    ['an alias whose anchor is never set', 'description: *Required*\n'],
+    ['an alias used as the name', 'name: *x\n'],
+    ['an alias used as a merge key', '<<: *x\nname: a\n'],
+    ['an alias explosion', aliasBomb()],
+  ])('reports %s as invalid frontmatter instead of throwing', (_label, yamlText) => {
+    const parsed = parseFrontmatter(yamlText);
+    expect(parsed.kind).toBe('invalid');
+  });
+
+  it('resolves an alias whose anchor is set', () => {
+    expect(parseFrontmatter('name: &n a\ndescription: *n\n')).toStrictEqual({ kind: 'mapping', value: { name: 'a', description: 'a' } });
+  });
+
   it('reads a mapping', () => {
     expect(parseFrontmatter('name: a\nmetadata:\n  internal: true\n')).toStrictEqual({ kind: 'mapping', value: { name: 'a', metadata: { internal: true } } });
   });
@@ -62,6 +88,10 @@ describe('parseFrontmatter', () => {
 });
 
 describe('readSkillName', () => {
+  it('returns undefined for frontmatter with an unresolvable alias', () => {
+    expect(readSkillName('---\nname: *x\n---\n')).toBeUndefined();
+  });
+
   it('reads the declared name', () => {
     expect(readSkillName('---\nname: word-count\ndescription: d\n---\n')).toBe('word-count');
   });
