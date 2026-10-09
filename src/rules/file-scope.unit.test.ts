@@ -109,10 +109,17 @@ describe('glob shapes minimatch reads differently', () => {
     expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`"opt" must not have a "." or ".." path segment`);
   });
 
+  it.each(['#internal/*', 'https://x/y', '/abs/x', './x', '../x', '../../contract/src/*conformance*', '@scope/pkg/sub', 'node:fs', '@scope/*', 'node:*', './x/**', '~/x/*', '@/lib/*', 'virtual:*', 'a/'])('accepts the specifier pattern %s, which only the package matcher reads', (pattern) => {
+    expect(() => { assertSupportedGlob(pattern, 'opt', 'specifier'); }).not.toThrow();
+  });
+
+  it.each([['@(fs|path)', /extglob/u], ['[[:alpha:]]', /POSIX/u], ['x/[c-a]', /not valid/u], ['{a}', /no comma/u], ['{a,b', /unmatched/u]])('still rejects %s in a specifier pattern, which the package matcher cannot read as written', (pattern, message) => {
+    expect(() => { assertSupportedGlob(pattern, 'opt', 'specifier'); }).toThrow(message);
+  });
+
   it('allows a relative specifier pattern its dot segments, since it is written as imported', () => {
     expect(() => { assertSupportedGlob('./a', 'opt', 'specifier'); }).not.toThrow();
     expect(() => { assertSupportedGlob('../a/**', 'opt', 'specifier'); }).not.toThrow();
-    expect(() => { assertSupportedGlob('/a', 'opt', 'specifier'); }).toThrow(/must not start or end with a slash/u);
   });
 
   it.each(['{*,a}(b)', 'x/{@,a}(b|c)', '{+,a}(b)', '{?,a}(b)'])('rejects the extglob that the braces of %s assemble', (glob) => {
