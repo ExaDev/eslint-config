@@ -1,3 +1,12 @@
+## [2.36.2](https://github.com/ExaDev/eslint-config/compare/v2.36.1...v2.36.2) (2026-10-09)
+
+
+### Bug Fixes
+
+* scope explicit-module-boundary-types to TypeScript files ([9d57ea1](https://github.com/ExaDev/eslint-config/commit/9d57ea15752c20d0345911f7bc9b0fddeff1e8b6))
+* scope tsdoc/syntax and jsdoc/no-types to TypeScript files ([dc107a4](https://github.com/ExaDev/eslint-config/commit/dc107a41aba0722ddfae9b5c76245faba3038673))
+* strip trailing whitespace from comment-style fixes and keep content markers standalone ([f67807b](https://github.com/ExaDev/eslint-config/commit/f67807b76e5f4485d0fa1c38fc96f60402592f20))
+
 ## [2.36.1](https://github.com/ExaDev/eslint-config/compare/v2.36.0...v2.36.1) (2026-10-09)
 
 # [2.36.0](https://github.com/ExaDev/eslint-config/compare/v2.35.4...v2.36.0) (2026-10-09)
