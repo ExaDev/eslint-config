@@ -80,13 +80,14 @@ export function exadevConfig(options: ExadevConfigOptions = {}, ...userConfigs: 
     ...buildNextjsConfig({ enabled: options.nextjs, plugin }),
     ...buildTurboEnvConfig({ enabled: options.turboEnv }),
     ...buildPackageJsonKeyOrderConfig({ enabled: options.packageJsonKeyOrder }),
-    ...buildAgentSkillsConfig(options.agentSkills, { ignores: gitignore.flatMap(({ ignores = [] }) => ignores) }),
     ...(options.workspaceArchitecture !== undefined ? buildWorkspaceArchitectureConfig(options.workspaceArchitecture) : []),
     ...(options.turbo !== undefined ? buildTurboConfig(withWorkspaceGroups(options.turbo, options.workspaceArchitecture)) : []),
     ...(options.importPolicies !== undefined ? buildImportPolicyConfig(options.importPolicies) : []),
     ...(options.pureModules !== undefined ? buildPureModulesConfig(options.pureModules) : []),
     ...(options.testHygiene !== undefined ? buildTestHygieneConfig(options.testHygiene) : []),
     ...(options.markdownHeadings !== undefined ? buildMarkdownHeadingsConfig(options.markdownHeadings) : []),
+    // After markdownHeadings: both blocks set the frontmatter format of the Markdown they select, and a SKILL.md is always YAML, so the later block must be this one.
+    ...buildAgentSkillsConfig(options.agentSkills, { ignores: gitignore.flatMap(({ ignores = [] }) => ignores) }),
     ...(options.toolingWiring !== undefined ? buildToolingWiringConfig(options.toolingWiring) : []),
     ...userConfigs,
   ];

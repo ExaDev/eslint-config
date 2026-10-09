@@ -15,6 +15,7 @@ import {
   hasAgentSkillsLayout,
 } from './agent-skills';
 import { exadevConfig } from './create-config';
+import { isRecord } from './is-record';
 import { buildGitignoreConfig } from './gitignore';
 import plugin from './plugin';
 import { createMemoryFs } from './rules/memory-fs';
@@ -208,6 +209,17 @@ describe('exadevConfig({ agentSkills })', () => {
     expect(derived).not.toStrictEqual([]);
     expect(optionsOf(exadevConfig({ agentSkills: true }))).toStrictEqual(['error', { files: DEFAULT_SKILL_FILES, ignores: derived }]);
     expect(optionsOf(exadevConfig({ agentSkills: true, gitignore: false }))).toStrictEqual(['error', { files: DEFAULT_SKILL_FILES }]);
+  });
+
+  it('keeps the SKILL.md frontmatter as YAML when markdownHeadings selects the same file with another frontmatter format', async () => {
+    const config = exadevConfig({ react: false, nextjs: false, agentSkills: true, markdownHeadings: { files: ['**/*.md'], headings: [{ depth: 1, text: 'Title' }], frontmatter: 'toml' } });
+    const eslint = new ESLint({ cwd: import.meta.dirname, overrideConfigFile: true, overrideConfig: [...config] });
+    const skill: unknown = await eslint.calculateConfigForFile('skills/a/SKILL.md');
+    const readme: unknown = await eslint.calculateConfigForFile('docs/readme.md');
+    const frontmatterOf = (resolved: unknown): unknown => (isRecord(resolved) && isRecord(resolved['languageOptions']) ? resolved['languageOptions']['frontmatter'] : undefined);
+
+    expect(frontmatterOf(skill)).toBe('yaml');
+    expect(frontmatterOf(readme)).toBe('toml');
   });
 
   it('adds nothing when off, or when auto-detection finds no skills', () => {
