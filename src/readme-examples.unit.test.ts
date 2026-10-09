@@ -1,5 +1,8 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { ESLint, type Linter } from 'eslint';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { plugin } from './index';
 import { isRecord } from './is-record';
 import {
@@ -204,3 +207,37 @@ describe('README defineConfig examples', () => {
     }
   });
 });
+
+describe('README agent skills example, in a repository that has a skills layout', () => {
+  let cwd: string;
+
+  beforeEach(() => {
+    cwd = mkdtempSync(join(tmpdir(), 'exadev-eslint-config-readme-agent-skills-'));
+    for (const [path, name] of [['skills/a/SKILL.md', 'b'], ['plugins/legacy/skills/old/SKILL.md', 'wrong']] as const) {
+      mkdirSync(dirname(join(cwd, path)), { recursive: true });
+      writeFileSync(join(cwd, path), `---\nname: ${name}\ndescription: Does a thing.\n---\n`);
+    }
+    // exadevConfig() auto-detects a skills layout from the process working directory.
+    vi.spyOn(process, 'cwd').mockReturnValue(cwd);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    rmSync(cwd, { recursive: true, force: true });
+  });
+
+  async function messagesOf(blocks: readonly Linter.Config[], file: string): Promise<readonly string[]> {
+    const [result] = await new ESLint({ cwd, overrideConfigFile: true, overrideConfig: blocks }).lintFiles([file]);
+
+    return (result?.messages ?? []).map((message) => message.message);
+  }
+
+  it.each([
+    ['the standalone export', buildViaAgentSkills],
+    ['the option on exadevConfig()', buildViaAgentSkillsOption],
+  ])('honours the excluded plugin through %s', async (_label, build) => {
+    expect(await messagesOf(build(), 'plugins/legacy/skills/old/SKILL.md')).toStrictEqual(['File ignored because no matching configuration was supplied.']);
+    expect(await messagesOf(build(), 'skills/a/SKILL.md')).toStrictEqual(['The skill name "b" must equal its directory name "a".']);
+  });
+});
+
