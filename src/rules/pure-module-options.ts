@@ -9,7 +9,7 @@ const GLOB_CHARACTERS = /[*?[\]{}]/u;
  * Options of `exadev/pure-module`, and the `allowImports` half of the `pureModules` option of `exadevConfig`.
  */
 export interface PureModuleOptions {
-  // Specifier patterns, in the dialect of `import-policy` (each also selects everything beneath it, and `node:` is ignored), exempting a module the rule bans by default. Every entry must select at least one banned module, so an entry that could never apply fails instead of lingering.
+  // Specifier patterns, in the form `import-policy` reads (minimatch globs; each also selects everything beneath it, and `node:` is ignored), exempting a module the rule bans by default. Every entry must select at least one banned module, so an entry that could never apply fails instead of lingering.
   readonly allowImports?: readonly string[];
 }
 

@@ -20,7 +20,7 @@ export type MarkdownFrontmatter = (typeof FRONTMATTER_FORMATS)[number];
  * The `markdownHeadings` option of `exadevConfig`, and the argument of `markdownHeadingsConfig`.
  */
 export interface MarkdownHeadingsOptions {
-  // Globs, relative to ESLint's working directory, of the Markdown files that must contain the headings, in the dialect of every file glob in this package. A leading `!` excludes. Linting `*.md` at all is a repository-wide decision (`.gitignore`-derived ignores and other `ignores` entries may hide those files), so nothing here widens what ESLint lints.
+  // Globs, relative to ESLint's working directory, of the Markdown files that must contain the headings, as minimatch globs. A leading `!` excludes. Linting `*.md` at all is a repository-wide decision (`.gitignore`-derived ignores and other `ignores` entries may hide those files), so nothing here widens what ESLint lints.
   readonly files: readonly string[];
   // The headings each of these files must contain.
   readonly headings: readonly RequiredHeading[];

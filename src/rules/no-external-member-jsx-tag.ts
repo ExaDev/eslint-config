@@ -11,7 +11,7 @@ const OPTION_NAME = 'no-external-member-jsx-tag';
  * The options of `exadev/no-external-member-jsx-tag`.
  */
 export interface NoExternalMemberJsxTagOptions {
-  // Import specifiers, in the dialect of `import-policy` (each also selects everything beneath it), whose member tags are not reported: packages known to attach nothing that fails to cross the boundary.
+  // Import specifiers, in the form `import-policy` reads (minimatch globs; each also selects everything beneath it), whose member tags are not reported: packages known to attach nothing that fails to cross the boundary.
   readonly allowSources?: readonly string[];
   // Tags as written (`Lib.Icon`, `Ctx.Provider`) that are not reported.
   readonly allowTags?: readonly string[];

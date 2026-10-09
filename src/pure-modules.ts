@@ -10,7 +10,7 @@ import { toPublicConfigArray } from './to-public-config-array';
  * The `pureModules` option of `exadevConfig`, and the argument of `pureModulesConfig`.
  */
 export interface PureModulesOptions extends PureModuleOptions {
-  // Globs, relative to ESLint's working directory, of the modules that must stay pure, in the dialect of every file glob in this package. A leading `!` excludes. ESLint lints a file only if some block names its extension, so this needs `exadevConfig()` or another block for JavaScript and TypeScript files beside it.
+  // Globs, relative to ESLint's working directory, of the modules that must stay pure, as minimatch globs. A leading `!` excludes. ESLint lints a file only if some block names its extension, so this needs `exadevConfig()` or another block for JavaScript and TypeScript files beside it.
   readonly files: readonly string[];
   // Also bans `if`, `switch`, loops and the ternary operator in these files (`exadev/no-control-flow`), for a module that should hold a lookup table and nothing else. Off unless true.
   readonly noControlFlow?: boolean;

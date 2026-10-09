@@ -4,7 +4,7 @@ import { assertSupportedGlob, createFileScope, readFileGlobs, type FileScope } f
 import { isExcludePattern } from './workspace-glob';
 
 /**
- * The option schema for the `files` field of a per-file rule entry: one glob, or a list of globs in the `fileGlobsSchema` dialect.
+ * The option schema for the `files` field of a per-file rule entry: one glob, or a list of minimatch globs (`fileGlobsSchema`).
  */
 export const entryFilesSchema: JSONSchema4 = {
   anyOf: [{ type: 'string', minLength: 1 }, { type: 'array', items: { type: 'string', minLength: 1 }, minItems: 1, uniqueItems: true }],

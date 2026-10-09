@@ -24,7 +24,7 @@ export type ImportDeny = ImportDenyBase & ({ readonly importNames?: readonly str
  */
 export interface ImportConfine {
   readonly specifiers: readonly string[];
-  // File globs relative to ESLint's working directory, in the dialect of every file glob in this package.
+  // File globs relative to ESLint's working directory, as minimatch globs (a leading `!` excludes).
   readonly onlyIn: readonly string[];
   readonly allowTypeImports?: boolean;
   // Defaults to a message listing `onlyIn`.
