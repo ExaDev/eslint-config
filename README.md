@@ -463,7 +463,7 @@ In every mode, re-exports are banned outside a permitted barrel, and a permitted
 
 `required-exports`, `required-imports`, `import-policy` and `filename-pattern` check one file against a convention that depends on its path. Each self-scopes through `context.filename`, so it is a no-op on every other file and can sit in a shared config without a `files` array of its own. None needs type information, and none is in `recommended`, since each takes options only a project can supply.
 
-`files` in these rules is a glob, or a list of globs, in the dialect used for every file glob in this package (braces, `*`, `?`, `[...]`, `**` as whole segments, a leading `!` to exclude, wildcards never matching dot-prefixed names; extglob groups such as `@(a|b)` are not part of it and are rejected when the option is read), matched against the path relative to ESLint's working directory. A glob without a `/` names a file at any depth, so `fake.ts` and `**/fake.ts` are the same.
+`files` in these rules is a glob, or a list of globs, in the dialect used for every file glob in this package (braces, `*`, `?`, `[...]`, `**` as whole segments, a leading `!` to exclude, wildcards never matching dot-prefixed names; extglob groups such as `@(a|b)` are not part of it and are rejected when the option is read, while a plain parenthesised name such as the route group in `app/(marketing)/**`, text inside `[...]` and an escaped `\@(` are ordinary characters), matched against the path relative to ESLint's working directory. A glob without a `/` names a file at any depth, so `fake.ts` and `**/fake.ts` are the same.
 
 ### Required exports
 

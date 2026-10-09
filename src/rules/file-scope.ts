@@ -1,6 +1,6 @@
 import { relative, sep } from 'node:path';
 import { expandBraces, isExcludePattern, normalizeGlobSegments, segmentRequestsDotMatch, segmentToRegExp } from './workspace-glob';
-import { splitPathSegments } from './workspace-path';
+import { requireChar, splitPathSegments } from './workspace-path';
 
 /**
  * The option schema for a list of file globs: an array of strings, at least one entry, no duplicates. The dialect is the one `workspace-glob.ts` documents (brace expansion, `*`, `?`, `[...]`, `**` as zero or more whole segments, a wildcard never matching a dot-prefixed name, a leading `!` for an exclude), applied to file paths relative to ESLint's working directory. `readFileGlobs` is the runtime counterpart that additionally requires one include.
@@ -12,8 +12,56 @@ export const fileGlobsSchema = {
   uniqueItems: true,
 } as const;
 
-// The five extglob openers (`@(`, `+(`, `!(`, `?(`, `*(`). ESLint's minimatch reads them as groups while the dialect below does not, so a glob using one would select files for ESLint that this package's own matching cannot.
-const EXTGLOB = /[@+!?*]\(/u;
+const EXTGLOB_OPENERS: ReadonlySet<string> = new Set(['@', '+', '!', '?', '*']);
+
+// The index of the `]` closing the character class that opens at `open`, or -1 when it never closes (the `[` is then an ordinary character). A `]` straight after the `[`, or after its `!` or `^` negation, is a member of the class.
+function classEnd(pattern: string, open: number): number {
+  let index = open + 1;
+  if (pattern[index] === '!' || pattern[index] === '^') index += 1;
+  if (pattern[index] === ']') index += 1;
+  while (index < pattern.length) {
+    if (pattern[index] === '\\') index += 2;
+    else if (pattern[index] === ']') return index;
+    else index += 1;
+  }
+
+  return -1;
+}
+
+/**
+ * Whether a glob uses extglob syntax: `@(`, `+(`, `?(`, `*(` or `!(` outside a character class and not escaped. One leading `!` is the dialect's exclusion marker and is not part of the pattern, so `!(group)/**` excludes a directory named `(group)`. Text inside `[...]` (`[!(]`) and a backslash-escaped character (`\@(a)`) are literal. A scan, not a regular expression, because the two exemptions depend on position.
+ */
+export function hasExtglob(glob: string): boolean {
+  const pattern = isExcludePattern(glob) ? glob.slice(1) : glob;
+  let index = 0;
+  while (index < pattern.length) {
+    const char = requireChar(pattern, index);
+    if (char === '\\') {
+      index += 2;
+      continue;
+    }
+    if (char === '[') {
+      const end = classEnd(pattern, index);
+      if (end !== -1) {
+        index = end + 1;
+        continue;
+      }
+    }
+    if (EXTGLOB_OPENERS.has(char) && pattern[index + 1] === '(') return true;
+    index += 1;
+  }
+
+  return false;
+}
+
+/**
+ * Throws when `glob` uses extglob syntax. ESLint's minimatch reads `@(a|b)` and its kin as groups while this package's glob dialect, which every option and specifier pattern list shares, does not, so a pattern using one would select files for ESLint that this package's own matching cannot. The one definition of "extglob", called by every reader of a glob or specifier list; the error names `optionName` and the glob.
+ */
+export function assertNoExtglob(glob: string, optionName: string): void {
+  if (hasExtglob(glob)) {
+    throw new Error(`@exadev/eslint-config: "${optionName}" must not use extglob syntax, which this package's glob dialect does not support: "${glob}". Use braces, "*", "?" and "[...]", or several globs.`);
+  }
+}
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
@@ -29,7 +77,7 @@ export function readFileGlobs(value: unknown, optionName: string): readonly stri
   if (new Set(value).size !== value.length) throw new Error(`${prefix} not contain duplicate globs.`);
   if (!value.some((item) => !isExcludePattern(item))) throw new Error(`${prefix} contain at least one glob that does not start with "!".`);
   for (const pattern of value) {
-    if (EXTGLOB.test(pattern)) throw new Error(`${prefix} not use extglob syntax, which this package's glob dialect does not support: "${pattern}". Use braces, "*", "?" and "[...]", or several globs.`);
+    assertNoExtglob(pattern, optionName);
     void expandBraces(pattern);
   }
 
