@@ -225,6 +225,31 @@ describe('skill-name-unique', () => {
     expect(lintWith(fs, text, `${CWD}/skills/alpha/SKILL.md`)).toStrictEqual([]);
   });
 
+  describe('names compared trimmed and exactly, as the skills CLI compares them', () => {
+    const own = `${CWD}/skills/a/SKILL.md`;
+    const other = `${CWD}/plugins/p/skills/a/SKILL.md`;
+    const duplicate = 'The skill name "a" is also defined in';
+
+    it.each([
+      ['a leading space', '" a"'],
+      ['a trailing space', '"a "'],
+      ['a tab and a newline', '"\\ta\\n"'],
+    ])('reports %s as the same name from both sides', (_label, padded) => {
+      const fs = createMemoryFs({ [own]: `---\nname: a\ndescription: d\n---\n`, [other]: `---\nname: ${padded}\ndescription: d\n---\n` });
+      expect(lintWith(fs, skill('a'), own)).toStrictEqual([`${duplicate} plugins/p/skills/a/SKILL.md, so the skills CLI lists only one of them.`]);
+      expect(lintWith(fs, `---\nname: ${padded}\ndescription: d\n---\n`, other)).toStrictEqual([`${duplicate} skills/a/SKILL.md, so the skills CLI lists only one of them.`]);
+    });
+
+    it.each([
+      ['a fullwidth letter', '\uff41'],
+      ['a decomposed accent', 'cafe\u0301'],
+    ])('keeps %s distinct from its normalised form', (_label, name) => {
+      const normal = name === '\uff41' ? 'a' : 'caf\u00e9';
+      const fs = createMemoryFs({ [`${CWD}/skills/x/SKILL.md`]: skill(normal) });
+      expect(lintWith(fs, skill(name), `${CWD}/skills/y/SKILL.md`)).toStrictEqual([]);
+    });
+  });
+
   it('compares only the files the files option selects', () => {
     const fs = createMemoryFs({ ...tree, [`${CWD}/skills/alpha-copy/SKILL.md`]: skill('alpha'), [`${CWD}/fixtures/skills/alpha/SKILL.md`]: skill('alpha') });
     const own = `${CWD}/skills/alpha/SKILL.md`;

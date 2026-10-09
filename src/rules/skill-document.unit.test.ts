@@ -87,6 +87,25 @@ describe('parseFrontmatter', () => {
   });
 });
 
+describe('readSkillName with surrounding whitespace', () => {
+  it.each([
+    ['a space', '" a"', 'a'],
+    ['a trailing space', '"a "', 'a'],
+    ['a tab and a newline', '"\\ta\\n"', 'a'],
+  ])('returns the trimmed name for %s', (_label, scalar, expected) => {
+    expect(readSkillName(`---\nname: ${scalar}\n---\n`)).toBe(expected);
+  });
+
+  it('returns undefined for a name of only whitespace', () => {
+    expect(readSkillName('---\nname: "  "\n---\n')).toBeUndefined();
+  });
+
+  it('does not normalise: fullwidth and decomposed names stay distinct', () => {
+    expect(readSkillName('---\nname: "\uff41"\n---\n')).toBe('\uff41');
+    expect(readSkillName('---\nname: "cafe\u0301"\n---\n')).toBe('cafe\u0301');
+  });
+});
+
 describe('readSkillName', () => {
   it('returns undefined for frontmatter with an unresolvable alias', () => {
     expect(readSkillName('---\nname: *x\n---\n')).toBeUndefined();
