@@ -119,6 +119,12 @@ describe('a plugin manifest that is not valid JSON', () => {
   });
 });
 
+describe('the duplicate entry name message', () => {
+  it('quotes the name once', () => {
+    expect(lintWith({}, entries({ name: 'a', source: { source: 'github' } }, { name: 'a', source: { source: 'github' } }))).toStrictEqual(['The marketplace lists "a" more than once.']);
+  });
+});
+
 describe('a plugin manifest without a name', () => {
   it.each([['a missing name', '{}'], ['a non-string name', '{"name":1}'], ['a non-object manifest', '[]']])('reports the entry as pointing at an unset name for %s', (_label, manifest) => {
     expect(lintWith({ [`${CWD}/plugins/a/.claude-plugin/plugin.json`]: manifest }, entries(listing[0]))).toStrictEqual(['Marketplace entry "a" points at a plugin named "unset".']);
