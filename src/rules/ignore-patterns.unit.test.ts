@@ -14,7 +14,7 @@ const MINIMUM_LISTS = 300;
 const NEGATIONS_PER_PATTERN = 5;
 
 const PATTERNS = [
-  'x', 'x/', 'x/**', 'x/**/', 'x/*', '**/x', '**/x/', '**/x/**', '!x', 'dist', 'dist/', 'dist/**', '**/dist', '**/dist/', '.hidden', '.hidden/', '.*', '**/.hidden/**', '*.log', '**/*.log', 'a/skills/foo', 'a/skills/foo/', 'a/skills/foo/**', 'a/skills/foo/**/', 'a/skills/{foo,}', 'a/skills/{foo,bar}', 'a/skills/{foo,bar}/', 'a/skills/?(foo)', 'a/skills/@(foo|bar)', 'a/skills/!(foo)', 'a/skills/+(foo)/', '**/skills/*/', '**/skills/*', 'a/**', 'a/**/', 'a/**/c', '**/c/', 'é', 'é/', '日本/**', '{x,dist}', '{x,dist}/', '[a-c]', '[!x]*/', '*/', '*', '**', '/x', '/x/', 'x/y/', './x', 'x\\*', 'src/**/generated/', 'a/b/c/', 'a/b/c',
+  'x', 'x/', 'x/**', 'x/**/', 'x/*', '**/x', '**/x/', '**/x/**', '!x', 'dist', 'dist/', 'dist/**', '**/dist', '**/dist/', '.hidden', '.hidden/', '.*', '**/.hidden/**', '*.log', '**/*.log', 'a/skills/foo', 'a/skills/foo/', 'a/skills/foo/**', 'a/skills/foo/**/', 'a/skills/{foo,}', 'a/skills/{foo,bar}', 'a/skills/{foo,bar}/', 'a/skills/?(foo)', 'a/skills/@(foo|bar)', 'a/skills/!(foo)', 'a/skills/+(foo)/', '**/skills/*/', '**/skills/*', 'a/**', 'a/**/', 'a/**/c', '**/c/', 'é', 'é/', '日本/**', '{x,dist}', '{x,dist}/', '[a-c]', '[!x]*/', '*/', '*', '**', '/x', '/x/', 'x/y/', './x', 'x\\*', 'src/**/generated/', 'a/b/c/', 'a/b/c', './!x', '!./x', '!!(foo)/x', '!!x',
 ];
 const NEGATIONS = ['!x', '!x/', '!dist/keep', '!dist/keep/', '!**/keep.log', '!a/skills/foo/SKILL.md', '!a/skills/foo/**', '!.hidden/keep', '!*/', '!a/b'];
 const IGNORE_LISTS: readonly (readonly string[])[] = [
