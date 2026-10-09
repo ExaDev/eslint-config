@@ -1,6 +1,8 @@
-import { realpathSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
-import { listEntryNames, listFileNames, listSubdirectories, realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { listEntryNames, listFileNames, listSubdirectories, listSubdirectoriesThroughLinks, realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
 
 function fakeFs(tree: Record<string, readonly string[]>): WorkspaceFs {
   return {
@@ -60,5 +62,35 @@ describe('listFileNames', () => {
 
   it('returns only file entries, filtering out directories', () => {
     expect(listFileNames(fakeFs({ '/root': ['a', 'b', 'package.json', 'eslint.config.ts'] }), '/root')).toEqual(['package.json', 'eslint.config.ts']);
+  });
+});
+
+describe('listSubdirectoriesThroughLinks', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'exadev-eslint-config-workspace-fs-'));
+  });
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('returns an empty array for a directory that does not exist', () => {
+    expect(listSubdirectoriesThroughLinks(realWorkspaceFs, join(root, 'missing'))).toEqual([]);
+  });
+
+  it('lists a directory, a symbolic link to a directory (directly or through another link) and nothing else', () => {
+    mkdirSync(join(root, 'real', 'target'), { recursive: true });
+    mkdirSync(join(root, 'plugins', 'plain'), { recursive: true });
+    writeFileSync(join(root, 'plugins', 'file.json'), '{}');
+    writeFileSync(join(root, 'real', 'file.json'), '{}');
+    symlinkSync(join(root, 'real', 'target'), join(root, 'plugins', 'linked'));
+    symlinkSync(join(root, 'plugins', 'linked'), join(root, 'plugins', 'chained'));
+    symlinkSync(join(root, 'real', 'file.json'), join(root, 'plugins', 'linked-file'));
+    symlinkSync(join(root, 'real', 'gone'), join(root, 'plugins', 'dangling'));
+
+    expect([...listSubdirectoriesThroughLinks(realWorkspaceFs, join(root, 'plugins'))].sort()).toEqual(['chained', 'linked', 'plain']);
+    expect(listSubdirectories(realWorkspaceFs, join(root, 'plugins'))).toEqual(['plain']);
   });
 });

@@ -12,7 +12,7 @@ import { readFileGlobs } from './rules/file-scope';
 import { CLAUDE_PLUGIN_DIR, PLUGIN_MANIFEST_FILE } from './rules/claude-plugin-json';
 import { PLUGINS_DIR } from './rules/marketplace-manifest';
 import { SKILL_FILE_NAME } from './rules/skill-document';
-import { listSubdirectories, realWorkspaceFs, type WorkspaceFs } from './rules/workspace-fs';
+import { listSubdirectoriesThroughLinks, realWorkspaceFs, type WorkspaceFs } from './rules/workspace-fs';
 import { toPublicConfigArray } from './to-public-config-array';
 
 const OPTION_NAME = 'agentSkills';
@@ -61,7 +61,7 @@ export interface AgentSkillsEnvironment {
 type MarkdownLanguageOptions = NonNullable<Linter.Config['languageOptions']>;
 
 function hasSkillBelow(fs: WorkspaceFs, skillsDirectory: string): boolean {
-  return listSubdirectories(fs, skillsDirectory).some((name) => fs.existsSync(join(skillsDirectory, name, SKILL_FILE_NAME)));
+  return listSubdirectoriesThroughLinks(fs, skillsDirectory).some((name) => fs.existsSync(join(skillsDirectory, name, SKILL_FILE_NAME)));
 }
 
 /**
@@ -71,7 +71,7 @@ export function hasAgentSkillsLayout(fs: WorkspaceFs, cwd: string): boolean {
   return (
     fs.existsSync(join(cwd, CLAUDE_PLUGIN_DIR, MARKETPLACE_FILE_NAME)) ||
     hasSkillBelow(fs, join(cwd, SKILLS_DIR)) ||
-    listSubdirectories(fs, join(cwd, PLUGINS_DIR)).some((pluginName) => hasSkillBelow(fs, join(cwd, PLUGINS_DIR, pluginName, SKILLS_DIR)))
+    listSubdirectoriesThroughLinks(fs, join(cwd, PLUGINS_DIR)).some((pluginName) => hasSkillBelow(fs, join(cwd, PLUGINS_DIR, pluginName, SKILLS_DIR)))
   );
 }
 

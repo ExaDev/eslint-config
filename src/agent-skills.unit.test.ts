@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import json from '@eslint/json';
@@ -16,6 +16,7 @@ import {
 import { exadevConfig } from './create-config';
 import plugin from './plugin';
 import { createMemoryFs } from './rules/memory-fs';
+import { realWorkspaceFs } from './rules/workspace-fs';
 import type { RequireFn } from './optional-plugin';
 
 const CWD = '/repo';
@@ -256,6 +257,27 @@ describe('linting a repository', () => {
     expect(results['.claude-plugin/marketplace.json']?.[0]).toMatch(/^exadev\/marketplace-manifest: Marketplace entry "p2" has source ".\/plugins\/p2", whose \.claude-plugin\/plugin\.json is not valid JSON: /u);
     expect(results['.claude-plugin/marketplace.json']?.[1]).toBe('exadev/marketplace-manifest: Marketplace entry "p3" has source "tools/p3", which does not start with "./", so the skills CLI skips it.');
     expect(results['plugins/p1/.claude-plugin/plugin.json']).toStrictEqual(['exadev/plugin-manifest: The plugin version is unset but package.json is 1.0.0; they must be equal.']);
+  });
+
+  it('lists a plugin directory that is a symbolic link, so an unlisted one is found', async () => {
+    write('real/p1/.claude-plugin/plugin.json', JSON.stringify({ name: 'p1' }));
+    mkdirSync(join(cwd, 'plugins'));
+    symlinkSync(join(cwd, 'real', 'p1'), join(cwd, 'plugins', 'p1'));
+    write('.claude-plugin/marketplace.json', JSON.stringify({ name: 'm', owner: { name: 'o' }, plugins: [] }));
+
+    expect((await lint())['.claude-plugin/marketplace.json']).toStrictEqual(['exadev/marketplace-manifest: plugins/p1 holds a plugin manifest but is not listed in the marketplace.']);
+  });
+
+  it.each([
+    ['skill directory', 'skills/a', 'real/a'],
+    ['plugin directory', 'plugins/p', 'real/p'],
+  ])('detects a layout whose %s is a symbolic link', (_label, link, target) => {
+    const skillsBase = link.startsWith('plugins') ? join(target, 'skills', 'a') : target;
+    write(`${skillsBase}/SKILL.md`, skill('a'));
+    mkdirSync(dirname(join(cwd, link)), { recursive: true });
+    symlinkSync(join(cwd, target), join(cwd, link));
+
+    expect(hasAgentSkillsLayout(realWorkspaceFs, cwd)).toBe(true);
   });
 
   it('reports nothing for a consistent repository', async () => {
