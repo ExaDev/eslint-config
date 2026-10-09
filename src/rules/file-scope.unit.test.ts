@@ -73,6 +73,12 @@ describe('assertSupportedGlob', () => {
 });
 
 describe('assertNoExtglob', () => {
+  it('words the whole error, hint included', () => {
+    expect(() => { assertNoExtglob('a/@(b)', 'opt'); }).toThrow(
+      new Error('@exadev/eslint-config: "opt" must not use extglob syntax, which this package\'s glob dialect does not support: "a/@(b)". Use braces, "*", "?" and "[...]", or several globs.'),
+    );
+  });
+
   const accepted = [
     'app/(marketing)/**',
     'src/(group)/**',
