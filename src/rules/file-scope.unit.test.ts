@@ -1,3 +1,4 @@
+import { Minimatch } from 'minimatch';
 import { describe, expect, it } from 'vitest';
 import { assertNoExtglob, createFileScope, createPathMatcher, fileGlobsSchema, readFileGlobs, relativeToCwd } from './file-scope';
 
@@ -10,6 +11,41 @@ function inScope(globs: readonly string[], relativePath: string): boolean {
 describe('fileGlobsSchema', () => {
   it('is a non-empty, duplicate-free array of non-empty strings', () => {
     expect(fileGlobsSchema).toStrictEqual({ type: 'array', items: { type: 'string', minLength: 1 }, minItems: 1, uniqueItems: true });
+  });
+});
+
+// ESLint selects files with minimatch, so for every class form below the package matcher must select exactly the candidates minimatch does: a glob handed to both would otherwise lint files the duplicate check cannot match.
+describe('character classes against minimatch', () => {
+  const candidates = [']x', '\\]x', 'ax', 'bx', 'x', 'a/a/x', 'a/]/x', 'a/b/x', 'a/\\b]/x', 'a]', 'b]', ']', 'a', 'b', '-', '^', '!', 'c', '[', '\\'];
+  it.each([
+    '[\\]]x',
+    'a/[a\\]b]/x',
+    '[a\\]]',
+    '[^\\]]x',
+    '[!\\]]x',
+    '[\\]a]x',
+    '[\\]\\]x',
+    '[]]x',
+    '[]a]x',
+    '[^]]x',
+    '[a-c]x',
+    '[^a]x',
+    '[!a]x',
+    '[ab]',
+    'a/[\\]]/x',
+  ])('selects what minimatch selects for %s', (glob) => {
+    const matches = createPathMatcher([glob], 'any');
+    const oracle = new Minimatch(glob, { dot: true });
+    for (const candidate of candidates) expect([glob, candidate, matches(candidate)]).toStrictEqual([glob, candidate, oracle.match(candidate)]);
+  });
+
+  it.each([
+    ['[^a]x', 'bx', true],
+    ['[^a]x', 'ax', false],
+    ['[!a]x', 'bx', true],
+    ['[!a]x', 'ax', false],
+  ])('negates %s: %s is %s', (glob, candidate, expected) => {
+    expect(createPathMatcher([glob])(candidate)).toBe(expected);
   });
 });
 

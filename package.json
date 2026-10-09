@@ -43,6 +43,7 @@
     "eslint-plugin-turbo": "2.11.4",
     "husky": "^9.1.7",
     "lint-staged": "^17.2.0",
+    "minimatch": "10.2.6",
     "publint": "^0.3.21",
     "semantic-release": "^25.0.8",
     "tsdown": "^0.22.13",
