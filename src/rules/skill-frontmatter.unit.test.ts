@@ -18,6 +18,22 @@ describe('rule metadata', () => {
   });
 });
 
+describe('a description with only whitespace', () => {
+  it.each([
+    ['spaces', '   '],
+    ['a tab', '\t'],
+    ['a newline', '\n'],
+    ['mixed whitespace', ' \t\n '],
+  ])('is reported as empty for %s', (_label, description) => {
+    expect(checkSkillFrontmatter({ name: 'a', description }, 'a')).toStrictEqual([{ messageId: 'invalidDescription', data: {} }]);
+  });
+
+  it('is accepted when it has text, whatever surrounds it, and the length limit counts the value as written', () => {
+    expect(checkSkillFrontmatter({ name: 'a', description: '  Counts words.\n' }, 'a')).toStrictEqual([]);
+    expect(checkSkillFrontmatter({ name: 'a', description: `${'d'.repeat(MAX_SKILL_DESCRIPTION_LENGTH)}\n` }, 'a')).toStrictEqual([{ messageId: 'descriptionTooLong', data: { max: String(MAX_SKILL_DESCRIPTION_LENGTH) } }]);
+  });
+});
+
 describe('checkSkillFrontmatter', () => {
   it('reports nothing for a skill that meets every requirement', () => {
     expect(checkSkillFrontmatter({ name: 'word-count', description: 'Counts words.' }, 'word-count')).toStrictEqual([]);
