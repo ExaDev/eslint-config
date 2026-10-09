@@ -1,18 +1,56 @@
 import stylistic from '@stylistic/eslint-plugin';
 import { Linter, RuleTester } from 'eslint';
 import { describe, expect, it } from 'vitest';
-import multilineCommentStyle from './multiline-comment-style';
+import type { Rule } from 'eslint';
+import multilineCommentStyle, { withoutTrailingWhitespace } from './multiline-comment-style';
 
 const ruleTester = new RuleTester({ languageOptions: { ecmaVersion: 'latest', sourceType: 'module' } });
 const upstreamRule = stylistic.rules['multiline-comment-style'];
 
 // Each directive-shaped line `exadev/prefer-doc-comment` recognises and the upstream rule does not, in the spelling a real comment carries after its `//`.
-const WRAPPER_DIRECTIVES = ['TODO: revisit', 'FIXME later', 'todo: lower-case marker', 'fixme(scope): message', 'cspell:disable-next-line', 'biome-ignore lint/style: reason', '#region helpers', '#endregion'];
+const WRAPPER_DIRECTIVES = ['TODO: revisit', 'FIXME later', 'todo: lower-case marker', 'fixme(scope): message', 'cspell:disable-next-line', 'biome-ignore lint/style: reason', '#region helpers', '#endregion', 'content:claude:start', 'content:claude:end'];
 
 describe('multiline-comment-style meta', () => {
   it('is the upstream rule object itself apart from create, so schema, defaults, messages and fixability cannot drift from upstream', () => {
     expect(multilineCommentStyle.meta).toBe(upstreamRule.meta);
     expect(Object.keys(multilineCommentStyle)).toEqual(Object.keys(upstreamRule));
+  });
+});
+
+// A fixer whose every method returns the arguments it was called with, so a test reads exactly what text reached it.
+const recordingFixer = {
+  insertTextAfter: (node: unknown, text: string) => ({ method: 'insertTextAfter', node, text }),
+  insertTextAfterRange: (range: unknown, text: string) => ({ method: 'insertTextAfterRange', range, text }),
+  insertTextBefore: (node: unknown, text: string) => ({ method: 'insertTextBefore', node, text }),
+  insertTextBeforeRange: (range: unknown, text: string) => ({ method: 'insertTextBeforeRange', range, text }),
+  replaceText: (node: unknown, text: string) => ({ method: 'replaceText', node, text }),
+  replaceTextRange: (range: unknown, text: string) => ({ method: 'replaceTextRange', range, text }),
+  remove: (node: unknown) => ({ method: 'remove', node }),
+  removeRange: (range: unknown) => ({ method: 'removeRange', range }),
+};
+const asFixer = (value: typeof recordingFixer): Rule.RuleFixer => value as unknown as Rule.RuleFixer;
+
+describe('withoutTrailingWhitespace', () => {
+  it('returns a missing fix unchanged', () => {
+    expect(withoutTrailingWhitespace(undefined)).toBeUndefined();
+    expect(withoutTrailingWhitespace(null)).toBeNull();
+  });
+
+  it('passes a null result from the wrapped fix straight through', () => {
+    expect(withoutTrailingWhitespace(() => null)?.(asFixer(recordingFixer))).toBeNull();
+  });
+
+  it.each(['insertTextAfter', 'insertTextAfterRange', 'insertTextBefore', 'insertTextBeforeRange', 'replaceText', 'replaceTextRange'] as const)(
+    '%s writes its text with trailing spaces and tabs stripped from every line, leaving the rest alone',
+    (method) => {
+      const fix = withoutTrailingWhitespace((fixer) => fixer[method]([0, 1] as never, ' a \t\n \n b  \n c d') as never);
+      expect(fix?.(asFixer(recordingFixer))).toEqual({ method, [method.endsWith('Range') ? 'range' : 'node']: [0, 1], text: ' a\n\n b\n c d' });
+    },
+  );
+
+  it.each(['remove', 'removeRange'] as const)('%s, which writes no text, still reaches the real fixer', (method) => {
+    const fix = withoutTrailingWhitespace((fixer) => fixer[method]([0, 1] as never) as never);
+    expect(fix?.(asFixer(recordingFixer))).toEqual({ method, [method.endsWith('Range') ? 'range' : 'node']: [0, 1] });
   });
 });
 
@@ -30,6 +68,34 @@ describe('multiline-comment-style', () => {
       { code: '// first line\n// TODO: revisit\nconst x = 1;\n', options: ['separate-lines'] },
     ],
     invalid: [
+      {
+        name: 'a blank line inside a rewritten starred block carries no trailing whitespace',
+        code: '// a\n//\n// b\nconst x = 1;\n',
+        options: ['starred-block'],
+        output: '/*\n * a\n *\n * b\n */\nconst x = 1;\n',
+        errors: [{ messageId: 'expectedBlock' }],
+      },
+      {
+        name: 'a blank line inside a rewritten bare block carries no trailing whitespace',
+        code: '// a\n//\n// b\nconst x = 1;\n',
+        options: ['bare-block'],
+        output: '/* a\n\n   b */\nconst x = 1;\n',
+        errors: [{ messageId: 'expectedBlock' }],
+      },
+      {
+        name: 'a blank line and trailing text padding in a block rewritten to separate lines carry no trailing whitespace',
+        code: '/* a\n\n   b */\nconst x = 1;\n',
+        options: ['separate-lines'],
+        output: '// a\n//\n// b\nconst x = 1;\n',
+        errors: [{ messageId: 'expectedLines' }],
+      },
+      {
+        name: 'a content marker is never merged into the prose on either side of it',
+        code: '// Before one.\n// Before two.\n// content:claude:start\n// After one.\n// After two.\nconst x = 1;\n',
+        options: ['bare-block'],
+        output: '/* Before one.\n   Before two. */\n// content:claude:start\n/* After one.\n   After two. */\nconst x = 1;\n',
+        errors: [{ messageId: 'expectedBlock', line: 1 }, { messageId: 'expectedBlock', line: 4 }],
+      },
       {
         code: '// first line\n// second line\nconst x = 1;\n',
         options: ['bare-block'],
@@ -60,8 +126,8 @@ describe('multiline-comment-style', () => {
         name: 'separate-lines passes through with its options object',
         code: '/* first line\n   second line */\nconst x = 1;\n',
         options: ['separate-lines', { checkJSDoc: false }],
-        // The trailing space after `second line` is the upstream fixer's own: it keeps the space that sat before the closing delimiter.
-        output: '// first line\n// second line \nconst x = 1;\n',
+        // Upstream keeps the space that sat before the closing delimiter as trailing whitespace; the wrapper strips it.
+        output: '// first line\n// second line\nconst x = 1;\n',
         errors: [{ messageId: 'expectedLines' }],
       },
       {

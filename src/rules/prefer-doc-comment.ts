@@ -36,6 +36,8 @@ const ESLINT_LINE_HONOURED_LABELS: ReadonlySet<string> = new Set(['eslint-disabl
 const TODO_FIXME_UPPERCASE_PATTERN = /^(?:TODO|FIXME)\b/u;
 const TODO_FIXME_MARKED_PATTERN = /^(?:todo|fixme)\b[:(]/iu;
 const OTHER_DIRECTIVE_PATTERN = /^(?:@?ts-(?:expect-error|ignore|nocheck|check)|prettier-ignore|(?:c8|v8|istanbul)\s+ignore|node:coverage\s+(?:ignore|disable|enable)|cspell:(?:disable(?:-next-line|-line)?|enable)|biome-ignore|#(?:end)?region)\b/iu;
+// A generated-content or managed-region marker (`content:claude:start`, `content:claude:end`, `generated:docs:start`): a whole comment of exactly `<word>:<word>:start` or `<word>:<word>:end`, which a tool locates by matching the exact line, so folding it into neighbouring prose, or into a doc comment, makes the marker undetectable. The pattern is anchored at both ends, so prose that merely opens with such a shape is not a marker, and it names no tools, so any tool's marker pair is covered without a list.
+const MARKER_PATTERN = /^[\w-]+:[\w-]+:(?:start|end)\s*$/u;
 // An unescaped tag-shaped `@word` mention: the `@` at the start of the text or immediately after a whitespace character. See checkAnchor's own hasTagLine comment for why every such mention withholds this rule's fix, and for the direct evidence (TypeScript's own JSDoc parser, jsdoc/escape-inline-tags) behind each half of the shape. No trailing `\w+` quantifier of its own: the pattern's job is to find the mention, never to capture its name, so a single word character after the `@` is all the shape needs to test.
 const UNESCAPED_TAG_MENTION_PATTERN = /(?:^|\s)@\w/u;
 
@@ -114,7 +116,7 @@ export function isDirectiveComment(text: string, commentType: TSESTree.Comment['
   if (eslintMatch !== null) return commentType !== AST_TOKEN_TYPES.Line || ESLINT_LINE_HONOURED_LABELS.has(eslintMatch[0]);
   if (TODO_FIXME_UPPERCASE_PATTERN.test(trimmed) || TODO_FIXME_MARKED_PATTERN.test(trimmed)) return true;
 
-  return OTHER_DIRECTIVE_PATTERN.test(trimmed);
+  return MARKER_PATTERN.test(trimmed) || OTHER_DIRECTIVE_PATTERN.test(trimmed);
 }
 
 /**
