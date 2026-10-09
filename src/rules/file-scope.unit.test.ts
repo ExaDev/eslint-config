@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createFileScope, createPathMatcher, fileGlobsSchema, readFileGlobs, relativeToCwd } from './file-scope';
+import { assertNoExtglob, createFileScope, createPathMatcher, fileGlobsSchema, readFileGlobs, relativeToCwd } from './file-scope';
 
 const CWD = '/repo';
 
@@ -13,9 +13,64 @@ describe('fileGlobsSchema', () => {
   });
 });
 
+describe('assertNoExtglob', () => {
+  const accepted = [
+    'app/(marketing)/**',
+    'src/(group)/**',
+    '(group)/**',
+    '!app/(marketing)/**',
+    'app/@modal/(.)photo/**',
+    'a/{(b),c}/**',
+    'a/{b,(c)}',
+    '[(]x/**',
+    '@scope/(x)',
+    '@scope/pkg',
+    '!(group)/**',
+    '**/[!(]x.ts',
+    '**/[^(]x.ts',
+    '**/[]!(]x.ts',
+    '\\@(a)',
+    'a/\\!(b)/c',
+    'src\\(a)\\x',
+    'a/(b|c)/**',
+    'notes (old)/*.md',
+    'a/[@+?*!](b)/c',
+    'a/[unclosed(x',
+    '**/*.ts',
+    'skills/*/SKILL.md',
+    'a/*/b',
+  ];
+  const rejected = [
+    'skills/@(a|b)/SKILL.md',
+    'src/+(a|b)/x',
+    'a/!(b)/c',
+    'a/?(b)/c',
+    'a/*(b)/c',
+    '@(a|b)/x',
+    '!skills/@(a)/**',
+    '!a/!(b)/c',
+    'a/{@(b),c}/**',
+    'a/[x]@(b)/c',
+    'a/\\@x/@(b)',
+    '**/+(a).ts',
+  ];
+
+  it.each(accepted)('accepts %s', (glob) => {
+    expect(() => { assertNoExtglob(glob, 'opt'); }).not.toThrow();
+  });
+
+  it.each(rejected)('rejects %s, naming the option and the glob', (glob) => {
+    expect(() => { assertNoExtglob(glob, 'opt'); }).toThrow(`@exadev/eslint-config: "opt" must not use extglob syntax, which this package's glob dialect does not support: "${glob}"`);
+  });
+});
+
 describe('readFileGlobs', () => {
   it.each(['skills/@(a|b)/SKILL.md', 'skills/+(a)/SKILL.md', 'skills/!(a)/SKILL.md', 'skills/?(a)/SKILL.md', 'skills/*(a)/SKILL.md', '!skills/@(a)/**'])('rejects the extglob form %s, naming the option and the glob', (glob) => {
     expect(() => readFileGlobs(['**/SKILL.md', glob], 'someOption')).toThrow(`"someOption" must not use extglob syntax, which this package's glob dialect does not support: "${glob}"`);
+  });
+
+  it.each(['app/(marketing)/**', '!(group)/**', '!app/(marketing)/**', '**/[!(]x.ts'])('accepts the route group or class form %s', (glob) => {
+    expect(readFileGlobs(['**/*.ts', glob], 'someOption')).toStrictEqual(['**/*.ts', glob]);
   });
 
   it('still accepts braces, classes and a literal parenthesis', () => {
