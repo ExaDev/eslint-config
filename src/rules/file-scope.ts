@@ -34,30 +34,40 @@ interface WildcardSegment {
   readonly matches: (name: string) => boolean;
 }
 
-// A '**' segment is the string itself; any other segment is pre-compiled once, when the scope is created, rather than per file.
-type CompiledSegment = '**' | WildcardSegment;
+// A '**' segment, which consumes zero or more whole path segments; `crossesDot` says whether it may consume a dot-prefixed one.
+interface GlobstarSegment {
+  readonly crossesDot: boolean;
+}
 
-function compileSegment(segment: string): CompiledSegment {
-  if (segment === '**') return '**';
+// Any other segment is pre-compiled once, when the scope is created, rather than per file.
+type CompiledSegment = GlobstarSegment | WildcardSegment;
+
+/**
+ * How a glob treats a dot-prefixed path segment. `explicit` is the dialect of every file glob option in this package: a wildcard or `**` never matches one, and only a segment that itself opens with a dot does. `any` is the matching ESLint applies to a config's `files` and `ignores` (minimatch with `dot: true`), for a rule that must agree with ESLint about which files a glob selects.
+ */
+export type DotMatching = 'explicit' | 'any';
+
+function compileSegment(segment: string, dotMatching: DotMatching): CompiledSegment {
+  if (segment === '**') return { crossesDot: dotMatching === 'any' };
   const pattern = segmentToRegExp(segment);
-  const allowDotMatch = segmentRequestsDotMatch(segment);
+  const allowDotMatch = dotMatching === 'any' || segmentRequestsDotMatch(segment);
 
   return { matches: (name) => (allowDotMatch || !name.startsWith('.')) && pattern.test(name) };
 }
 
-function compilePattern(pattern: string): readonly (readonly CompiledSegment[])[] {
-  return expandBraces(pattern).map((expanded) => normalizeGlobSegments(splitPathSegments(expanded)).map(compileSegment));
+function compilePattern(pattern: string, dotMatching: DotMatching): readonly (readonly CompiledSegment[])[] {
+  return expandBraces(pattern).map((expanded) => normalizeGlobSegments(splitPathSegments(expanded)).map((segment) => compileSegment(segment, dotMatching)));
 }
 
 function matchSegments(path: readonly string[], pattern: readonly CompiledSegment[]): boolean {
   const [head, ...rest] = pattern;
   const [first, ...others] = path;
   if (head === undefined) return first === undefined;
-  if (head === '**') {
-    // Zero segments consumed, or one real segment consumed and '**' tried again from the next; '**' never crosses a dot-prefixed segment, the same rule a single wildcard follows.
+  if ('crossesDot' in head) {
+    // Zero segments consumed, or one real segment consumed and '**' tried again from the next; unless it crosses dots, '**' never crosses a dot-prefixed segment, the same rule a single wildcard follows.
     if (matchSegments(path, rest)) return true;
 
-    return first !== undefined && !first.startsWith('.') && matchSegments(others, pattern);
+    return first !== undefined && (head.crossesDot || !first.startsWith('.')) && matchSegments(others, pattern);
   }
 
   return first !== undefined && head.matches(first) && matchSegments(others, rest);
@@ -74,14 +84,15 @@ export type FileScope = (filename: string, cwd: string) => boolean;
 export type PathMatcher = (path: string) => boolean;
 
 /**
- * Compiles a validated glob list into a `PathMatcher`: a match means at least one include matches and no `!` exclude does. The path is split on `/` and matched segment by segment, so it need not be a file path: an import specifier matches the same way. A path whose first segment is `..` matches nothing, since it leaves the root the globs are relative to. Compile once per rule `create()` (or per options object), not per path.
+ * Compiles a validated glob list into a `PathMatcher`: a match means at least one include matches and no `!` exclude does. The path is split on `/` and matched segment by segment, so it need not be a file path: an import specifier matches the same way. A path whose first segment is `..` matches nothing, since it leaves the root the globs are relative to. Compile once per rule `create()` (or per options object), not per path. `dotMatching` defaults to the package dialect (`explicit`).
  */
-export function createPathMatcher(globs: readonly string[]): PathMatcher {
-  const includes = globs.filter((glob) => !isExcludePattern(glob)).flatMap(compilePattern);
+export function createPathMatcher(globs: readonly string[], dotMatching: DotMatching = 'explicit'): PathMatcher {
+  const compile = (glob: string) => compilePattern(glob, dotMatching);
+  const includes = globs.filter((glob) => !isExcludePattern(glob)).flatMap(compile);
   const excludes = globs
     .filter(isExcludePattern)
     .map((glob) => glob.slice(1))
-    .flatMap(compilePattern);
+    .flatMap(compile);
 
   return (path) => {
     const segments = splitPathSegments(path);

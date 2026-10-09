@@ -280,6 +280,19 @@ describe('linting a repository', () => {
     expect(hasAgentSkillsLayout(realWorkspaceFs, cwd)).toBe(true);
   });
 
+  it('finds a repeated skill name from either side when one copy sits in a dot-prefixed directory', async () => {
+    write('skills/a/SKILL.md', skill('a'));
+    write('.agents/skills/a2/SKILL.md', skill('a'));
+
+    expect(await lint()).toStrictEqual({
+      '.agents/skills/a2/SKILL.md': [
+        'exadev/skill-frontmatter: The skill name "a" must equal its directory name "a2".',
+        'exadev/skill-name-unique: The skill name "a" is also defined in skills/a/SKILL.md, so the skills CLI lists only one of them.',
+      ],
+      'skills/a/SKILL.md': ['exadev/skill-name-unique: The skill name "a" is also defined in .agents/skills/a2/SKILL.md, so the skills CLI lists only one of them.'],
+    });
+  });
+
   it('reports nothing for a consistent repository', async () => {
     write('skills/word-count/SKILL.md', skill('word-count'));
     write('plugins/p/skills/other/SKILL.md', skill('other'));

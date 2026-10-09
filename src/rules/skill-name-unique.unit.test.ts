@@ -129,6 +129,13 @@ describe('skill-name-unique', () => {
     expect(lintWith(fs, skill('alpha'), own, { options: [{ files: ['**/SKILL.md', '!skills/alpha-copy/**', '!fixtures/**'] }] })).toStrictEqual([]);
   });
 
+  it('matches a dot-prefixed directory with a wildcard or ** in the files option, as ESLint does', () => {
+    const fs = createMemoryFs({ ...tree, [`${CWD}/.agents/skills/copy/SKILL.md`]: skill('alpha') });
+    expect(lintWith(fs, skill('alpha'), `${CWD}/skills/alpha/SKILL.md`, { options: [{ files: ['**/skills/*/SKILL.md'] }] })).toStrictEqual([
+      'The skill name "alpha" is also defined in .agents/skills/copy/SKILL.md, so the skills CLI lists only one of them.',
+    ]);
+  });
+
   it('rejects an unknown option and an empty files list', () => {
     const fs = createMemoryFs(tree);
     const own = `${CWD}/skills/alpha/SKILL.md`;
