@@ -1,13 +1,31 @@
 import markdown from '@eslint/markdown';
 import { Linter } from 'eslint';
+import type { Minimatch as MinimatchClass } from 'minimatch';
 import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createIgnoreMatcher } from './ignore-patterns';
 import { createMemoryFs } from './memory-fs';
 import { createSkillNameUniqueRule, scanSkillFiles } from './skill-name-unique';
 import { realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
+
+// Counts every Minimatch the rule's code constructs, so a test can tell when a glob is compiled.
+const constructions = vi.hoisted(() => ({ count: 0 }));
+
+vi.mock('minimatch', async (importOriginal) => {
+  const original = await importOriginal<{ readonly Minimatch: typeof MinimatchClass }>();
+
+  return {
+    ...original,
+    Minimatch: class extends original.Minimatch {
+      constructor(...args: ConstructorParameters<typeof original.Minimatch>) {
+        super(...args);
+        constructions.count += 1;
+      }
+    },
+  };
+});
 
 const CWD = '/repo';
 const SCANS_FOR_THREE_SELECTIONS = 3;
@@ -267,6 +285,21 @@ describe('skill-name-unique', () => {
     expect(lintWith(fs, skill('alpha'), `${CWD}/skills/alpha/SKILL.md`, { options: [{ files: ['skills/@(alpha|alpha-copy)/SKILL.md'] }] })).toStrictEqual([
       'The skill name "alpha" is also defined in skills/alpha-copy/SKILL.md, so the skills CLI lists only one of them.',
     ]);
+  });
+
+  it('validates the files option once for a lint of many skills, not once per file', () => {
+    const SKILLS = 200;
+    const files: Record<string, string> = {};
+    for (let index = 0; index < SKILLS; index += 1) files[`${CWD}/skills/s${String(index)}/SKILL.md`] = skill(`s${String(index)}`);
+    const fs = createMemoryFs(files);
+    const rule = createSkillNameUniqueRule(fs);
+    const options = [{ files: ['skills/*/SKILL.md', '!skills/drafts/**'] }];
+    lintWith(fs, skill('s0'), `${CWD}/skills/s0/SKILL.md`, { options, rule });
+    const afterFirst = constructions.count;
+    for (let index = 1; index < SKILLS; index += 1) lintWith(fs, skill(`s${String(index)}`), `${CWD}/skills/s${String(index)}/SKILL.md`, { options, rule });
+
+    // Every glob is compiled for the option's validation and for the scan's matcher on the first lint; the other lints reuse both.
+    expect(constructions.count).toBe(afterFirst);
   });
 
   it('matches a dot-prefixed directory with a wildcard or ** in the files option, as ESLint does', () => {
