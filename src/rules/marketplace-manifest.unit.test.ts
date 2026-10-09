@@ -136,6 +136,36 @@ describe('the location of an entry name that is empty', () => {
   });
 });
 
+describe('the order of unlisted plugin findings', () => {
+  const tree = {
+    [`${CWD}/plugins/a/.claude-plugin/plugin.json`]: plugin('a'),
+    [`${CWD}/plugins/b/.claude-plugin/plugin.json`]: plugin('b'),
+    [`${CWD}/plugins/c/.claude-plugin/plugin.json`]: plugin('c'),
+  };
+  const inner = createMemoryFs(tree);
+
+  function lintListedAs(order: (names: readonly string[]) => readonly string[]): readonly string[] {
+    const shuffled = {
+      ...inner,
+      readdirSync: (path: string) => {
+        const listed = inner.readdirSync(path);
+
+        return path.endsWith('/plugins') ? order(listed.map((entry) => entry.name)).map((name) => ({ name, isDirectory: () => true })) : listed;
+      },
+    };
+    const config = [{ files: ['**/*.json'], language: 'json/json', plugins: { json, test: { rules: { 'marketplace-manifest': createMarketplaceManifestRule(shuffled) } } }, rules: { 'test/marketplace-manifest': 'error' } }];
+
+    return new Linter({ cwd: CWD }).verify(entries(), config as never, { filename: FILE }).map((message) => message.message);
+  }
+
+  it('is by plugin name whatever order the file system lists them in', () => {
+    const expected = ['plugins/a holds a plugin manifest but is not listed in the marketplace.', 'plugins/b holds a plugin manifest but is not listed in the marketplace.', 'plugins/c holds a plugin manifest but is not listed in the marketplace.'];
+    expect(lintListedAs((names) => names)).toStrictEqual(expected);
+    expect(lintListedAs((names) => [...names].reverse())).toStrictEqual(expected);
+    expect(lintListedAs((names) => ['b', 'c', 'a'].filter((name) => names.includes(name)))).toStrictEqual(expected);
+  });
+});
+
 describe('the duplicate entry name message', () => {
   it('quotes the name once', () => {
     expect(lintWith({}, entries({ name: 'a', source: { source: 'github' } }, { name: 'a', source: { source: 'github' } }))).toStrictEqual(['The marketplace lists "a" more than once.']);
