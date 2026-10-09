@@ -938,7 +938,7 @@ import { defineConfig } from 'eslint/config';
 import { agentSkillsConfig, exadevConfig } from '@exadev/eslint-config';
 
 export default defineConfig(
-  ...exadevConfig(),
+  ...exadevConfig({ agentSkills: false }),
   ...agentSkillsConfig({
     skillFiles: ['skills/*/SKILL.md', 'plugins/*/skills/*/SKILL.md', '!plugins/legacy/**'],
     pluginFiles: ['plugins/*/.claude-plugin/plugin.json'],
@@ -946,7 +946,9 @@ export default defineConfig(
 );
 ```
 
-The same object goes to `exadevConfig({ agentSkills: { ... } })`. With no argument the defaults apply, and `exadevConfig()` needs no option at all in a repository that has a marketplace or a skills directory:
+`agentSkills: false` is part of the example. In a repository with a skills layout `exadevConfig()` detects it and adds the default-glob blocks itself, and flat config applies every block that selects a file, so a `!` exclusion in the later `agentSkillsConfig` block would not take back a rule the earlier block already applied to the excluded plugin.
+
+The same object goes to `exadevConfig({ agentSkills: { ... } })`, which replaces the default globs instead of adding blocks beside them, so it needs no `agentSkills: false`. With no argument the defaults apply, and `exadevConfig()` needs no option at all in a repository that has a marketplace or a skills directory:
 
 | Value | `options.agentSkills` |
 | --- | --- |

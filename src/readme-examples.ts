@@ -211,11 +211,11 @@ export function buildViaDefensiveFallbackAllow(): DefinedConfig {
 }
 
 /**
- * README's "Agent skills and plugin marketplaces" section: the standalone form with its own globs, spread into defineConfig() alongside exadevConfig().
+ * README's "Agent skills and plugin marketplaces" section: the standalone form with its own globs, spread into defineConfig() alongside exadevConfig() with its own agentSkills turned off, since in a repository with a skills layout it would otherwise add the default-glob blocks that the standalone one's exclusions cannot undo.
  */
 export function buildViaAgentSkills(): DefinedConfig {
   return defineConfig(
-    ...exadevConfig({ react: false, nextjs: false }),
+    ...exadevConfig({ react: false, nextjs: false, agentSkills: false }),
     ...agentSkillsConfig({
       skillFiles: ['skills/*/SKILL.md', 'plugins/*/skills/*/SKILL.md', '!plugins/legacy/**'],
       pluginFiles: ['plugins/*/.claude-plugin/plugin.json'],
