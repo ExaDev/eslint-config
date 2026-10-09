@@ -81,7 +81,7 @@ export function scanSkillFiles(fs: WorkspaceFs, root: string, matches: PathMatch
 }
 
 /**
- * Requires a skill name to be defined once across the repository. The skills CLI de-duplicates skills by `name` and silently drops every later one, so a copied SKILL.md whose name was never changed disappears from `skills add` with no error. The other SKILL.md files are found by scanning the working directory, once per directory, file selection and ignore list for the life of the process, and the current file is compared by its own linted text rather than its copy on disk. The scan is never invalidated, and the cache belongs to the rule, so every `ESLint` instance in the process shares it and a long-lived process (an editor's language server) keeps serving the files it saw first until it restarts, the same trade-off the workspace architecture rules make: ESLint gives a rule no signal that a run has started, so detecting a change would mean rescanning the tree for every SKILL.md linted, and checking only the files already seen would miss a newly added copy. The cache lives in the rule created by this factory, so a test that builds its own rule starts with an empty one. The filesystem is injectable so a test drives it from an in-memory tree.
+ * Requires a skill name to be defined once across the repository. The skills CLI de-duplicates skills by `name` and silently drops every later one, so a copied SKILL.md whose name was never changed disappears from `skills add` with no error. The other SKILL.md files are found by scanning the working directory, once per directory, file selection and ignore list for the life of the process, and the current file is compared by its own linted text rather than its copy on disk. A scanned file that resolves (realpath) to the linted file is the same skill and not a duplicate, which is what a skill directory linked into a plugin is; the scan itself never follows a link. The scan is never invalidated, and the cache belongs to the rule, so every `ESLint` instance in the process shares it and a long-lived process (an editor's language server) keeps serving the files it saw first until it restarts, the same trade-off the workspace architecture rules make: ESLint gives a rule no signal that a run has started, so detecting a change would mean rescanning the tree for every SKILL.md linted, and checking only the files already seen would miss a newly added copy. The cache lives in the rule created by this factory, so a test that builds its own rule starts with an empty one. The filesystem is injectable so a test drives it from an in-memory tree.
  */
 export function createSkillNameUniqueRule(fs: WorkspaceFs = realWorkspaceFs): SkillNameUniqueRuleDefinition {
   const scans = new Map<string, readonly SkillEntry[]>();
@@ -114,6 +114,9 @@ export function createSkillNameUniqueRule(fs: WorkspaceFs = realWorkspaceFs): Sk
     create(context) {
       const [options] = context.options;
       const ownPath = relativeToCwd(context.filename, context.cwd);
+      // The linted file as the file system names it, which is what makes two paths one skill. A file that is not on disk (an unsaved buffer) is its own path.
+      const ownRealPath = fs.existsSync(context.filename) ? fs.realpathSync(context.filename) : context.filename;
+      const isOwnFile = (entry: SkillEntry): boolean => entry.path === ownPath || fs.realpathSync(join(context.cwd, entry.path)) === ownRealPath;
 
       return {
         yaml(node) {
@@ -122,7 +125,7 @@ export function createSkillNameUniqueRule(fs: WorkspaceFs = realWorkspaceFs): Sk
           const { name } = parsed.value;
           if (typeof name !== 'string' || name.length === 0) return;
           const others = skillsUnder(context.cwd, options)
-            .filter((entry) => entry.name === name && entry.path !== ownPath)
+            .filter((entry) => entry.name === name && !isOwnFile(entry))
             .map((entry) => entry.path)
             .sort();
           if (others.length > 0) context.report({ node, messageId: 'duplicateName', data: { name, paths: others.join(', ') } });

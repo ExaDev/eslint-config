@@ -371,6 +371,28 @@ describe('linting a repository', () => {
     expect(results['skills/bad/SKILL.md']?.[0]).toMatch(/^exadev\/skill-frontmatter: The frontmatter is not valid YAML: Unresolved alias/u);
   });
 
+  it('does not report a skill reached through a directory symbolic link as a duplicate of its own target, from either path', async () => {
+    write('skills/foo/SKILL.md', skill('foo'));
+    mkdirSync(join(cwd, 'plugins', 'p', 'skills'), { recursive: true });
+    symlinkSync(join(cwd, 'skills', 'foo'), join(cwd, 'plugins', 'p', 'skills', 'foo'));
+    const eslint = new ESLint({ cwd, overrideConfigFile: true, overrideConfig: agentSkillsConfig() });
+    const results = await eslint.lintFiles(['skills/foo/SKILL.md', 'plugins/p/skills/foo/SKILL.md']);
+
+    expect(results.map((result) => [result.filePath.slice(cwd.length + 1), result.messages.map((message) => message.message)])).toStrictEqual([
+      ['skills/foo/SKILL.md', []],
+      ['plugins/p/skills/foo/SKILL.md', []],
+    ]);
+  });
+
+  it('still reports a copy that is a different file', async () => {
+    write('skills/foo/SKILL.md', skill('foo'));
+    write('plugins/p/skills/foo/SKILL.md', skill('foo'));
+    const eslint = new ESLint({ cwd, overrideConfigFile: true, overrideConfig: agentSkillsConfig() });
+    const [result] = await eslint.lintFiles(['plugins/p/skills/foo/SKILL.md']);
+
+    expect(result?.messages.map((message) => message.message)).toStrictEqual(['The skill name "foo" is also defined in skills/foo/SKILL.md, so the skills CLI lists only one of them.']);
+  });
+
   it('reports nothing for a consistent repository', async () => {
     write('skills/word-count/SKILL.md', skill('word-count'));
     write('plugins/p/skills/other/SKILL.md', skill('other'));
