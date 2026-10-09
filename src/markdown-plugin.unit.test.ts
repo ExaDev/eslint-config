@@ -1,6 +1,6 @@
 import markdown from '@eslint/markdown';
 import { describe, expect, it } from 'vitest';
-import { requireMarkdownPlugin, resolveMarkdownPlugin } from './markdown-plugin';
+import { requireMarkdownPlugin, resolveMarkdownPlugin, tryResolveMarkdownPlugin } from './markdown-plugin';
 
 describe('resolveMarkdownPlugin', () => {
   it('finds the plugin under .default of a namespace, the shape require() gives an ES module', () => {
@@ -18,6 +18,21 @@ describe('resolveMarkdownPlugin', () => {
 
   it.each([undefined, null, 'markdown', true, []])('rejects %j', (value) => {
     expect(resolveMarkdownPlugin(value)).toBeUndefined();
+  });
+});
+
+describe('tryResolveMarkdownPlugin', () => {
+  it('resolves the installed package', () => {
+    expect(tryResolveMarkdownPlugin()).toBe(markdown);
+  });
+
+  it('is undefined, never a throw, when the package cannot be resolved or is not the plugin', () => {
+    expect(
+      tryResolveMarkdownPlugin(() => {
+        throw new Error('not found');
+      }),
+    ).toBeUndefined();
+    expect(tryResolveMarkdownPlugin(() => ({ rules: {} }))).toBeUndefined();
   });
 });
 

@@ -1,4 +1,5 @@
 import type { TSESLint } from '@typescript-eslint/utils';
+import { buildAgentSkillsConfig, type AgentSkillsOptions } from './agent-skills';
 import type { ConfigArrayValue, PublicConfigArray } from './config-types';
 import { buildGitignoreConfig } from './gitignore';
 import { buildImportPolicyConfig } from './import-policy';
@@ -29,6 +30,8 @@ export interface ExadevConfigOptions {
   readonly turboEnv?: boolean;
   // true: enforce package.json key order (see src/rules/package-json-key-order.ts) regardless of syncpack. false: never enforce it. undefined (the default): auto-detect -- enabled unless the consumer's own project already has syncpack configured, since syncpack already produces this exact order for free.
   readonly packageJsonKeyOrder?: boolean;
+  // true or an options object: lint agent SKILL.md files and Claude Code plugin manifests (see src/agent-skills.ts), throwing if @eslint/markdown or @eslint/json isn't resolvable; an options object also overrides the globs the rules apply to. false: never. undefined (the default): auto-detect -- on if the working directory holds a marketplace or skills/<name>/SKILL.md, using whichever of the two optional peers resolves.
+  readonly agentSkills?: boolean | AgentSkillsOptions;
   // true: derive ESLint's ignores from .gitignore, throwing if no .gitignore exists. false: never derive it. undefined (the default): auto-detect -- on if the consumer's project has a .gitignore, silently off if it doesn't (a project with no .gitignore at all -- no version control set up yet -- has nothing for this to read).
   readonly gitignore?: boolean;
   // Off unless given (unlike every tri-state option above): workspace architecture rules require real per-repo configuration (a "groups" list has no sensible default), so there is no auto-detected middle state. See workspaceArchitectureConfig in src/workspace-architecture.ts.
@@ -76,6 +79,7 @@ export function exadevConfig(options: ExadevConfigOptions = {}, ...userConfigs: 
     ...buildNextjsConfig({ enabled: options.nextjs, plugin }),
     ...buildTurboEnvConfig({ enabled: options.turboEnv }),
     ...buildPackageJsonKeyOrderConfig({ enabled: options.packageJsonKeyOrder }),
+    ...buildAgentSkillsConfig(options.agentSkills),
     ...(options.workspaceArchitecture !== undefined ? buildWorkspaceArchitectureConfig(options.workspaceArchitecture) : []),
     ...(options.turbo !== undefined ? buildTurboConfig(withWorkspaceGroups(options.turbo, options.workspaceArchitecture)) : []),
     ...(options.importPolicies !== undefined ? buildImportPolicyConfig(options.importPolicies) : []),

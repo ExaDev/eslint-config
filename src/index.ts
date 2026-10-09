@@ -1,3 +1,4 @@
+export { agentSkillsConfig } from './agent-skills';
 export { defaultConfig as default, exadevConfig } from './create-config';
 export { importPolicyConfig } from './import-policy';
 export { markdownHeadingsConfig } from './markdown-headings';
@@ -8,6 +9,7 @@ export { toolingWiringConfig } from './tooling-wiring';
 export { turboConfig } from './turbo-config';
 export { assertEslintConfig, verifyEslintConfig } from './verify-eslint';
 export { workspaceArchitectureConfig } from './workspace-architecture';
+export type { AgentSkillsOptions } from './agent-skills';
 export type { MarkdownFrontmatter, MarkdownHeadingsOptions } from './markdown-headings';
 export type { PureModulesOptions } from './pure-modules';
 export type { TestHygieneOptions } from './test-hygiene';
