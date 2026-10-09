@@ -1533,7 +1533,7 @@ export default exadevConfig({
 
 ### Reading the shared layout from @exadev/config
 
-A repository that describes its workspace once in [`@exadev/config`](https://github.com/ExaDev/config)'s `layout` section can feed the same description to these rules. The `layout` section's type is checked equal to `WorkspaceArchitectureOptions`, so the value `loadSection(layoutSection)` returns is passed to `workspaceArchitecture` as it is. In an ESM `eslint.config.ts`, read it with top-level `await`:
+A repository that describes its workspace once in [`@exadev/config`](https://github.com/ExaDev/config)'s `layout` section can feed the same description to these rules. The `layout` section's type is checked equal to `WorkspaceArchitectureOptions`, so the `value` of the result `loadSection(layoutSection)` returns is passed to `workspaceArchitecture` as it is (the result also names the `file` it was read from and its `shape`). In an ESM `eslint.config.ts`, read it with top-level `await`:
 
 ```ts
 // eslint.config.ts
@@ -1541,8 +1541,8 @@ import { layoutSection, loadSection } from '@exadev/config';
 import { exadevConfig } from '@exadev/eslint-config';
 import { defineConfig } from 'eslint/config';
 
-const layout = await loadSection(layoutSection, { cwd: import.meta.dirname });
-if (layout === undefined) throw new Error('exadev.config.ts defines no layout section');
+const loaded = await loadSection(layoutSection, { cwd: import.meta.dirname });
+if (loaded === undefined) throw new Error('exadev.config.ts defines no layout section');
 
 export default defineConfig(
   {
@@ -1550,13 +1550,13 @@ export default defineConfig(
       parserOptions: { project: './tsconfig.json', tsconfigRootDir: import.meta.dirname },
     },
   },
-  ...exadevConfig({ workspaceArchitecture: layout }),
+  ...exadevConfig({ workspaceArchitecture: loaded.value }),
 );
 ```
 
 `loadSection` resolves to `undefined` when no `layout` section is defined, hence the check. `cwd` is the directory holding `exadev.config.ts` (or `exadev.layout.config.ts`). A layout that fails the section's schema throws when the config loads, with the path and the rule that failed.
 
-The layout carries structure only: groups, ranks, slices, naming and isolated pairs. Policy stays here, so `allow`, `exemptTargetGroups`, `dependencyConstraints`, `requiredFiles`, `devOnly` and `requiredScripts` are not part of it; add them with a spread (`workspaceArchitecture: { ...layout, allow: [...] }`).
+The layout carries structure only: groups, ranks, slices, naming and isolated pairs. Policy stays here, so `allow`, `exemptTargetGroups`, `dependencyConstraints`, `requiredFiles`, `devOnly` and `requiredScripts` are not part of it; add them with a spread (`workspaceArchitecture: { ...loaded.value, allow: [...] }`).
 
 The ESLint config itself stays in `eslint.config.*`. Only the layout moves into `exadev.config.ts`: ESLint loads its own config file, and the unified file has no section for rules or plugins. Neither package depends on the other: install `@exadev/config` (and its `cosmiconfig` peer) in the repository, and `@exadev/eslint-config` takes the value structurally. This repository keeps `@exadev/config` as a dev dependency only, for the test that fails when either side's types drift apart.
 
