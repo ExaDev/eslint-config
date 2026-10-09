@@ -11,7 +11,8 @@
     "eslint-plugin-jsdoc": "64.3.6",
     "eslint-plugin-json-canonical": "2.1.0",
     "eslint-plugin-tsdoc": "^0.5.2",
-    "ts-api-utils": "^2.5.0"
+    "ts-api-utils": "^2.5.0",
+    "yaml": "2.9.1"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",

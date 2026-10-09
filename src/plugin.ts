@@ -12,6 +12,7 @@ import filenamePattern from './rules/filename-pattern';
 import importPolicy from './rules/import-policy';
 import injectedTestHygiene from './rules/injected-test-hygiene';
 import markdownRequiredHeading from './rules/markdown-required-heading';
+import marketplaceManifest from './rules/marketplace-manifest';
 import multilineCommentStyle from './rules/multiline-comment-style';
 import noArrayIsarrayMutation from './rules/no-array-isarray-mutation';
 import noBoundariesIgnore from './rules/no-boundaries-ignore';
@@ -45,12 +46,15 @@ import preferOptionsObjectParam from './rules/prefer-options-object-param';
 import preferReadonlyArrayParam from './rules/prefer-readonly-array-param';
 import preferReadonlyObjectParam from './rules/prefer-readonly-object-param';
 import playwrightConfig from './rules/playwright-config';
+import pluginManifest from './rules/plugin-manifest';
 import pureModule from './rules/pure-module';
 import requireCompilerOptions from './rules/require-compiler-options';
 import requiredExports from './rules/required-exports';
 import requiredImports from './rules/required-imports';
 import requiredScripts from './rules/required-scripts';
 import scopedFirstParameter from './rules/scoped-first-parameter';
+import skillFrontmatter from './rules/skill-frontmatter';
+import skillNameUnique from './rules/skill-name-unique';
 import strykerBreakThreshold from './rules/stryker-break-threshold';
 import strykerThresholdsOrder from './rules/stryker-thresholds-order';
 import testFileKind from './rules/test-file-kind';
@@ -89,6 +93,7 @@ const plugin: TSESLint.FlatConfig.Plugin = {
     'import-policy': importPolicy,
     'injected-test-hygiene': injectedTestHygiene,
     'markdown-required-heading': markdownRequiredHeading,
+    'marketplace-manifest': marketplaceManifest,
     'multiline-comment-style': multilineCommentStyle,
     'no-array-isarray-mutation': noArrayIsarrayMutation,
     'no-boundaries-ignore': noBoundariesIgnore,
@@ -117,6 +122,7 @@ const plugin: TSESLint.FlatConfig.Plugin = {
     'package-name-mirrors-path': packageNameMirrorsPath,
     'package-requirements': packageRequirements,
     'playwright-config': playwrightConfig,
+    'plugin-manifest': pluginManifest,
     'prefer-doc-comment': preferDocComment,
     'prefer-numeric-sort-compare': preferNumericSortCompare,
     'prefer-options-object-param': preferOptionsObjectParam,
@@ -128,6 +134,8 @@ const plugin: TSESLint.FlatConfig.Plugin = {
     'required-imports': requiredImports,
     'required-scripts': requiredScripts,
     'scoped-first-parameter': scopedFirstParameter,
+    'skill-frontmatter': skillFrontmatter,
+    'skill-name-unique': skillNameUnique,
     'stryker-break-threshold': strykerBreakThreshold,
     'stryker-thresholds-order': strykerThresholdsOrder,
     'test-file-kind': testFileKind,
