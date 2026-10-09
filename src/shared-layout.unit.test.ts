@@ -5,7 +5,7 @@ import { type LayoutConfig, layoutSection, loadSection } from '@exadev/config';
 import { afterEach, describe, expect, expectTypeOf, it } from 'vitest';
 import { exadevConfig, type WorkspaceArchitectureOptions } from './index';
 
-// The recipe in README.md ("Reading the shared layout from @exadev/config") hands the value `loadSection(layoutSection)` returns to `exadevConfig({ workspaceArchitecture })`. @exadev/config is a devDependency here, never a dependency: this file is the only place the two packages meet, so a change on either side that breaks the route fails here.
+// The recipe in README.md ("Reading the shared layout from @exadev/config") hands the `value` of the result `loadSection(layoutSection)` returns to `exadevConfig({ workspaceArchitecture })`. @exadev/config is a devDependency here, never a dependency: this file is the only place the two packages meet, so a change on either side that breaks the route fails here.
 
 const LAYOUT_FILE = `export default {
   layout: {
@@ -47,8 +47,9 @@ describe('the shared layout read through @exadev/config', () => {
   });
 
   it('loads from exadev.config.ts and reaches no-uphill-dependency with every field intact', async () => {
-    const layout = await loadSection(layoutSection, { cwd: makeProject(LAYOUT_FILE) });
-    if (layout === undefined) throw new Error('Unreachable: the project file defines a layout section.');
+    const loaded = await loadSection(layoutSection, { cwd: makeProject(LAYOUT_FILE) });
+    if (loaded === undefined) throw new Error('Unreachable: the project file defines a layout section.');
+    const layout = loaded.value;
 
     const config = exadevConfig({ react: false, nextjs: false, workspaceArchitecture: layout });
     const entry = config.find((block) => block.rules?.['exadev/no-uphill-dependency'] !== undefined);
@@ -58,8 +59,9 @@ describe('the shared layout read through @exadev/config', () => {
   });
 
   it('accepts policy options added beside the spread layout', async () => {
-    const layout = await loadSection(layoutSection, { cwd: makeProject(LAYOUT_FILE) });
-    if (layout === undefined) throw new Error('Unreachable: the project file defines a layout section.');
+    const loaded = await loadSection(layoutSection, { cwd: makeProject(LAYOUT_FILE) });
+    if (loaded === undefined) throw new Error('Unreachable: the project file defines a layout section.');
+    const layout = loaded.value;
 
     const config = exadevConfig({ react: false, nextjs: false, workspaceArchitecture: { ...layout, devOnly: [{ group: 'targets' }] } });
     const entry = config.find((block) => block.rules?.['exadev/dev-dependency-only'] !== undefined);
