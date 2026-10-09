@@ -10,15 +10,21 @@ interface IgnoreRule {
   readonly matcher: Minimatch;
 }
 
-// ESLint strips one leading "./" from an ignore pattern before it compiles it, after the negation marker.
-function withoutDotSlash(pattern: string): string {
-  return pattern.startsWith('./') ? pattern.slice(2) : pattern;
+const CURRENT_DIRECTORY = './';
+
+// ESLint strips one leading "./" (after a negation marker, "!./" becomes "!") before it reads an ignore pattern.
+function normalise(pattern: string): string {
+  if (pattern.startsWith(CURRENT_DIRECTORY)) return pattern.slice(CURRENT_DIRECTORY.length);
+
+  return pattern.startsWith(`!${CURRENT_DIRECTORY}`) ? `!${pattern.slice(CURRENT_DIRECTORY.length + 1)}` : pattern;
 }
 
+// A negated entry is handed to minimatch whole, with its marker, and with `flipNegate` so that a hit stays a hit, exactly as ESLint's config array does; that is what makes `!!(foo)/x` read as ESLint reads it, not as a negation of an extglob.
 function compileRule(pattern: string): IgnoreRule {
-  const negated = pattern.startsWith('!');
+  const normalised = normalise(pattern);
+  const negated = normalised.startsWith('!');
 
-  return { negated, matcher: new Minimatch(withoutDotSlash(negated ? pattern.slice(1) : pattern), { dot: true }) };
+  return { negated, matcher: new Minimatch(normalised, { dot: true, ...(negated && { flipNegate: true }) }) };
 }
 
 /**
