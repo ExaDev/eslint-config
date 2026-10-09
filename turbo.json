@@ -1,5 +1,6 @@
 {
   "$schema": "https://turborepo.com/schema.json",
+  "agentGuidance": false,
   "globalDependencies": [
     "pnpm-lock.yaml"
   ],
@@ -53,6 +54,5 @@
       ],
       "outputs": []
     }
-  },
-  "agentGuidance": false
+  }
 }
