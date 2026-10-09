@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import type { MarkdownRuleDefinition } from '@eslint/markdown';
 import { createPathMatcher, fileGlobsSchema, relativeToCwd, type PathMatcher } from './file-scope';
+import { createIgnoreMatcher, type IgnoreMatcher } from './ignore-patterns';
 import { parseFrontmatter, readSkillName, SKILL_FILE_NAME } from './skill-document';
 import { realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
 
@@ -9,6 +10,8 @@ import { realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
  */
 export interface SkillNameUniqueOptions {
   readonly files?: readonly string[];
+  // The entries of the flat config's `ignores` that hide files from ESLint (a `.gitignore`-derived list, say). The rule cannot ask ESLint what it ignores, so a copy of a skill under an ignored directory, which ESLint never lints, would otherwise count as a duplicate of the real one. Evaluated in order, the last entry that selects a path deciding it, with `!` bringing a path back.
+  readonly ignores?: readonly string[];
 }
 
 export type SkillNameUniqueMessageIds = 'duplicateName';
@@ -30,19 +33,19 @@ export interface SkillEntry {
 }
 
 /**
- * Every SKILL.md under `root` that `matches` selects and that declares a name, skipping `node_modules` and `.git`. A directory that is a symbolic link is not followed.
+ * Every SKILL.md under `root` that `matches` selects and that declares a name, skipping `node_modules`, `.git` and whatever `isIgnored` ignores: an ignored directory is not entered and an ignored file is not read. A directory that is a symbolic link is not followed.
  */
-export function scanSkillFiles(fs: WorkspaceFs, root: string, matches: PathMatcher): readonly SkillEntry[] {
+export function scanSkillFiles(fs: WorkspaceFs, root: string, matches: PathMatcher, isIgnored: IgnoreMatcher): readonly SkillEntry[] {
   const found: SkillEntry[] = [];
   const visit = (directory: string): void => {
     for (const entry of fs.readdirSync(directory)) {
       const path = join(directory, entry.name);
+      const relativePath = relativeToCwd(path, root);
       if (entry.isDirectory()) {
-        if (!IGNORED_DIRECTORIES.has(entry.name)) visit(path);
+        if (!IGNORED_DIRECTORIES.has(entry.name) && !isIgnored(relativePath, true)) visit(path);
         continue;
       }
-      if (entry.name !== SKILL_FILE_NAME) continue;
-      const relativePath = relativeToCwd(path, root);
+      if (entry.name !== SKILL_FILE_NAME || isIgnored(relativePath, false)) continue;
       if (!matches(relativePath)) continue;
       const name = readSkillName(fs.readFileSync(path));
       if (name !== undefined) found.push({ path: relativePath, name });
@@ -59,11 +62,11 @@ export function scanSkillFiles(fs: WorkspaceFs, root: string, matches: PathMatch
 export function createSkillNameUniqueRule(fs: WorkspaceFs = realWorkspaceFs): SkillNameUniqueRuleDefinition {
   const scans = new Map<string, readonly SkillEntry[]>();
 
-  function skillsUnder(cwd: string, files: readonly string[] | undefined): readonly SkillEntry[] {
-    const key = JSON.stringify([cwd, files]);
+  function skillsUnder(cwd: string, { files, ignores = [] }: SkillNameUniqueOptions): readonly SkillEntry[] {
+    const key = JSON.stringify([cwd, files, ignores]);
     const cached = scans.get(key);
     if (cached !== undefined) return cached;
-    const scanned = scanSkillFiles(fs, cwd, files === undefined ? () => true : createPathMatcher(files, 'any'));
+    const scanned = scanSkillFiles(fs, cwd, files === undefined ? () => true : createPathMatcher(files, 'any'), createIgnoreMatcher(ignores));
     scans.set(key, scanned);
 
     return scanned;
@@ -78,14 +81,14 @@ export function createSkillNameUniqueRule(fs: WorkspaceFs = realWorkspaceFs): Sk
         description: 'Require a skill name to be defined once across the repository, since the skills CLI silently drops a skill whose name is already taken.',
         url: 'https://github.com/ExaDev/eslint-config/blob/main/src/rules/skill-name-unique.ts',
       },
-      schema: [{ type: 'object', properties: { files: fileGlobsSchema }, additionalProperties: false }],
+      schema: [{ type: 'object', properties: { files: fileGlobsSchema, ignores: { type: 'array', items: { type: 'string', minLength: 1 } } }, additionalProperties: false }],
       defaultOptions: [{}],
       messages: {
         duplicateName: 'The skill name "{{name}}" is also defined in {{paths}}, so the skills CLI lists only one of them.',
       },
     },
     create(context) {
-      const [{ files }] = context.options;
+      const [options] = context.options;
       const ownPath = relativeToCwd(context.filename, context.cwd);
 
       return {
@@ -94,7 +97,7 @@ export function createSkillNameUniqueRule(fs: WorkspaceFs = realWorkspaceFs): Sk
           if (parsed.kind !== 'mapping') return;
           const { name } = parsed.value;
           if (typeof name !== 'string' || name.length === 0) return;
-          const others = skillsUnder(context.cwd, files)
+          const others = skillsUnder(context.cwd, options)
             .filter((entry) => entry.name === name && entry.path !== ownPath)
             .map((entry) => entry.path)
             .sort();

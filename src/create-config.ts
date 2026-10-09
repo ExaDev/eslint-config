@@ -69,8 +69,9 @@ function withWorkspaceGroups(turbo: TurboOptions, workspaceArchitecture: Workspa
  * The tri-state per feature threads straight into each builder's own `enabled` option: true forces on (throwing if the underlying peer isn't resolvable), false forces off (skipping resolution entirely), undefined auto-detects (silently empty if unresolvable, or if an equivalent tool, syncpack for packageJsonKeyOrder, or a project's own .gitignore for gitignore, already does the job). One resolution pass per feature; no separate pre-check gate that would resolve twice.
  */
 export function exadevConfig(options: ExadevConfigOptions = {}, ...userConfigs: readonly TSESLint.FlatConfig.Config[]): PublicConfigArray {
+  const gitignore = buildGitignoreConfig({ enabled: options.gitignore });
   const built: ConfigArrayValue = [
-    ...buildGitignoreConfig({ enabled: options.gitignore }),
+    ...gitignore,
     ...recommendedTypeChecked,
     ...jsdocAndTsdoc,
     ...jsonCanonicalConfig,
@@ -79,7 +80,7 @@ export function exadevConfig(options: ExadevConfigOptions = {}, ...userConfigs: 
     ...buildNextjsConfig({ enabled: options.nextjs, plugin }),
     ...buildTurboEnvConfig({ enabled: options.turboEnv }),
     ...buildPackageJsonKeyOrderConfig({ enabled: options.packageJsonKeyOrder }),
-    ...buildAgentSkillsConfig(options.agentSkills),
+    ...buildAgentSkillsConfig(options.agentSkills, { ignores: gitignore.flatMap(({ ignores = [] }) => ignores) }),
     ...(options.workspaceArchitecture !== undefined ? buildWorkspaceArchitectureConfig(options.workspaceArchitecture) : []),
     ...(options.turbo !== undefined ? buildTurboConfig(withWorkspaceGroups(options.turbo, options.workspaceArchitecture)) : []),
     ...(options.importPolicies !== undefined ? buildImportPolicyConfig(options.importPolicies) : []),

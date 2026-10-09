@@ -55,6 +55,8 @@ export interface AgentSkillsEnvironment {
   readonly cwd?: string;
   readonly fs?: WorkspaceFs;
   readonly requireFn?: RequireFn;
+  // The entries of the flat config's `ignores` that hide files from ESLint, handed to `exadev/skill-name-unique` so it does not count a skill ESLint never lints. exadevConfig() passes the ones it derives from the project's `.gitignore`; the standalone `agentSkillsConfig` passes none, so a repository using it excludes build output with a `!` glob in `skillFiles`. Defaults to none.
+  readonly ignores?: readonly string[];
 }
 
 // Typed against ESLint's own Linter.Config rather than the typescript-eslint FlatConfig type the config arrays use: only the former knows a language plugin's own language options (`frontmatter`) exist, and the result stays assignable because its languageOptions carries an index signature.
@@ -90,7 +92,7 @@ function readOptions(setting: unknown): Required<AgentSkillsOptions> {
  * Builds the blocks that lint agent skills and Claude Code plugin manifests: SKILL.md files under `markdown/gfm` with frontmatter parsed as a node of its own, and the two manifest kinds under `json/json`. The setting is tri-state like the other optional features: `false` builds nothing and resolves nothing; `true` or an options object forces the feature on and throws with the install command when `@eslint/markdown` or `@eslint/json` cannot be resolved; `undefined` auto-detects, building only when the working directory holds skills or a marketplace (`hasAgentSkillsLayout`) and then only the blocks whose peer resolves. Options are validated whenever given, even when the feature ends up off. Internal: consumed by create-config.ts as one more `ConfigArrayValue` entry.
  */
 export function buildAgentSkillsConfig(setting: boolean | AgentSkillsOptions | undefined, environment: AgentSkillsEnvironment = {}): ConfigArrayValue {
-  const { cwd = process.cwd(), fs = realWorkspaceFs, requireFn } = environment;
+  const { cwd = process.cwd(), fs = realWorkspaceFs, requireFn, ignores = [] } = environment;
   const { skillFiles, marketplaceFiles, pluginFiles } = readOptions(typeof setting === 'boolean' || setting === undefined ? {} : setting);
   const skillScope = scopeOfValidated(skillFiles);
   const marketplaceScope = scopeOfValidated(marketplaceFiles);
@@ -112,7 +114,7 @@ export function buildAgentSkillsConfig(setting: boolean | AgentSkillsOptions | u
             language: 'markdown/gfm',
             languageOptions,
             plugins: { exadev: plugin, markdown: markdownPlugin },
-            rules: { 'exadev/skill-frontmatter': 'error', 'exadev/skill-name-unique': ['error', { files: skillFiles }] },
+            rules: { 'exadev/skill-frontmatter': 'error', 'exadev/skill-name-unique': ['error', { files: skillFiles, ...(ignores.length > 0 && { ignores }) }] },
           } satisfies ConfigArrayValue[number],
         ]),
     ...(jsonPlugin === undefined
