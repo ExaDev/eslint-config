@@ -3,7 +3,7 @@ import type { MarkdownRuleDefinition } from '@eslint/markdown';
 import { createPathMatcher, fileGlobsSchema, relativeToCwd, type PathMatcher } from './file-scope';
 import { createIgnoreMatcher, type IgnoreMatcher } from './ignore-patterns';
 import { parseFrontmatter, readSkillName, SKILL_FILE_NAME } from './skill-document';
-import { realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
+import { realWorkspaceFs, type DirEntry, type WorkspaceFs } from './workspace-fs';
 
 /**
  * The options of `skill-name-unique`. `files` limits which SKILL.md files are compared (the glob dialect of this package, a leading `!` excluding, but with a wildcard and `**` matching a dot-prefixed directory as they do in an ESLint config's `files`, so the comparison covers the files ESLint lints); omitted, every SKILL.md under the working directory counts.
@@ -32,13 +32,37 @@ export interface SkillEntry {
   readonly name: string;
 }
 
+// Whether `error` is the operating system refusing access, as opposed to a path that is missing or not a directory.
+function isPermissionError(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && (error.code === 'EACCES' || error.code === 'EPERM');
+}
+
+// A directory the process may not list is empty to the scan: ESLint lints nothing in it either, so no skill there can duplicate one it lints. Every other failure propagates.
+function listDirectory(fs: WorkspaceFs, directory: string): readonly DirEntry[] {
+  try {
+    return fs.readdirSync(directory);
+  } catch (error) {
+    if (isPermissionError(error)) return [];
+    throw error;
+  }
+}
+
+// A SKILL.md the scan found but cannot read is not skipped, since a duplicate could hide in it; the error names the file, which the bare operating system error does not always.
+function readSkillFile(fs: WorkspaceFs, path: string): string {
+  try {
+    return fs.readFileSync(path);
+  } catch (error) {
+    throw new Error(`@exadev/eslint-config: skill-name-unique cannot read "${path}": ${String(error)}`, { cause: error });
+  }
+}
+
 /**
- * Every SKILL.md under `root` that `matches` selects and that declares a name, skipping `node_modules`, `.git` and whatever `isIgnored` ignores: an ignored directory is not entered and an ignored file is not read. A directory that is a symbolic link is not followed.
+ * Every SKILL.md under `root` that `matches` selects and that declares a name, skipping `node_modules`, `.git` and whatever `isIgnored` ignores: an ignored directory is not entered and an ignored file is not read. A directory that cannot be listed for lack of permission counts as empty; a SKILL.md that cannot be read throws an error naming it. A directory that is a symbolic link is not followed.
  */
 export function scanSkillFiles(fs: WorkspaceFs, root: string, matches: PathMatcher, isIgnored: IgnoreMatcher): readonly SkillEntry[] {
   const found: SkillEntry[] = [];
   const visit = (directory: string): void => {
-    for (const entry of fs.readdirSync(directory)) {
+    for (const entry of listDirectory(fs, directory)) {
       const path = join(directory, entry.name);
       const relativePath = relativeToCwd(path, root);
       if (entry.isDirectory()) {
@@ -47,7 +71,7 @@ export function scanSkillFiles(fs: WorkspaceFs, root: string, matches: PathMatch
       }
       if (entry.name !== SKILL_FILE_NAME || isIgnored(relativePath, false)) continue;
       if (!matches(relativePath)) continue;
-      const name = readSkillName(fs.readFileSync(path));
+      const name = readSkillName(readSkillFile(fs, path));
       if (name !== undefined) found.push({ path: relativePath, name });
     }
   };

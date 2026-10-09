@@ -1,14 +1,28 @@
 import markdown from '@eslint/markdown';
 import { Linter } from 'eslint';
-import { describe, expect, it } from 'vitest';
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createIgnoreMatcher } from './ignore-patterns';
 import { createMemoryFs } from './memory-fs';
 import { createSkillNameUniqueRule, scanSkillFiles } from './skill-name-unique';
-import type { WorkspaceFs } from './workspace-fs';
+import { realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
 
 const CWD = '/repo';
 const SCANS_FOR_THREE_SELECTIONS = 3;
 const NOTHING_IGNORED = createIgnoreMatcher([]);
+const OWNER_ACCESS = 0o700;
+const NO_ACCESS = 0;
+
+class CodedError extends Error {
+  constructor(
+    message: string,
+    readonly code: string,
+  ) {
+    super(message);
+  }
+}
 
 function skill(name: string | undefined): string {
   return name === undefined ? '---\ndescription: d\n---\n' : `---\nname: ${name}\ndescription: d\n---\n\n# ${name}\n`;
@@ -94,6 +108,63 @@ describe('scanSkillFiles with ignore patterns', () => {
   it('skips a file the patterns ignore and reads one a later ! pattern brings back', () => {
     expect(paths(['**/SKILL.md', '!**/skills/alpha-copy/SKILL.md'])).toStrictEqual(['skills/alpha-copy/SKILL.md']);
     expect(paths(['!**/skills/alpha-copy/SKILL.md', '**/SKILL.md'])).toStrictEqual([]);
+  });
+});
+
+describe('scanSkillFiles over a tree it cannot read', () => {
+  let root: string;
+  const restricted: string[] = [];
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'exadev-eslint-config-skill-scan-'));
+    mkdirSync(join(root, 'skills', 'a'), { recursive: true });
+    mkdirSync(join(root, 'skills', 'b'), { recursive: true });
+    mkdirSync(join(root, 'data', 'secret'), { recursive: true });
+    writeFileSync(join(root, 'skills', 'a', 'SKILL.md'), skill('a'));
+    writeFileSync(join(root, 'skills', 'b', 'SKILL.md'), skill('b'));
+    writeFileSync(join(root, 'data', 'secret', 'x.txt'), 'x');
+  });
+
+  afterEach(() => {
+    for (const path of restricted.splice(0)) chmodSync(path, OWNER_ACCESS);
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  // Whether the process can still read the path after it was restricted, which is the case for root and makes the fixture unable to fail.
+  function restrict(path: string, probe: (path: string) => unknown): boolean {
+    chmodSync(path, NO_ACCESS);
+    restricted.push(path);
+    try {
+      probe(path);
+
+      return false;
+    } catch {
+      return true;
+    }
+  }
+
+  it('treats a directory it is not permitted to list as empty, as ESLint never reads what it is not asked to lint', (context) => {
+    if (!restrict(join(root, 'data', 'secret'), readdirSync)) context.skip();
+    expect(
+      scanSkillFiles(realWorkspaceFs, root, () => true, NOTHING_IGNORED)
+        .map((entry) => entry.path)
+        .sort(),
+    ).toStrictEqual(['skills/a/SKILL.md', 'skills/b/SKILL.md']);
+  });
+
+  it('fails loudly for a SKILL.md it cannot read, naming the file and the cause', (context) => {
+    if (!restrict(join(root, 'skills', 'b', 'SKILL.md'), (path) => readFileSync(path))) context.skip();
+    expect(() => scanSkillFiles(realWorkspaceFs, root, () => true, NOTHING_IGNORED)).toThrow(/cannot read ".*skills\/b\/SKILL\.md".*EACCES/u);
+  });
+
+  it('rethrows a listing error that is not a permission error', () => {
+    const failing: WorkspaceFs = {
+      ...createMemoryFs({}),
+      readdirSync: () => {
+        throw new CodedError('ENOENT: gone', 'ENOENT');
+      },
+    };
+    expect(() => scanSkillFiles(failing, CWD, () => true, NOTHING_IGNORED)).toThrow(/ENOENT: gone/u);
   });
 });
 
