@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 
 /**
  * The injectable filesystem seam for every workspace-architecture module (workspace-yaml, workspace-glob, workspace-graph): pure decision logic never touches node:fs directly, only this interface, so a unit test can fabricate an in-memory tree with a plain object instead of writing real files to disk. Mirrors the ReadPackageJsonFn seam barrel-auto-detect.ts already establishes for the same "injectable in tests, defaulted in production" problem, generalised to the handful of fs operations workspace discovery needs (existence checks, reading a manifest/yaml file, and listing a directory's own entries).
@@ -35,6 +36,26 @@ export function listSubdirectories(fs: WorkspaceFs, dir: string): readonly strin
   return fs
     .readdirSync(dir)
     .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name);
+}
+
+// Whether `path` is a symbolic link, directly or through further links, to a directory: its fully resolved path is listed as a directory by its own parent. A dangling link has no target to resolve and is not one.
+function isLinkToDirectory(fs: WorkspaceFs, path: string): boolean {
+  if (!fs.existsSync(path)) return false;
+  const target = fs.realpathSync(path);
+
+  return fs.readdirSync(dirname(target)).some((entry) => entry.name === basename(target) && entry.isDirectory());
+}
+
+/**
+ * The names of the subdirectories of `dir`, counting a symbolic link to a directory as one, with the same missing-directory-lists-as-empty stance as listSubdirectories. `listSubdirectories` leaves links out because a recursive walk (workspace globs, the SKILL.md scan) must never follow one into a cycle; this is for a one-level listing of a directory whose entries a repository may legitimately link in from elsewhere (a plugin or a skill kept outside the tree that publishes it).
+ */
+export function listSubdirectoriesThroughLinks(fs: WorkspaceFs, dir: string): readonly string[] {
+  if (!fs.existsSync(dir)) return [];
+
+  return fs
+    .readdirSync(dir)
+    .filter((entry) => entry.isDirectory() || isLinkToDirectory(fs, join(dir, entry.name)))
     .map((entry) => entry.name);
 }
 

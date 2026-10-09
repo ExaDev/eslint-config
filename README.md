@@ -953,7 +953,7 @@ The same object goes to `exadevConfig({ agentSkills: { ... } })`. With no argume
 | `true` | Force on with the default globs, throwing if `@eslint/markdown` or `@eslint/json` isn't resolvable |
 | an options object | Force on, with the globs it gives in place of the defaults |
 | `false` | Force off, always `[]`, no resolution attempted |
-| `undefined` / omitted | Auto-detect (the default): on if the working directory has a `.claude-plugin/marketplace.json`, a `skills/<name>/SKILL.md` at its root or a `plugins/<plugin>/skills/<name>/SKILL.md`, using whichever of the two optional peers resolves |
+| `undefined` / omitted | Auto-detect (the default): on if the working directory has a `.claude-plugin/marketplace.json`, a `skills/<name>/SKILL.md` at its root or a `plugins/<plugin>/skills/<name>/SKILL.md`, using whichever of the two optional peers resolves; a symbolic link to a directory counts as that directory |
 
 | Option | Default | Selects |
 | --- | --- | --- |
@@ -984,7 +984,7 @@ The two limits are `MAX_SKILL_DESCRIPTION_LENGTH` and `MAX_SKILL_NAME_LENGTH` in
 - An entry has no `skills` key. Claude Code scans a plugin's `skills/` directory by default, so declaring it lists each skill twice.
 - A string `source` starts with `./`. The skills CLI skips every other form when it searches a marketplace for skills.
 - The directory a local `source` names holds `.claude-plugin/plugin.json`, whose `name` equals the entry's, and no two entries name the same directory.
-- Every directory directly under `plugins/` that holds a `.claude-plugin/plugin.json` is listed by some entry.
+- Every directory directly under `plugins/` that holds a `.claude-plugin/plugin.json` is listed by some entry. A symbolic link to a directory counts as a directory here, so a plugin kept elsewhere and linked in is held to the same rule.
 
 An object `source` (`github`, `git-subdir` and the like) points at another repository and is checked only for being an object. A sibling `plugin.json` or `package.json` is read as JSON with comments, trailing commas and a leading byte order mark allowed, as the other JSON-reading rules here read a file they do not lint, so a file an editor accepts is not reported for it. One that is not valid JSON at all is reported on the marketplace entry that lists it (`marketplace-manifest`) or on the manifest it sits beside (`plugin-manifest`), with the parse error, instead of aborting the run; its own lint reports the syntax error where it is linted.
 

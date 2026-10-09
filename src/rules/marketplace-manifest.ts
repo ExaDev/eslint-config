@@ -3,7 +3,7 @@ import type { JSONRuleDefinition, JSONRuleVisitor } from '@eslint/json';
 import type { ObjectNode, StringNode } from '@humanwhocodes/momoa';
 import { isRecord } from '../is-record';
 import { CLAUDE_PLUGIN_DIR, findMember, isNonEmptyString, PLUGIN_MANIFEST_FILE, readJsonFile } from './claude-plugin-json';
-import { listSubdirectories, realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
+import { listSubdirectoriesThroughLinks, realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
 
 /**
  * The directory, relative to the marketplace root, whose subdirectories are the plugins of a monorepo marketplace. Every plugin found there must be listed.
@@ -156,7 +156,7 @@ export function createMarketplaceManifestRule(fs: WorkspaceFs = realWorkspaceFs)
             }
             checkEntry(element.value, index, listed, names);
           }
-          for (const name of listSubdirectories(fs, join(marketplaceRoot, PLUGINS_DIR))) {
+          for (const name of listSubdirectoriesThroughLinks(fs, join(marketplaceRoot, PLUGINS_DIR))) {
             const directory = `${PLUGINS_DIR}/${name}`;
             if (!listed.has(directory) && fs.existsSync(manifestPathOf(directory))) {
               context.report({ loc: pluginsMember.value.loc, messageId: 'unlistedPlugin', data: { directory } });
