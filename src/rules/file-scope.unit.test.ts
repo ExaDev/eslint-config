@@ -14,6 +14,14 @@ describe('fileGlobsSchema', () => {
 });
 
 describe('readFileGlobs', () => {
+  it.each(['skills/@(a|b)/SKILL.md', 'skills/+(a)/SKILL.md', 'skills/!(a)/SKILL.md', 'skills/?(a)/SKILL.md', 'skills/*(a)/SKILL.md', '!skills/@(a)/**'])('rejects the extglob form %s, naming the option and the glob', (glob) => {
+    expect(() => readFileGlobs(['**/SKILL.md', glob], 'someOption')).toThrow(`"someOption" must not use extglob syntax, which this package's glob dialect does not support: "${glob}"`);
+  });
+
+  it('still accepts braces, classes and a literal parenthesis', () => {
+    expect(readFileGlobs(['skills/{a,b}/[cd]*.md', 'notes (old)/*.md'], 'someOption')).toStrictEqual(['skills/{a,b}/[cd]*.md', 'notes (old)/*.md']);
+  });
+
   it('returns a valid list unchanged', () => {
     const globs = ['**/turbo.json', '!packages/legacy/**'];
     expect(readFileGlobs(globs, 'files')).toBe(globs);

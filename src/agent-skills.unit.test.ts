@@ -120,6 +120,9 @@ describe('option validation', () => {
     ['an unknown key', { skills: [] }, /"agentSkills" has an unknown key "skills". Allowed keys: skillFiles, marketplaceFiles, pluginFiles/u],
     ['a non-array skillFiles', { skillFiles: 'a' }, /"agentSkills.skillFiles" must be an array of glob strings/u],
     ['an exclude-only marketplaceFiles', { marketplaceFiles: ['!a'] }, /"agentSkills.marketplaceFiles" must contain at least one glob that does not start with "!"/u],
+    ['an extglob skillFiles entry', { skillFiles: ['skills/@(a|b)/SKILL.md'] }, /"agentSkills.skillFiles" must not use extglob syntax.*"skills\/@\(a\|b\)\/SKILL\.md"/u],
+    ['an extglob marketplaceFiles entry', { marketplaceFiles: ['+(a)/.claude-plugin/marketplace.json'] }, /"agentSkills.marketplaceFiles" must not use extglob syntax/u],
+    ['an extglob pluginFiles entry', { pluginFiles: ['!(a)/.claude-plugin/plugin.json', '**/.claude-plugin/plugin.json'] }, /"agentSkills.pluginFiles" must not use extglob syntax/u],
     ['an empty-string pluginFiles entry', { pluginFiles: [''] }, /"agentSkills.pluginFiles" must contain only non-empty strings/u],
   ])('rejects %s', (_label, given, message) => {
     // The options are deliberately malformed, which the declared option type would reject at compile time.
