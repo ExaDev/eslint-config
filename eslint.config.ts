@@ -1,5 +1,6 @@
 import { defineConfig } from 'eslint/config';
 import js from '@eslint/js';
+import markdown from '@eslint/markdown';
 import { exadevConfig } from './src/index';
 
 /**
@@ -70,5 +71,13 @@ export default defineConfig(
         },
       ],
     },
+  },
+  // CHANGELOG.md is written by semantic-release, and AGENTS.md and CLAUDE.md are symlinks to README.md, which is linted once under its own name.
+  {
+    files: ['**/*.md'],
+    ignores: ['CHANGELOG.md', 'AGENTS.md', 'CLAUDE.md'],
+    plugins: { markdown },
+    language: 'markdown/gfm',
+    extends: ['markdown/recommended'],
   },
 );
