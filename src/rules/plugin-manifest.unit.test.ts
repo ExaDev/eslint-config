@@ -8,6 +8,7 @@ const CWD = process.cwd();
 const A = `${CWD}/plugins/a/.claude-plugin/plugin.json`;
 const B = `${CWD}/plugins/b/.claude-plugin/plugin.json`;
 const NO_VERSION = `${CWD}/plugins/c/.claude-plugin/plugin.json`;
+const ROOT = `${CWD}/.claude-plugin/plugin.json`;
 const NOT_OBJECT = `${CWD}/plugins/d/.claude-plugin/plugin.json`;
 
 const files = {
@@ -39,12 +40,18 @@ ruleTester.run('plugin-manifest', rule, {
     // A package.json without a version, or that is not an object, owns no version.
     { code: manifest({ name: 'c', version: '0.0.1' }), filename: NO_VERSION },
     { code: manifest({ name: 'd' }), filename: NOT_OBJECT },
+    // A plugin at ESLint's working directory (a marketplace entry with source "./") has a directory named after the checkout, which says nothing about the plugin.
+    { code: manifest({ name: 'myplugin' }), filename: ROOT },
     // The plugin directory is the one holding .claude-plugin, whatever the nesting.
     { code: manifest({ name: 'deep' }), filename: `${CWD}/a/b/deep/.claude-plugin/plugin.json` },
   ],
   invalid: [
     { code: '"a"', filename: A, errors: [{ messageId: 'notObject' }] },
     { code: manifest({ version: '1.2.3' }), filename: A, errors: [{ messageId: 'nameMissing', data: { directory: 'a' } }] },
+    // A root plugin still has to name itself, but not after the checkout directory.
+    { code: manifest({ version: '1.2.3' }), filename: ROOT, errors: [{ messageId: 'rootNameMissing' }] },
+    { code: manifest({ name: '' }), filename: ROOT, errors: [{ messageId: 'rootNameMissing' }] },
+    { code: manifest({ name: 3 }), filename: ROOT, errors: [{ messageId: 'rootNameMissing' }] },
     { code: manifest({ name: 3, version: '1.2.3' }), filename: A, errors: [{ messageId: 'nameMissing' }] },
     { code: manifest({ name: 'other', version: '1.2.3' }), filename: A, errors: [{ messageId: 'nameMismatch', data: { name: 'other', directory: 'a' } }] },
     { code: manifest({ name: '', version: '1.2.3' }), filename: A, errors: [{ messageId: 'nameMismatch', data: { name: '', directory: 'a' } }] },

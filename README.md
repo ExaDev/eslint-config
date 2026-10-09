@@ -990,7 +990,7 @@ An object `source` (`github`, `git-subdir` and the like) points at another repos
 
 `exadev/plugin-manifest` checks each plugin manifest:
 
-- `name` equals the plugin directory's name, the directory holding `.claude-plugin`, since the marketplace entry, the `/<plugin>:<skill>` command prefix and the directory are read as one identifier.
+- `name` equals the plugin directory's name, the directory holding `.claude-plugin`, since the marketplace entry, the `/<plugin>:<skill>` command prefix and the directory are read as one identifier. A plugin at ESLint's working directory (a marketplace entry with source `./`) is exempt from the match, since that directory is the checkout and is named by wherever it was cloned; its `name` need only be a non-empty string.
 - There is no `skills` key, for the same double-scan reason as in the marketplace.
 - When a `package.json` beside `.claude-plugin` declares a `version`, the manifest's `version` equals it, and both values are reported when they differ. A release tool bumps `package.json`, and Claude Code prefers the manifest's version, so a manifest left behind keeps announcing the old release.
 
