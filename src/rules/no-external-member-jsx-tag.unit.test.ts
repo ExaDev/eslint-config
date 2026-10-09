@@ -33,6 +33,7 @@ describe('readNoExternalMemberJsxTagOptions', () => {
     ['an empty allowSources list', { allowSources: [] }, /"allowSources" to be a non-empty array/u],
     ['a duplicated tag', { allowTags: ['A.B', 'A.B'] }, /"allowTags" to be a non-empty array of distinct/u],
     ['a non-string source', { allowSources: [1] }, /"allowSources" to be a non-empty array/u],
+    ['an extglob source', { allowSources: ['@(ui|lib)'] }, /"no-external-member-jsx-tag\.allowSources" must not use extglob syntax/u],
   ])('rejects %s', (_label, value, message) => {
     expect(() => readNoExternalMemberJsxTagOptions(value)).toThrow(message);
   });

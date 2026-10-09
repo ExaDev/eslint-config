@@ -1,5 +1,5 @@
 import type { JSONSchema4 } from '@typescript-eslint/utils/json-schema';
-import { assertOnlyKeys, readEntryRecords, readRequiredString, readRequiredStrings } from './file-entry';
+import { assertOnlyKeys, readEntryRecords, readRequiredString, readRequiredStrings, readSpecifierPatterns } from './file-entry';
 import { createFileScope, readFileGlobs, relativeToCwd } from './file-scope';
 import { createSpecifierMatcher } from './specifier-match';
 
@@ -139,7 +139,7 @@ function readDeny(entry: Readonly<Record<string, unknown>>, name: string): Impor
   const allowImportNames = entry['allowImportNames'] === undefined ? undefined : readRequiredStrings(entry, 'allowImportNames', name);
   const allowTypeImports = readBoolean(entry, 'allowTypeImports', name);
   const base = {
-    specifiers: readRequiredStrings(entry, 'specifiers', name),
+    specifiers: readSpecifierPatterns(entry, 'specifiers', name),
     ...(allowTypeImports !== undefined && { allowTypeImports }),
     message: readRequiredString(entry, 'message', name),
   };
@@ -157,7 +157,7 @@ function readConfine(entry: Readonly<Record<string, unknown>>, name: string): Im
   const message = entry['message'] === undefined ? undefined : readRequiredString(entry, 'message', name);
 
   return {
-    specifiers: readRequiredStrings(entry, 'specifiers', name),
+    specifiers: readSpecifierPatterns(entry, 'specifiers', name),
     onlyIn: readFileGlobs(entry['onlyIn'], `${name}.onlyIn`),
     ...(allowTypeImports !== undefined && { allowTypeImports }),
     ...(message !== undefined && { message }),

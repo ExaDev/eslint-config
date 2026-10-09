@@ -37,6 +37,7 @@ describe('required-imports options', () => {
     expect(read({ files: 'a.ts', from: [] })).toThrow(/"from"/u);
     expect(read({ files: 'a.ts', from: 'x', call: 'yes' })).toThrow(/"call" to be a boolean/u);
     expect(read({ from: 'x' })).toThrow(/glob strings/u);
+    expect(read({ files: 'a.ts', from: ['x', '@(a|b)/y'] })).toThrow(/"exadev\/required-imports\.from" must not use extglob syntax/u);
   });
 });
 

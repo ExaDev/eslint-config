@@ -1,7 +1,7 @@
 import { AST_NODE_TYPES, ASTUtils, ESLintUtils, TSESLint, type TSESTree } from '@typescript-eslint/utils';
 import type { JSONSchema4 } from '@typescript-eslint/utils/json-schema';
 import { isRecord } from '../is-record';
-import { assertOnlyKeys, readRequiredStrings } from './file-entry';
+import { assertOnlyKeys, readRequiredStrings, readSpecifierPatterns } from './file-entry';
 import { createSpecifierMatcher, isRelativeSpecifier, type SpecifierMatcher } from './specifier-match';
 import { hasUseClientDirective } from './use-client-directive';
 
@@ -40,7 +40,7 @@ interface ReadOptions {
 export function readNoExternalMemberJsxTagOptions(value: unknown): ReadOptions {
   if (!isRecord(value)) throw new Error(`@exadev/eslint-config: "${OPTION_NAME}" must be an object.`);
   assertOnlyKeys(value, ['allowSources', 'allowTags'], OPTION_NAME);
-  const allowSources = value['allowSources'] === undefined ? undefined : readRequiredStrings(value, 'allowSources', OPTION_NAME);
+  const allowSources = value['allowSources'] === undefined ? undefined : readSpecifierPatterns(value, 'allowSources', OPTION_NAME);
   const allowTags = value['allowTags'] === undefined ? [] : readRequiredStrings(value, 'allowTags', OPTION_NAME);
 
   return { allowSource: allowSources === undefined ? undefined : createSpecifierMatcher(allowSources), allowTags: new Set(allowTags) };
