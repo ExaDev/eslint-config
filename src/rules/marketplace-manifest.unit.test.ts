@@ -119,6 +119,23 @@ describe('a plugin manifest that is not valid JSON', () => {
   });
 });
 
+// The empty name sits on the fifth line, after the four spaces and `{ "name": ` that precede it; an empty string literal is two characters wide.
+const NAME_LINE = 5;
+const NAME_COLUMN = 15;
+const EMPTY_STRING_WIDTH = 2;
+
+describe('the location of an entry name that is empty', () => {
+  const emptyName = ['{', '  "name": "m",', '  "owner": { "name": "o" },', '  "plugins": [', '    { "name": "", "source": { "source": "github" } }', '  ]', '}'].join('\n');
+
+  it('is the name value, not the entry that holds it', () => {
+    const config = [{ files: ['**/*.json'], language: 'json/json', plugins: { json, test: { rules: { 'marketplace-manifest': createMarketplaceManifestRule(createMemoryFs({})) } } }, rules: { 'test/marketplace-manifest': 'error' } }];
+    const [message, ...rest] = new Linter({ cwd: CWD }).verify(emptyName, config as never, { filename: FILE });
+
+    expect(rest).toStrictEqual([]);
+    expect([message?.line, message?.column, message?.endLine, message?.endColumn]).toStrictEqual([NAME_LINE, NAME_COLUMN, NAME_LINE, NAME_COLUMN + EMPTY_STRING_WIDTH]);
+  });
+});
+
 describe('the duplicate entry name message', () => {
   it('quotes the name once', () => {
     expect(lintWith({}, entries({ name: 'a', source: { source: 'github' } }, { name: 'a', source: { source: 'github' } }))).toStrictEqual(['The marketplace lists "a" more than once.']);
