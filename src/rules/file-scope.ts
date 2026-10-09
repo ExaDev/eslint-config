@@ -12,12 +12,15 @@ export const fileGlobsSchema = {
   uniqueItems: true,
 } as const;
 
+// The five extglob openers (`@(`, `+(`, `!(`, `?(`, `*(`). ESLint's minimatch reads them as groups while the dialect below does not, so a glob using one would select files for ESLint that this package's own matching cannot.
+const EXTGLOB = /[@+!?*]\(/u;
+
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
 }
 
 /**
- * Validates a file-glob option value, enforcing everything `fileGlobsSchema` does plus one include: an array of non-empty strings with no duplicates, at least one of which does not start with `!` (a list of excludes alone would match nothing), and balanced braces in every pattern. Returns the same array; throws naming `optionName` and the specific failure otherwise.
+ * Validates a file-glob option value, enforcing everything `fileGlobsSchema` does plus one include: an array of non-empty strings with no duplicates, at least one of which does not start with `!` (a list of excludes alone would match nothing), balanced braces in every pattern, and no extglob syntax (`@(a|b)`, `+(a)`, `!(a)`, `?(a)`, `*(a)`), which ESLint accepts and the dialect does not. Returns the same array; throws naming `optionName` and the specific failure otherwise.
  */
 export function readFileGlobs(value: unknown, optionName: string): readonly string[] {
   const prefix = `@exadev/eslint-config: "${optionName}" must`;
@@ -25,7 +28,10 @@ export function readFileGlobs(value: unknown, optionName: string): readonly stri
   if (!value.every(isNonEmptyString)) throw new Error(`${prefix} contain only non-empty strings.`);
   if (new Set(value).size !== value.length) throw new Error(`${prefix} not contain duplicate globs.`);
   if (!value.some((item) => !isExcludePattern(item))) throw new Error(`${prefix} contain at least one glob that does not start with "!".`);
-  for (const pattern of value) void expandBraces(pattern);
+  for (const pattern of value) {
+    if (EXTGLOB.test(pattern)) throw new Error(`${prefix} not use extglob syntax, which this package's glob dialect does not support: "${pattern}". Use braces, "*", "?" and "[...]", or several globs.`);
+    void expandBraces(pattern);
+  }
 
   return value;
 }
