@@ -104,6 +104,10 @@ describe('readFileGlobs', () => {
     expect(readFileGlobs(['**/*.ts', glob], 'someOption')).toStrictEqual(['**/*.ts', glob]);
   });
 
+  it.each(['[[:alpha:]]/,][/b', '[[:alpha:]]/[-', '-/[[:alpha:]]]', ',/[[[:alpha:]]]'])('rejects %s, which constructs in minimatch but has no valid form and so matches nothing, naming the option and the glob', (glob) => {
+    expect(() => readFileGlobs(['**/*.ts', glob], 'someOption')).toThrow(`@exadev/eslint-config: "someOption" has a glob that minimatch cannot compile: "${glob}": the pattern has no valid form`);
+  });
+
   it('rejects a glob minimatch cannot compile, naming the option and the glob', () => {
     expect(() => readFileGlobs(['**/*.ts', '{[,]}[:alpha:]],'], 'someOption')).toThrow('"someOption" has a glob that minimatch cannot compile: "{[,]}[:alpha:]],"');
   });
