@@ -31,7 +31,7 @@
     "@stryker-mutator/core": "10.0.0",
     "@stryker-mutator/typescript-checker": "10.0.0",
     "@stryker-mutator/vitest-runner": "10.0.0",
-    "@types/node": "^24.9.2",
+    "@types/node": "^26.6.4",
     "@typescript-eslint/rule-tester": "^8.67.0",
     "@vitest/coverage-v8": "^4.1.10",
     "@vitest/eslint-plugin": "^1.6.27",
