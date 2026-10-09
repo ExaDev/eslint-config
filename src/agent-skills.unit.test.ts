@@ -358,6 +358,16 @@ describe('linting a repository', () => {
     ]);
   });
 
+  it('reports a skill whose frontmatter has an unresolvable alias, and still lints every other skill', async () => {
+    write('skills/bad/SKILL.md', '---\nname: *x\ndescription: *Required*\n---\n');
+    write('skills/good/SKILL.md', skill('good'));
+
+    const results = await lint();
+    expect(results['skills/good/SKILL.md']).toStrictEqual([]);
+    expect(results['skills/bad/SKILL.md']).toHaveLength(1);
+    expect(results['skills/bad/SKILL.md']?.[0]).toMatch(/^exadev\/skill-frontmatter: The frontmatter is not valid YAML: Unresolved alias/u);
+  });
+
   it('reports nothing for a consistent repository', async () => {
     write('skills/word-count/SKILL.md', skill('word-count'));
     write('plugins/p/skills/other/SKILL.md', skill('other'));

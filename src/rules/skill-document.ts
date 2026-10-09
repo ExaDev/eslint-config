@@ -1,5 +1,6 @@
 import { parseDocument } from 'yaml';
 import { isRecord } from '../is-record';
+import { assertIsError } from './workspace-errors';
 
 /**
  * The file name the Agent Skills specification gives a skill's entry point (https://agentskills.io/specification).
@@ -25,15 +26,22 @@ export function extractFrontmatter(text: string): string | undefined {
 }
 
 /**
- * Parses frontmatter text as YAML without throwing, reporting a syntax error as a value so a rule can attach it to the block.
+ * Parses frontmatter text as YAML without throwing, reporting a syntax error, or an alias that cannot be resolved, as a value so a rule can attach it to the block.
  */
 export function parseFrontmatter(yamlText: string): ParsedFrontmatter {
   const document = parseDocument(yamlText);
   const [firstError] = document.errors;
   if (firstError !== undefined) return { kind: 'invalid', message: firstError.message };
-  const value: unknown = document.toJS();
+  // Not in `document.errors`: converting throws for an alias with no anchor (a value such as `*Required*` is one) and for an alias explosion, and both are invalid frontmatter like any other syntax error.
+  try {
+    const value: unknown = document.toJS();
 
-  return isRecord(value) ? { kind: 'mapping', value } : { kind: 'other' };
+    return isRecord(value) ? { kind: 'mapping', value } : { kind: 'other' };
+  } catch (error) {
+    assertIsError(error, 'converting a parsed YAML document');
+
+    return { kind: 'invalid', message: error.message };
+  }
 }
 
 /**
