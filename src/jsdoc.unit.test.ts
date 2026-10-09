@@ -2,7 +2,7 @@ import type { Linter } from 'eslint';
 import { Linter as LinterClass } from 'eslint';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { ESLint } from 'eslint';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { exadevConfig } from './create-config';
@@ -158,31 +158,34 @@ describe('exadevConfig on JSDoc-typed plain JavaScript', () => {
     rmSync(cwd, { recursive: true, force: true });
   });
 
-  async function lintFile(path: string, code: string): Promise<readonly string[]> {
-    writeFileSync(join(cwd, path), code);
+  // Every file is written before ESLint is constructed: the TypeScript project service reads the tsconfig's `include` once per project, and a file created after that first read is not guaranteed to be found, which surfaces as a parse error instead of the rule's report.
+  async function lintFiles(files: Readonly<Record<string, string>>): Promise<Readonly<Record<string, readonly string[]>>> {
+    for (const [path, code] of Object.entries(files)) writeFileSync(join(cwd, path), code);
     const eslint = new ESLint({
       cwd,
       overrideConfigFile: true,
       overrideConfig: [{ languageOptions: { parserOptions: { project: ['./tsconfig.json'], tsconfigRootDir: cwd } } }, ...exadevConfig({ react: false, nextjs: false, gitignore: false })],
     });
-    const [result] = await eslint.lintFiles([path]);
+    const results = await eslint.lintFiles(Object.keys(files));
 
-    return result?.messages.map((message) => `${message.ruleId ?? 'none'}: ${message.message}`) ?? [];
+    return Object.fromEntries(results.map((result) => [relative(cwd, result.filePath), result.messages.map((message) => `${message.ruleId ?? 'none'}: ${message.message}`)]));
   }
 
   it('lints a JSDoc-typed .js file clean', async () => {
-    expect(await lintFile('src/typed.js', JSDOC_TYPED_CODE)).toStrictEqual([]);
+    expect(await lintFiles({ 'src/typed.js': JSDOC_TYPED_CODE })).toStrictEqual({ 'src/typed.js': [] });
   });
 
   it('lints an exported JSDoc-typed function in a .js file clean, since explicit-module-boundary-types reads only written type annotations and is scoped to TypeScript', async () => {
     const code = '/**\n * Adds one.\n * @param {number} value The input.\n * @returns {number} The input plus one.\n */\nexport function increment(value) {\n  return value + 1;\n}\n';
-    expect(await lintFile('src/exported.js', code)).toStrictEqual([]);
-    expect((await lintFile('src/exported.ts', code)).some((message) => message.startsWith('@typescript-eslint/explicit-module-boundary-types'))).toBe(true);
+    const results = await lintFiles({ 'src/exported-plain.js': code, 'src/exported-typed.ts': code });
+
+    expect(results['src/exported-plain.js']).toStrictEqual([]);
+    expect(results['src/exported-typed.ts']?.some((message) => message.startsWith('@typescript-eslint/explicit-module-boundary-types'))).toBe(true);
   });
 
   it('still reports the same annotations in a .ts file', async () => {
-    const messages = await lintFile('src/typed.ts', JSDOC_TYPED_CODE);
-    expect(messages.some((message) => message.startsWith('jsdoc/no-types'))).toBe(true);
-    expect(messages.some((message) => message.startsWith('tsdoc/syntax'))).toBe(true);
+    const messages = (await lintFiles({ 'src/typed.ts': JSDOC_TYPED_CODE }))['src/typed.ts'];
+    expect(messages?.some((message) => message.startsWith('jsdoc/no-types'))).toBe(true);
+    expect(messages?.some((message) => message.startsWith('tsdoc/syntax'))).toBe(true);
   });
 });
