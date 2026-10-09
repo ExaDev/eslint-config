@@ -281,6 +281,9 @@ importers:
       lint-staged:
         specifier: ^17.2.0
         version: 17.3.0
+      minimatch:
+        specifier: 10.2.6
+        version: 10.2.6
       publint:
         specifier: ^0.3.21
         version: 0.3.22
