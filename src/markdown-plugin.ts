@@ -19,10 +19,17 @@ export function resolveMarkdownPlugin(value: unknown): Record<string, unknown> |
 }
 
 /**
- * Resolves `@eslint/markdown`'s plugin object or throws, naming `feature` (the thing that cannot work without it) and the install command. Nothing here is auto-detected: the features that use it are off unless configured, so a missing package is always an error.
+ * Resolves `@eslint/markdown`'s plugin object through the optional peer, or `undefined` when it cannot be resolved. Callers decide whether that is silence or an error; see `requireMarkdownPlugin` for the error case.
+ */
+export function tryResolveMarkdownPlugin(requireFn?: RequireFn): Record<string, unknown> | undefined {
+  return resolveMarkdownPlugin(tryRequire('@eslint/markdown', requireFn));
+}
+
+/**
+ * Resolves `@eslint/markdown`'s plugin object or throws, naming `feature` (the thing that cannot work without it) and the install command. A feature that is off unless configured always treats a missing package as an error; one that auto-detects uses `tryResolveMarkdownPlugin` instead.
  */
 export function requireMarkdownPlugin(feature: string, requireFn?: RequireFn): Record<string, unknown> {
-  const markdownPlugin = resolveMarkdownPlugin(tryRequire('@eslint/markdown', requireFn));
+  const markdownPlugin = tryResolveMarkdownPlugin(requireFn);
   if (markdownPlugin === undefined) {
     throw new Error(`@exadev/eslint-config: ${feature} needs '@eslint/markdown' but it could not be resolved. Install it with: pnpm add -D @eslint/markdown`);
   }

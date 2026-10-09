@@ -10,11 +10,17 @@ export interface GlobScope {
 }
 
 /**
- * Validates a glob list as `readFileGlobs` does, naming `optionName` in the error, and splits it into a block scope.
+ * Splits a glob list that `readFileGlobs` has already validated into a block scope.
  */
-export function scopeBlock(globs: unknown, optionName: string): GlobScope {
-  const validated = readFileGlobs(globs, optionName);
+export function scopeOfValidated(validated: readonly string[]): GlobScope {
   const ignores = validated.filter(isExcludePattern).map((glob) => glob.slice(1));
 
   return { files: validated.filter((glob) => !isExcludePattern(glob)), ...(ignores.length > 0 && { ignores }) };
+}
+
+/**
+ * Validates a glob list as `readFileGlobs` does, naming `optionName` in the error, and splits it into a block scope.
+ */
+export function scopeBlock(globs: unknown, optionName: string): GlobScope {
+  return scopeOfValidated(readFileGlobs(globs, optionName));
 }
