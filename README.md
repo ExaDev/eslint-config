@@ -205,6 +205,7 @@ export default tseslint.config(
 | [Tooling wiring](#tooling-wiring) | Off unless given (only a repository can say it wants its publish checks, root tooling and hooks enforced); the package.json sections need the optional peer `@eslint/json` | `exadevConfig({ toolingWiring })` / `toolingWiringConfig(options)` |
 | [Turbo environment variable checking](#environment-variables-read-in-source) | Auto-detected: on if `eslint-plugin-turbo` is installed | `exadevConfig({ turboEnv })` |
 | [Required Markdown headings](#required-markdown-headings) | Off unless given (only a repository can say which documents need which headings); needs the optional peer `@eslint/markdown` | `exadevConfig({ markdownHeadings })` / `markdownHeadingsConfig(options)` |
+| [Agent skills and plugin marketplaces](#agent-skills-and-plugin-marketplaces) | Auto-detected: on if the project has a `.claude-plugin/marketplace.json` or a `skills/<name>/SKILL.md`; the SKILL.md rules need the optional peer `@eslint/markdown` and the manifest rules `@eslint/json` | `exadevConfig({ agentSkills })` / `agentSkillsConfig(options)` |
 
 Every tri-state option above (`true`/`false`/`undefined`) is passed through the named `exadevConfig(options, ...userConfigs)` factory export:
 
@@ -427,6 +428,10 @@ Bundled into `exadevConfig()`'s default output the same way React/Next.js auto-d
 | `non-vacuous-guard` | | **A guard test must show it can fail:** an unconditional lower bound on what it discovered, and its pattern checked against an input it must catch and one it must not. Wired by `testHygieneConfig`. See [Guard and conformance test hygiene](#guard-and-conformance-test-hygiene). |
 | `no-multiline-template-literal` | ✓ | **An untagged template literal whose value spans several lines should be an array of lines joined with `\n`.** Autofixes only when the rewrite provably yields the same string. See [Multi-line template literals](#multi-line-template-literals). |
 | `markdown-required-heading` | | **A Markdown document must contain each configured heading:** a `{ depth, text }` per required heading, matched on the text as it renders. A Markdown-language rule (`@eslint/markdown`). Wired by `markdownHeadingsConfig`. See [Required Markdown headings](#required-markdown-headings). |
+| `skill-frontmatter` | | **A SKILL.md must start with valid Agent Skills frontmatter:** a YAML mapping whose `name` equals the skill's directory, is hyphenated lower case and is within the specification's length limit, a non-empty `description` within its limit, and `metadata.internal` a boolean when present. Other keys are accepted. A Markdown-language rule (`@eslint/markdown`). Wired by `agentSkillsConfig`. See [Agent skills and plugin marketplaces](#agent-skills-and-plugin-marketplaces). |
+| `skill-name-unique` | | **A skill name must be defined once across the repository.** The skills CLI silently drops a skill whose name is already taken. Scans the working directory for other SKILL.md files once per process. A Markdown-language rule. Wired by `agentSkillsConfig`. |
+| `marketplace-manifest` | | **A Claude Code `marketplace.json` must be well formed and agree with the plugins it lists:** no entry `version` or `skills` key, a local `source` starting with `./` whose directory holds a `plugin.json` of the same name, no directory listed twice, every plugin under `plugins/` listed. A JSON-language rule (`@eslint/json`). Wired by `agentSkillsConfig`. |
+| `plugin-manifest` | | **A Claude Code `plugin.json` must name its plugin directory, declare no `skills` key and carry the version of the `package.json` beside it.** A JSON-language rule. Wired by `agentSkillsConfig`. |
 | `no-defensive-fallback` | | **An empty-literal fallback hides a value that should have been modelled as absent.** Reports `value ?? []`, `value \|\| ''` and the logical-assignment forms for an empty array, object or string, `0`, `false` or `null`, and a `catch` clause or `.catch()` handler that discards the error and returns nothing or a fixed value. Opt-in, not part of `recommended` or the default export. Needs no type information. See [Defensive fallbacks](#defensive-fallbacks). |
 | `timeout-aborts-request` | | **A `Promise.race` timeout must abort the request it raced against,** not only settle the race: the timer callback calls `.abort()` on an `AbortController` created in the same function, the timer id is cleared in a `finally`, and a `catch` returns early on `controller.signal.aborted`. Opt-in, needs no type information. See [Timeout races](#timeout-races). |
 | `no-non-serialisable-server-prop` | | **A configured prop (default `component`) of a JSX element in a file without `"use client"` must be serialisable data.** A function or component reference cannot cross from a server component to a client component. Enabled by the Next.js preset. See [Server component boundary](#server-component-boundary). |
@@ -923,6 +928,73 @@ Each entry is a `depth` from 1 to 6 (`#` to `######`) and the `text` of the head
 The entries are a list rather than a single `{ depth, text }` because flat config replaces a rule's options when a later block sets the same rule for the same files, so a second required heading could not be added by enabling the rule again.
 
 Frontmatter is parsed as a node of its own (`yaml` by default, or `frontmatter: 'toml'` or `'json'`). Without that, a leading `---` block is read as a thematic break followed by a Setext heading made of the block's first line, which could satisfy or spoil a check; the preset always sets it. A repository that wires the rule by hand sets `languageOptions: { frontmatter: 'yaml' }` on its own block for the same reason. The frontmatter is never treated as a heading, so `title: Usage` does not satisfy a required `Usage`.
+
+## Agent skills and plugin marketplaces
+
+A repository that publishes agent skills, or a Claude Code plugin marketplace, depends on conventions that its tools enforce by silently ignoring what breaks them. The [skills CLI](https://github.com/vercel-labs/skills) ([latest archived copy](https://web.archive.org/web/https://github.com/vercel-labs/skills)) drops every skill whose `name` is already taken and skips a marketplace entry whose `source` does not start with `./`, and Claude Code prefers a plugin's own `version` over its marketplace entry's. None of these is an error anywhere, so a skill or plugin just goes missing or announces the wrong release. `agentSkillsConfig` (or `exadevConfig({ agentSkills })`) lints the files involved with four rules:
+
+```ts
+import { defineConfig } from 'eslint/config';
+import { agentSkillsConfig, exadevConfig } from '@exadev/eslint-config';
+
+export default defineConfig(
+  ...exadevConfig(),
+  ...agentSkillsConfig({
+    skillFiles: ['skills/*/SKILL.md', 'plugins/*/skills/*/SKILL.md', '!plugins/legacy/**'],
+    pluginFiles: ['plugins/*/.claude-plugin/plugin.json'],
+  }),
+);
+```
+
+The same object goes to `exadevConfig({ agentSkills: { ... } })`. With no argument the defaults apply, and `exadevConfig()` needs no option at all in a repository that has a marketplace or a skills directory:
+
+| Value | `options.agentSkills` |
+| --- | --- |
+| `true` | Force on with the default globs, throwing if `@eslint/markdown` or `@eslint/json` isn't resolvable |
+| an options object | Force on, with the globs it gives in place of the defaults |
+| `false` | Force off, always `[]`, no resolution attempted |
+| `undefined` / omitted | Auto-detect (the default): on if the working directory has a `.claude-plugin/marketplace.json`, a `skills/<name>/SKILL.md` at its root or a `plugins/<plugin>/skills/<name>/SKILL.md`, using whichever of the two optional peers resolves |
+
+| Option | Default | Selects |
+| --- | --- | --- |
+| `skillFiles` | `**/skills/*/SKILL.md` | The SKILL.md files checked by `skill-frontmatter`, and the files `skill-name-unique` compares names across. |
+| `marketplaceFiles` | `.claude-plugin/marketplace.json` | The marketplace manifests checked by `marketplace-manifest`. |
+| `pluginFiles` | `**/.claude-plugin/plugin.json` | The plugin manifests checked by `plugin-manifest`. |
+
+Each is a list of globs relative to ESLint's working directory, in the [file glob dialect](#file-level-rules) used across this package, where a leading `!` excludes. Whether ESLint lints these files at all stays a repository-wide decision: a `.gitignore`-derived or other `ignores` entry that hides them still hides them. SKILL.md files are linted under `markdown/gfm` with `frontmatter: 'yaml'`, so the frontmatter is a node of its own, and the manifests under `json/json`. The rules need `@eslint/markdown` and `@eslint/json`, both optional peers (`pnpm add -D @eslint/markdown @eslint/json`); a forced feature throws with the install command when one is missing, and auto-detection builds the blocks whose peer resolves.
+
+### Skills
+
+`exadev/skill-frontmatter` requires a SKILL.md to start with YAML frontmatter that is a mapping and holds:
+
+- `name`: a non-empty string equal to the name of the directory holding the SKILL.md, made of lower-case letters and digits in hyphen-separated runs, within the length limit of the [Agent Skills specification](https://agentskills.io/specification) ([latest archived copy](https://web.archive.org/web/https://agentskills.io/specification)). The skills CLI skips a skill with no name, and a name that differs from the directory leaves one skill answering to two identifiers: the slash command Claude Code derives from the directory and the name other agents list.
+- `description`: a non-empty string within the specification's length limit. Agents match it against the task and load every description into context up front.
+- `metadata.internal`: a boolean when present, since `true` is the value the skills CLI reads to hide a skill.
+
+The two limits are `MAX_SKILL_DESCRIPTION_LENGTH` and `MAX_SKILL_NAME_LENGTH` in [`src/rules/skill-frontmatter.ts`](src/rules/skill-frontmatter.ts), counted in characters (code points). Every other key is accepted (`argument-hint`, `disable-model-invocation`, `allowed-tools`, `model`, `metadata` and whatever the specification adds next), and every problem is reported rather than the first. A file with no frontmatter, frontmatter that is not valid YAML, or frontmatter that is not a mapping is reported once.
+
+`exadev/skill-name-unique` reports a skill whose name another SKILL.md in the repository also defines, naming the other paths. The skills CLI de-duplicates skills by name and silently drops all but one, so a copied SKILL.md whose name was never changed disappears from `skills add` with no error. The other files are found by scanning ESLint's working directory (skipping `node_modules` and `.git`) for the files `skillFiles` selects, once per directory and file selection for the life of the process; the file being linted is compared by its own text, not its copy on disk. The scan is never invalidated, so a long-lived process such as an editor's language server keeps serving the files it first saw until it restarts, the same limitation the [workspace architecture](#workspace-architecture) graph has. A SKILL.md that declares no usable name is not counted, since `skill-frontmatter` already reports it.
+
+### Marketplaces and plugins
+
+`exadev/marketplace-manifest` checks a Claude Code marketplace and the plugins it lists, reading the marketplace root as the directory that holds `.claude-plugin`:
+
+- `name` and `owner.name` are non-empty strings, and `plugins` is an array of objects, each with a non-empty `name`, unique across the list, and a `source` that is a string or an object.
+- An entry has no `version` key. Claude Code ignores a marketplace entry's version once the plugin's own `plugin.json` sets one, so the two silently disagree.
+- An entry has no `skills` key. Claude Code scans a plugin's `skills/` directory by default, so declaring it lists each skill twice.
+- A string `source` starts with `./`. The skills CLI skips every other form when it searches a marketplace for skills.
+- The directory a local `source` names holds `.claude-plugin/plugin.json`, whose `name` equals the entry's, and no two entries name the same directory.
+- Every directory directly under `plugins/` that holds a `.claude-plugin/plugin.json` is listed by some entry.
+
+An object `source` (`github`, `git-subdir` and the like) points at another repository and is checked only for being an object. A `plugin.json` that is not valid JSON makes the rule throw, naming the file, rather than being read as absent.
+
+`exadev/plugin-manifest` checks each plugin manifest:
+
+- `name` equals the plugin directory's name, the directory holding `.claude-plugin`, since the marketplace entry, the `/<plugin>:<skill>` command prefix and the directory are read as one identifier.
+- There is no `skills` key, for the same double-scan reason as in the marketplace.
+- When a `package.json` beside `.claude-plugin` declares a `version`, the manifest's `version` equals it, and both values are reported when they differ. A release tool bumps `package.json`, and Claude Code prefers the manifest's version, so a manifest left behind keeps announcing the old release.
+
+The version check is the convention of marketplaces that release each plugin from its own `package.json`; a plugin with no `package.json` beside it is never asked for a version. Claude Code's own references are the authority for field names: [plugin manifest](https://code.claude.com/docs/en/plugins/manifest-reference) ([latest archived copy](https://web.archive.org/web/https://code.claude.com/docs/en/plugins/manifest-reference)) and [marketplace](https://code.claude.com/docs/en/plugins/marketplace-reference) ([latest archived copy](https://web.archive.org/web/https://code.claude.com/docs/en/plugins/marketplace-reference)).
 
 ## Timeout races
 
@@ -1673,6 +1745,7 @@ pnpm build
 - [`src/pure-modules.ts`](src/pure-modules.ts) builds the `pureModulesConfig` block: `files` becomes the block's `files` and `ignores`, and the rule options are read by [`src/rules/pure-module-options.ts`](src/rules/pure-module-options.ts), which also holds the ban lists. [`src/rules/pure-module.ts`](src/rules/pure-module.ts) reuses `moduleReferenceOf` from `import-policy.ts` so every import syntax is recognised the same way.
 - [`src/test-hygiene.ts`](src/test-hygiene.ts) builds the `testHygieneConfig` blocks: it resolves the optional `@vitest/eslint-plugin` through `tryRequire`, checks the three rules it relies on exist, and emits the vitest rules and `exadev/injected-test-hygiene` per list of globs, plus `exadev/non-vacuous-guard` for guard files. Tests supply a plugin through `assembleTestHygieneConfig`, so the public options carry no resolver seam. [`src/config-globs.ts`](src/config-globs.ts) turns a validated glob list into a block's `files` and `ignores`, shared with the pure-module builder.
 - [`src/markdown-headings.ts`](src/markdown-headings.ts) builds the `markdownHeadingsConfig` block. It resolves the optional `@eslint/markdown` through [`src/markdown-plugin.ts`](src/markdown-plugin.ts), which unwraps the ES module namespace `require()` returns the way `json-plugin.ts` does for `@eslint/json`, and fixes the language and the frontmatter option the rule depends on. [`src/rules/markdown-required-heading.ts`](src/rules/markdown-required-heading.ts) is typed against `@eslint/markdown`'s own rule definition, like the JSON rules.
+- [`src/agent-skills.ts`](src/agent-skills.ts) builds the `agentSkillsConfig` blocks and holds the tri-state behaviour of `exadevConfig({ agentSkills })`. It resolves `@eslint/markdown` and `@eslint/json` through [`src/markdown-plugin.ts`](src/markdown-plugin.ts) and [`src/json-language-config.ts`](src/json-language-config.ts), building each block only when its peer resolves unless the feature is forced, and detects a marketplace or skills layout through the same injectable `WorkspaceFs` the cross-file rules use. The four rules read the filesystem through that seam too, so their tests supply an in-memory tree from [`src/rules/memory-fs.ts`](src/rules/memory-fs.ts). [`src/rules/skill-document.ts`](src/rules/skill-document.ts) is the frontmatter reading `skill-frontmatter` and `skill-name-unique` share, [`src/rules/claude-plugin-json.ts`](src/rules/claude-plugin-json.ts) the JSON reading the two manifest rules share, and `yaml` parses the frontmatter.
 - [`src/rules/file-reference.ts`](src/rules/file-reference.ts) is the option shape for a rule that reads another file: `{ path, relativeTo? }`, resolved against the linted file's directory (`file`, the default) or the workspace root (`root`, found the way the workspace architecture rules find it).
   - `readReferencedJson` parses the target as JSONC through [`src/rules/jsonc.ts`](src/rules/jsonc.ts) (comments, trailing commas and a leading byte order mark), returning `undefined` for a missing file and throwing, naming the path, for one that does not parse.
 - [`src/turbo-config.ts`](src/turbo-config.ts) builds the turbo blocks (`buildTurboConfig` internally, `turboConfig` publicly) from the one shared options object in [`src/rules/turbo-options.ts`](src/rules/turbo-options.ts).
@@ -1685,12 +1758,13 @@ pnpm build
 - [`src/rules/run-tracker.ts`](src/rules/run-tracker.ts) decides which lint carries a finding that belongs to a set of files rather than to one, so `require-compiler-options` reports once per run; it reads run boundaries from the order of the lints, as [Compiler options](#compiler-options) describes.
 - [`src/rules/tsconfig-attribution.ts`](src/rules/tsconfig-attribution.ts) works out which tsconfig governs a linted file, attributing a program with no tsconfig to the one the file was last linted under while that tsconfig still lists it.
 - [`src/create-config.ts`](src/create-config.ts) is config assembly's single source of truth.
-  - `exadevConfig(options, ...userConfigs)` concatenates, in order: `buildGitignoreConfig`, `recommendedTypeChecked`, `jsdocAndTsdoc`, `jsonCanonicalConfig`, `stylisticCommentsConfig`, `buildReactConfig`, `buildNextjsConfig`, `buildPackageJsonKeyOrderConfig` (each tri-state builder fed its matching option), `buildWorkspaceArchitectureConfig` (only when `workspaceArchitecture` is given; there is no auto-detected default), `buildTurboConfig` (only when `turbo` is given, likewise), `buildImportPolicyConfig` (only when `importPolicies` is given, likewise), `buildPureModulesConfig` (only when `pureModules` is given, likewise), `buildTestHygieneConfig` (only when `testHygiene` is given, likewise), `buildMarkdownHeadingsConfig` (only when `markdownHeadings` is given, likewise), `buildToolingWiringConfig` (only when `toolingWiring` is given, likewise), and any trailing user configs.
+  - `exadevConfig(options, ...userConfigs)` concatenates, in order: `buildGitignoreConfig`, `recommendedTypeChecked`, `jsdocAndTsdoc`, `jsonCanonicalConfig`, `stylisticCommentsConfig`, `buildReactConfig`, `buildNextjsConfig`, `buildPackageJsonKeyOrderConfig`, `buildAgentSkillsConfig` (each tri-state builder fed its matching option), `buildWorkspaceArchitectureConfig` (only when `workspaceArchitecture` is given; there is no auto-detected default), `buildTurboConfig` (only when `turbo` is given, likewise), `buildImportPolicyConfig` (only when `importPolicies` is given, likewise), `buildPureModulesConfig` (only when `pureModules` is given, likewise), `buildTestHygieneConfig` (only when `testHygiene` is given, likewise), `buildMarkdownHeadingsConfig` (only when `markdownHeadings` is given, likewise), `buildToolingWiringConfig` (only when `toolingWiring` is given, likewise), and any trailing user configs.
   - `defaultConfig` is `exadevConfig()` evaluated once, eagerly, at module load.
 - [`src/robustness-rules.ts`](src/robustness-rules.ts) holds `UNTYPED_ROBUSTNESS_RULES`, the core ESLint rules that need no type information, spread into both `plugin.configs.recommended` and the type-checked block so the two cannot drift apart.
 - [`src/stylistic-comments.ts`](src/stylistic-comments.ts) builds `stylisticCommentsConfig`: the hand-picked `@stylistic/eslint-plugin` rules plus this package's own `exadev/multiline-comment-style` and `exadev/prefer-doc-comment`, in two blocks (one scoped to every JS/TS file, one scoped to JSX files only for the three JSX-specific rules). See [Stylistic comment, class-member and JSX rules](#stylistic-comment-class-member-and-jsx-rules).
 - [`src/index.ts`](src/index.ts) is the entry point, still a pure re-export barrel:
   ```ts
+  export { agentSkillsConfig } from './agent-skills';
   export { defaultConfig as default, exadevConfig } from './create-config';
   export { importPolicyConfig } from './import-policy';
   export { markdownHeadingsConfig } from './markdown-headings';
@@ -1701,6 +1775,7 @@ pnpm build
   export { turboConfig } from './turbo-config';
   export { assertEslintConfig, verifyEslintConfig } from './verify-eslint';
   export { workspaceArchitectureConfig } from './workspace-architecture';
+  export type { AgentSkillsOptions } from './agent-skills';
   export type { MarkdownFrontmatter, MarkdownHeadingsOptions } from './markdown-headings';
   export type { PureModulesOptions } from './pure-modules';
   export type { TestHygieneOptions } from './test-hygiene';

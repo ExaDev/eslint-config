@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { plugin } from './index';
 import { isRecord } from './is-record';
 import {
+  buildViaAgentSkills,
+  buildViaAgentSkillsOption,
   buildViaDefensiveFallbackAllow,
   buildViaDependAllowsReact,
   buildViaDynamicImportBan,
@@ -190,5 +192,15 @@ describe('README defineConfig examples', () => {
       2,
       { allow: [{ files: ['src/config/**'], reason: 'optional settings default to empty at the parsing boundary' }] },
     ]);
+  });
+
+  it('the agent skills examples apply the given globs, as the standalone export and through exadevConfig()', () => {
+    for (const blocks of [buildViaAgentSkills(), buildViaAgentSkillsOption()]) {
+      const skills = blocks.find((entry) => entry.rules?.['exadev/skill-frontmatter'] !== undefined);
+      expect(skills?.files).toStrictEqual(['skills/*/SKILL.md', 'plugins/*/skills/*/SKILL.md']);
+      expect(skills?.ignores).toStrictEqual(['plugins/legacy/**']);
+      expect(blocks.find((entry) => entry.rules?.['exadev/plugin-manifest'] !== undefined)?.files).toStrictEqual(['plugins/*/.claude-plugin/plugin.json']);
+      expect(blocks.find((entry) => entry.rules?.['exadev/marketplace-manifest'] !== undefined)?.files).toStrictEqual(['.claude-plugin/marketplace.json']);
+    }
   });
 });
