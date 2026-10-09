@@ -18,6 +18,47 @@ describe('rule metadata', () => {
   });
 });
 
+describe('skill names beyond ASCII, as the specification reference validator reads them', () => {
+  const problemIds = (name: string, directory: string) => checkSkillFrontmatter({ name, description: 'd' }, directory).map((problem) => problem.messageId);
+  const deseretSmallLetter = '\u{10428}';
+  const nfc = 'caf\u00e9';
+  const nfd = 'cafe\u0301';
+
+  it.each([
+    ['accented lower-case letters', nfc, nfc],
+    ['letters of another script', '\u65e5\u672c\u8a9e-\u30b9\u30ad\u30eb', '\u65e5\u672c\u8a9e-\u30b9\u30ad\u30eb'],
+    ['digits and hyphens', 'a1-b2', 'a1-b2'],
+    ['a decomposed directory name for a composed name, as macOS stores it', nfc, nfd],
+    ['a composed directory name for a decomposed name', nfd, nfc],
+    ['the longest name, in astral code points', deseretSmallLetter.repeat(MAX_SKILL_NAME_LENGTH), deseretSmallLetter.repeat(MAX_SKILL_NAME_LENGTH)],
+  ])('accepts %s', (_label, name, directory) => {
+    expect(problemIds(name, directory)).toStrictEqual([]);
+  });
+
+  it.each([
+    ['an upper-case accented letter', '\u00c9cole', ['nameFormat']],
+    ['an upper-case ASCII letter', 'Cafe', ['nameFormat']],
+    ['consecutive hyphens', 'a--b', ['nameFormat']],
+    ['a leading hyphen', '-ab', ['nameFormat']],
+    ['a trailing hyphen', 'ab-', ['nameFormat']],
+    ['an underscore', 'a_b', ['nameFormat']],
+    ['a space', 'a b', ['nameFormat']],
+    ['one code point too many', deseretSmallLetter.repeat(MAX_SKILL_NAME_LENGTH + 1), ['nameTooLong']],
+  ])('reports %s', (_label, name, expected) => {
+    expect(problemIds(name, name)).toStrictEqual(expected);
+  });
+
+  it('counts the length on the normalised name', () => {
+    // Fullwidth Latin letters normalise to ASCII letters, one for one, so the limit applies to the same count either side of it.
+    expect(problemIds('\uff41'.repeat(MAX_SKILL_NAME_LENGTH), 'a'.repeat(MAX_SKILL_NAME_LENGTH))).toStrictEqual([]);
+    expect(problemIds('\uff41'.repeat(MAX_SKILL_NAME_LENGTH + 1), 'a'.repeat(MAX_SKILL_NAME_LENGTH + 1))).toStrictEqual(['nameTooLong']);
+  });
+
+  it('still reports a name that differs from its directory once both are normalised', () => {
+    expect(problemIds(nfc, 'cafe')).toStrictEqual(['nameMismatch']);
+  });
+});
+
 describe('a description with only whitespace', () => {
   it.each([
     ['spaces', '   '],
