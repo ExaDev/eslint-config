@@ -245,6 +245,19 @@ describe('linting a repository', () => {
     });
   });
 
+  it('reads a sibling manifest with a byte order mark, and reports one that is not JSON without aborting the run', async () => {
+    write('.claude-plugin/marketplace.json', JSON.stringify({ name: 'm', owner: { name: 'o' }, plugins: [{ name: 'p1', source: './plugins/p1' }, { name: 'p2', source: './plugins/p2' }, { name: 'p3', source: 'tools/p3' }] }));
+    write('plugins/p1/.claude-plugin/plugin.json', `\uFEFF${JSON.stringify({ name: 'p1' })}`);
+    write('plugins/p2/.claude-plugin/plugin.json', '{"name":');
+    write('plugins/p1/package.json', '{"version":"1.0.0",}');
+
+    const results = await lint();
+    expect(results['.claude-plugin/marketplace.json']).toHaveLength(2);
+    expect(results['.claude-plugin/marketplace.json']?.[0]).toMatch(/^exadev\/marketplace-manifest: Marketplace entry "p2" has source ".\/plugins\/p2", whose \.claude-plugin\/plugin\.json is not valid JSON: /u);
+    expect(results['.claude-plugin/marketplace.json']?.[1]).toBe('exadev/marketplace-manifest: Marketplace entry "p3" has source "tools/p3", which does not start with "./", so the skills CLI skips it.');
+    expect(results['plugins/p1/.claude-plugin/plugin.json']).toStrictEqual(['exadev/plugin-manifest: The plugin version is unset but package.json is 1.0.0; they must be equal.']);
+  });
+
   it('reports nothing for a consistent repository', async () => {
     write('skills/word-count/SKILL.md', skill('word-count'));
     write('plugins/p/skills/other/SKILL.md', skill('other'));

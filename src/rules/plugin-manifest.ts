@@ -4,7 +4,7 @@ import { isRecord } from '../is-record';
 import { findMember, readJsonFile } from './claude-plugin-json';
 import { realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
 
-export type PluginManifestMessageIds = 'notObject' | 'nameMissing' | 'nameMismatch' | 'skillsKey' | 'versionMismatch';
+export type PluginManifestMessageIds = 'notObject' | 'nameMissing' | 'nameMismatch' | 'skillsKey' | 'versionMismatch' | 'invalidPackageJson';
 
 export type PluginManifestRuleDefinition = JSONRuleDefinition<{
   RuleOptions: [];
@@ -30,6 +30,7 @@ export function createPluginManifestRule(fs: WorkspaceFs = realWorkspaceFs): Plu
         nameMissing: 'The plugin manifest must set "name" to its directory name "{{directory}}".',
         nameMismatch: 'The plugin name "{{name}}" must equal its directory name "{{directory}}".',
         skillsKey: 'The plugin manifest must not have a "skills" key: Claude Code scans the default skills/ directory, so declaring it scans the same skills twice.',
+        invalidPackageJson: 'The package.json beside the plugin is not valid JSON, so its version cannot be compared: {{reason}}',
         versionMismatch: 'The plugin version is {{actual}} but package.json is {{expected}}; they must be equal.',
       },
     },
@@ -55,7 +56,12 @@ export function createPluginManifestRule(fs: WorkspaceFs = realWorkspaceFs): Plu
           const packageJsonPath = join(pluginDirectory, 'package.json');
           if (!fs.existsSync(packageJsonPath)) return;
           const packageJson = readJsonFile(fs, packageJsonPath);
-          const expected = isRecord(packageJson) ? packageJson['version'] : undefined;
+          if (packageJson.kind === 'invalid') {
+            context.report({ loc: root.loc, messageId: 'invalidPackageJson', data: { reason: packageJson.reason } });
+
+            return;
+          }
+          const expected = isRecord(packageJson.value) ? packageJson.value['version'] : undefined;
           if (typeof expected !== 'string') return;
           const version = findMember(root, 'version');
           if (version?.value.type === 'String' && version.value.value === expected) return;

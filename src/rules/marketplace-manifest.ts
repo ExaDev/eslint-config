@@ -23,6 +23,7 @@ export type MarketplaceManifestMessageIds =
   | 'invalidSource'
   | 'sourceNotRelative'
   | 'missingPluginManifest'
+  | 'invalidPluginManifest'
   | 'pluginNameMismatch'
   | 'duplicateSource'
   | 'unlistedPlugin';
@@ -63,6 +64,7 @@ export function createMarketplaceManifestRule(fs: WorkspaceFs = realWorkspaceFs)
         invalidSource: 'Marketplace entry {{entry}} must have a "source" that is a string or an object.',
         sourceNotRelative: 'Marketplace entry {{entry}} has source "{{source}}", which does not start with "./", so the skills CLI skips it.',
         missingPluginManifest: 'Marketplace entry {{entry}} has source "{{source}}", which has no {{manifest}}.',
+        invalidPluginManifest: 'Marketplace entry {{entry}} has source "{{source}}", whose {{manifest}} is not valid JSON: {{reason}}',
         pluginNameMismatch: 'Marketplace entry {{entry}} points at a plugin named "{{actual}}".',
         duplicateSource: '{{directory}} is listed by more than one marketplace entry, so its skills would be listed once per entry.',
         unlistedPlugin: '{{directory}} holds a plugin manifest but is not listed in the marketplace.',
@@ -104,13 +106,19 @@ export function createMarketplaceManifestRule(fs: WorkspaceFs = realWorkspaceFs)
         if (listed.has(directory)) context.report({ loc: source.loc, messageId: 'duplicateSource', data: { directory } });
         listed.add(directory);
         const manifestPath = manifestPathOf(directory);
+        const manifestName = `${CLAUDE_PLUGIN_DIR}/${PLUGIN_MANIFEST_FILE}`;
         if (!fs.existsSync(manifestPath)) {
-          context.report({ loc: source.loc, messageId: 'missingPluginManifest', data: { entry: label, source: source.value, manifest: `${CLAUDE_PLUGIN_DIR}/${PLUGIN_MANIFEST_FILE}` } });
+          context.report({ loc: source.loc, messageId: 'missingPluginManifest', data: { entry: label, source: source.value, manifest: manifestName } });
 
           return;
         }
         const manifest = readJsonFile(fs, manifestPath);
-        const actual = isRecord(manifest) && typeof manifest['name'] === 'string' ? manifest['name'] : 'unset';
+        if (manifest.kind === 'invalid') {
+          context.report({ loc: source.loc, messageId: 'invalidPluginManifest', data: { entry: label, source: source.value, manifest: manifestName, reason: manifest.reason } });
+
+          return;
+        }
+        const actual = isRecord(manifest.value) && typeof manifest.value['name'] === 'string' ? manifest.value['name'] : 'unset';
         if (entryName !== undefined && actual !== entryName.value) {
           context.report({ loc: entryName.loc, messageId: 'pluginNameMismatch', data: { entry: label, actual } });
         }

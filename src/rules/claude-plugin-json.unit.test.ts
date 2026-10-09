@@ -44,17 +44,28 @@ describe('isNonEmptyString', () => {
 });
 
 describe('readJsonFile', () => {
-  const fs = createMemoryFs({ '/r/ok.json': '{"a":1}', '/r/bad.json': '{"a":' });
+  const fs = createMemoryFs({
+    '/r/ok.json': '{"a":1}',
+    '/r/bom.json': '\uFEFF{"a":1}',
+    '/r/trailing.json': '{"a":1,}',
+    '/r/bad.json': '{"a":',
+  });
 
   it('parses a file', () => {
-    expect(readJsonFile(fs, '/r/ok.json')).toStrictEqual({ a: 1 });
+    expect(readJsonFile(fs, '/r/ok.json')).toStrictEqual({ kind: 'parsed', value: { a: 1 } });
   });
 
-  it('names the file when it is not valid JSON', () => {
-    expect(() => readJsonFile(fs, '/r/bad.json')).toThrow(/^@exadev\/eslint-config: cannot read "\/r\/bad\.json" as JSON: SyntaxError/u);
+  it.each([['a byte order mark', '/r/bom.json'], ['a trailing comma', '/r/trailing.json']])('parses a file with %s, as editors and the JSONC reader do', (_label, path) => {
+    expect(readJsonFile(fs, path)).toStrictEqual({ kind: 'parsed', value: { a: 1 } });
   });
 
-  it('names the file when it does not exist', () => {
-    expect(() => readJsonFile(fs, '/r/missing.json')).toThrow(/cannot read "\/r\/missing\.json" as JSON: Error: ENOENT/u);
+  it('reports the syntax error as a value, so a rule can attach it to the file that points here', () => {
+    const result = readJsonFile(fs, '/r/bad.json');
+    if (result.kind !== 'invalid') throw new Error('Unreachable: the file is not valid JSON.');
+    expect(result.reason).toMatch(/JSON/u);
+  });
+
+  it('lets a read error through, since only a syntax error is a finding about the file', () => {
+    expect(() => readJsonFile(fs, '/r/missing.json')).toThrow(/ENOENT/u);
   });
 });

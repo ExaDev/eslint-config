@@ -106,15 +106,16 @@ function lintWith(tree: Readonly<Record<string, string>>, text: string, filename
   return new Linter({ cwd: CWD }).verify(text, config as never, { filename }).map((message) => message.message);
 }
 
-describe('a plugin manifest that is not JSON', () => {
-  it('fails loudly, naming the file', () => {
-    expect(() => lintWith({ [`${CWD}/plugins/a/.claude-plugin/plugin.json`]: '{' }, entries(listing[0]))).toThrow(/plugins\/a\/\.claude-plugin\/plugin\.json" as JSON/u);
+describe('a plugin manifest that is not valid JSON', () => {
+  it('is reported at the entry that lists it, leaving every other finding in the run intact', () => {
+    const messages = lintWith({ [`${CWD}/plugins/a/.claude-plugin/plugin.json`]: '{' }, entries(listing[0], { name: 'c', source: 'tools/c' }));
+    expect(messages).toHaveLength(2);
+    expect(messages[0]).toMatch(/^Marketplace entry "a" has source ".\/plugins\/a", whose \.claude-plugin\/plugin\.json is not valid JSON: /u);
+    expect(messages[1]).toBe('Marketplace entry "c" has source "tools/c", which does not start with "./", so the skills CLI skips it.');
   });
-});
 
-describe('the duplicate entry name message', () => {
-  it('quotes the name once', () => {
-    expect(lintWith({}, entries({ name: 'a', source: { source: 'github' } }, { name: 'a', source: { source: 'github' } }))).toStrictEqual(['The marketplace lists "a" more than once.']);
+  it.each([['a byte order mark', '\uFEFF{"name":"a"}'], ['a trailing comma', '{"name":"a",}']])('accepts a manifest with %s, which its own lint reports where it is a syntax error', (_label, manifest) => {
+    expect(lintWith({ [`${CWD}/plugins/a/.claude-plugin/plugin.json`]: manifest }, entries(listing[0]))).toStrictEqual([]);
   });
 });
 

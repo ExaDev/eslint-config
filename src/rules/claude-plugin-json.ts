@@ -1,4 +1,5 @@
 import type { MemberNode, ObjectNode, StringNode, ValueNode } from '@humanwhocodes/momoa';
+import { tryParseJsonc } from './jsonc';
 import { getMemberKeyName } from './json-member-key';
 import type { WorkspaceFs } from './workspace-fs';
 
@@ -27,12 +28,15 @@ export function isNonEmptyString(node: ValueNode): node is StringNode {
 }
 
 /**
- * Reads and parses a JSON file through `fs`, throwing an error that names the file when it is not valid JSON, so a manifest another file points at fails loudly instead of being read as absent.
+ * The outcome of `readJsonFile`: the parsed value, or why the file is not JSON.
  */
-export function readJsonFile(fs: WorkspaceFs, path: string): unknown {
-  try {
-    return JSON.parse(fs.readFileSync(path));
-  } catch (error) {
-    throw new Error(`@exadev/eslint-config: cannot read "${path}" as JSON: ${String(error)}`, { cause: error });
-  }
+export type JsonFileResult = { readonly kind: 'parsed'; readonly value: unknown } | { readonly kind: 'invalid'; readonly reason: string };
+
+/**
+ * Reads and parses a sibling JSON file through `fs` with the repository's tolerant JSONC reader, so a byte order mark or a trailing comma, which editors and the file's own lint treat separately, does not make this read fail. A syntax error comes back as the `invalid` result for the calling rule to report on the file that points here, since throwing would abort the whole ESLint run and hide every other finding. A read error (a file that cannot be read) is not a finding about the file's content and propagates.
+ */
+export function readJsonFile(fs: WorkspaceFs, path: string): JsonFileResult {
+  const result = tryParseJsonc(fs.readFileSync(path), path);
+
+  return result.kind === 'parsed' ? result : { kind: 'invalid', reason: result.error.message };
 }

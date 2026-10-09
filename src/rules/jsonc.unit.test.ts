@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { endOfString, parseJsonc, stripJsonc } from './jsonc';
+import { endOfString, parseJsonc, stripJsonc, tryParseJsonc } from './jsonc';
 
 describe('endOfString', () => {
   it('returns the index just past the closing quote', () => {
@@ -166,5 +166,17 @@ describe('parseJsonc', () => {
     if (!(caught instanceof Error)) throw new Error('Unreachable: parseJsonc was expected to throw an Error.');
     expect(caught.message).toMatch(/^@exadev\/eslint-config: could not parse "\/p\/turbo.json" as JSON with comments: /);
     expect(caught.cause).toBeInstanceOf(SyntaxError);
+  });
+});
+
+describe('tryParseJsonc', () => {
+  it('returns the value of a document with a byte order mark, comments and a trailing comma', () => {
+    expect(tryParseJsonc('\uFEFF{\n  // c\n  "a": [1, 2,],\n}\n', '/p/a.json')).toStrictEqual({ kind: 'parsed', value: { a: [1, 2] } });
+  });
+
+  it('returns the syntax error as a value instead of throwing', () => {
+    const result = tryParseJsonc('{"a": }', '/p/bad.json');
+    if (result.kind !== 'invalid') throw new Error('Unreachable: the document is not valid JSON.');
+    expect(result.error).toBeInstanceOf(SyntaxError);
   });
 });
