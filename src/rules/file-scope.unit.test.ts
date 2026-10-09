@@ -39,9 +39,12 @@ describe('character classes against minimatch', () => {
     '[\\a]x',
     '[\\-]x',
     '[a\\-c]x',
-    '[\\^a]x',
     '[\\!a]x',
     '[\\[]x',
+    '[\\^]x',
+    '[\\^]]x',
+    '[c][\\^]x',
+    '[a\\^]x',
   ])('selects what minimatch selects for %s', (glob) => {
     const matches = createPathMatcher([glob], 'any');
     const oracle = new Minimatch(glob, { dot: true });
@@ -61,6 +64,14 @@ describe('character classes against minimatch', () => {
 describe('assertSupportedGlob', () => {
   it.each(['[[:alpha:]]x', 'a/[[:digit:]a]/x', '!a/[[:alpha:]]'])('rejects the POSIX class in %s, naming the option and the glob', (glob) => {
     expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`@exadev/eslint-config: "opt" must not use a POSIX character class, which this package's glob dialect does not support: "${glob}". List the characters or a range instead.`);
+  });
+
+  it.each(['[\\^a]x', '[\\^-x]x', 'a/[\\^b]/x', '!a/[\\^-.]x'])('rejects the class opening with an escaped caret in %s, which minimatch reads as negated only sometimes', (glob) => {
+    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`@exadev/eslint-config: "opt" must not open a character class with an escaped caret, which this package's glob dialect cannot read the way ESLint does: "${glob}". Use "[^...]" to negate, or put the caret after the first member.`);
+  });
+
+  it.each(['[\\^]x', '[\\^]]x', '[a\\^]x'])('accepts %s, where the escaped caret is a plain member', (glob) => {
+    expect(() => { assertSupportedGlob(glob, 'opt'); }).not.toThrow();
   });
 
   it.each(['[c-a]x', 'a/[a-\\]]/x', 'a/{b,[z-a]}/x'])('rejects the reversed range in %s, naming the option and the glob', (glob) => {
