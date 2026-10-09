@@ -57,7 +57,7 @@ export function createMarketplaceManifestRule(fs: WorkspaceFs = realWorkspaceFs)
         pluginsNotArray: 'The marketplace "plugins" must be an array.',
         invalidEntry: 'Each marketplace plugin entry must be an object.',
         invalidEntryName: 'Marketplace plugin entry {{entry}} must have a non-empty string "name".',
-        duplicateEntryName: 'The marketplace lists "{{entry}}" more than once.',
+        duplicateEntryName: 'The marketplace lists {{entry}} more than once.',
         entryVersion: 'Marketplace entry {{entry}} must not have a "version": the plugin\'s own plugin.json owns it, and Claude Code ignores the entry\'s once plugin.json sets one.',
         entrySkills: 'Marketplace entry {{entry}} must not have a "skills" key: skills are found in the default skills/ directory, and declaring it lists each skill twice.',
         invalidSource: 'Marketplace entry {{entry}} must have a "source" that is a string or an object.',
