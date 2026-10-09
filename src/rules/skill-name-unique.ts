@@ -70,6 +70,7 @@ export function scanSkillFiles(fs: WorkspaceFs, root: string, matches: PathMatch
  */
 export function createSkillNameUniqueRule(fs: WorkspaceFs = realWorkspaceFs): SkillNameUniqueRuleDefinition {
   const scans = new Map<string, readonly SkillEntry[]>();
+  const validatedFiles = new Set<string | undefined>();
 
   function skillsUnder(cwd: string, { files, ignores = [] }: SkillNameUniqueOptions): readonly SkillEntry[] {
     const key = JSON.stringify([cwd, files, ignores]);
@@ -98,7 +99,12 @@ export function createSkillNameUniqueRule(fs: WorkspaceFs = realWorkspaceFs): Sk
     },
     create(context) {
       const [options] = context.options;
-      for (const glob of options.files ?? []) assertSupportedGlob(glob, 'skill-name-unique.files');
+      // ESLint calls `create` for every linted file, so a files list is validated the first time it is seen and remembered, not recompiled per file.
+      const filesKey = JSON.stringify(options.files);
+      if (!validatedFiles.has(filesKey)) {
+        for (const glob of options.files ?? []) assertSupportedGlob(glob, 'skill-name-unique.files');
+        validatedFiles.add(filesKey);
+      }
       // Absence is a legitimate branch here, not an error: the scan is cached for the life of the process, so a cached entry can name a skill that has since been renamed or removed, and the linted file can be an unsaved buffer with no copy on disk. A path that does not exist names itself.
       const realPathOf = (path: string): string => (fs.existsSync(path) ? fs.realpathSync(path) : path);
       const ownRealPath = realPathOf(context.filename);
