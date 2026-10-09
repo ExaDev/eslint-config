@@ -114,10 +114,15 @@ export function createSkillNameUniqueRule(fs: WorkspaceFs = realWorkspaceFs): Sk
     create(context) {
       const [options] = context.options;
       for (const glob of options.files ?? []) assertNoExtglob(glob, 'skill-name-unique.files');
-      const ownPath = relativeToCwd(context.filename, context.cwd);
-      // The linted file as the file system names it, which is what makes two paths one skill. A file that is not on disk (an unsaved buffer) is its own path.
-      const ownRealPath = fs.existsSync(context.filename) ? fs.realpathSync(context.filename) : context.filename;
-      const isOwnFile = (entry: SkillEntry): boolean => entry.path === ownPath || fs.realpathSync(join(context.cwd, entry.path)) === ownRealPath;
+      // Absence is a legitimate branch here, not an error: the scan is cached for the life of the process, so a cached entry can name a skill that has since been renamed or removed, and the linted file can be an unsaved buffer with no copy on disk. A path that does not exist names itself.
+      const realPathOf = (path: string): string => (fs.existsSync(path) ? fs.realpathSync(path) : path);
+      const ownRealPath = realPathOf(context.filename);
+      // A copy exists, and is not the linted file, which is the same skill when two paths resolve to one file (a skill directory linked into a plugin). The path comparison needs no clause of its own: the linted file resolves to itself.
+      const isOtherExistingFile = (entry: SkillEntry): boolean => {
+        const path = join(context.cwd, entry.path);
+
+        return fs.existsSync(path) && fs.realpathSync(path) !== ownRealPath;
+      };
 
       return {
         yaml(node) {
@@ -126,7 +131,7 @@ export function createSkillNameUniqueRule(fs: WorkspaceFs = realWorkspaceFs): Sk
           const { name } = parsed.value;
           if (typeof name !== 'string' || name.length === 0) return;
           const others = skillsUnder(context.cwd, options)
-            .filter((entry) => entry.name === name && !isOwnFile(entry))
+            .filter((entry) => entry.name === name && isOtherExistingFile(entry))
             .map((entry) => entry.path)
             .sort();
           if (others.length > 0) context.report({ node, messageId: 'duplicateName', data: { name, paths: others.join(', ') } });

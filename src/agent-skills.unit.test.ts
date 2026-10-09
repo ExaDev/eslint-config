@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { includeIgnoreFile } from '@eslint/config-helpers';
@@ -382,6 +382,18 @@ describe('linting a repository', () => {
       ['skills/foo/SKILL.md', []],
       ['plugins/p/skills/foo/SKILL.md', []],
     ]);
+  });
+
+  it('lints a skill that was renamed after the scan was cached, without a crash or a duplicate of the path that is gone', async () => {
+    write('skills/foo/SKILL.md', skill('foo'));
+    write('skills/bar/SKILL.md', skill('bar'));
+    const eslint = new ESLint({ cwd, overrideConfigFile: true, overrideConfig: agentSkillsConfig() });
+    await eslint.lintFiles(['skills/bar/SKILL.md']);
+    renameSync(join(cwd, 'skills', 'foo'), join(cwd, 'skills', 'foo2'));
+    const [result] = await eslint.lintFiles(['skills/foo2/SKILL.md']);
+
+    // The cache still lists skills/foo, which is gone, so it is not a copy of anything.
+    expect(result?.messages.map((message) => message.message)).toStrictEqual(['The skill name "foo" must equal its directory name "foo2".']);
   });
 
   it('still reports a copy that is a different file', async () => {
