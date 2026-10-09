@@ -46,4 +46,14 @@ describe('createIgnoreMatcher', () => {
   it('ignores nothing outside the working directory', () => {
     expect(createIgnoreMatcher(['**'])('../x', false)).toBe(false);
   });
+
+  it.each(['/dist/', '/dist', '/dist/**', '/**/dist', '/*'])('matches nothing for %s, as ESLint does for a pattern with a leading slash', (pattern) => {
+    const isIgnored = createIgnoreMatcher([pattern]);
+    expect(isIgnored('dist', true)).toBe(false);
+    expect(isIgnored('dist/a.md', false)).toBe(false);
+  });
+
+  it('lets a leading-slash ! pattern bring nothing back', () => {
+    expect(createIgnoreMatcher(['dist/**', '!/dist/keep.md'])('dist/keep.md', false)).toBe(true);
+  });
 });
