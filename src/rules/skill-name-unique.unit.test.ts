@@ -1,12 +1,14 @@
 import markdown from '@eslint/markdown';
 import { Linter } from 'eslint';
 import { describe, expect, it } from 'vitest';
+import { createIgnoreMatcher } from './ignore-patterns';
 import { createMemoryFs } from './memory-fs';
 import { createSkillNameUniqueRule, scanSkillFiles } from './skill-name-unique';
 import type { WorkspaceFs } from './workspace-fs';
 
 const CWD = '/repo';
 const SCANS_FOR_THREE_SELECTIONS = 3;
+const NOTHING_IGNORED = createIgnoreMatcher([]);
 
 function skill(name: string | undefined): string {
   return name === undefined ? '---\ndescription: d\n---\n' : `---\nname: ${name}\ndescription: d\n---\n\n# ${name}\n`;
@@ -61,7 +63,7 @@ describe('scanSkillFiles', () => {
   });
 
   it('lists every SKILL.md that declares a name, relative to the root, skipping node_modules and .git', () => {
-    expect([...scanSkillFiles(fs, CWD, () => true)].sort((left, right) => (left.path < right.path ? -1 : 1))).toStrictEqual([
+    expect([...scanSkillFiles(fs, CWD, () => true, NOTHING_IGNORED)].sort((left, right) => (left.path < right.path ? -1 : 1))).toStrictEqual([
       { path: 'plugins/p/skills/gamma/SKILL.md', name: 'gamma' },
       { path: 'skills/alpha/SKILL.md', name: 'alpha' },
       { path: 'skills/beta/SKILL.md', name: 'beta' },
@@ -69,7 +71,29 @@ describe('scanSkillFiles', () => {
   });
 
   it('lists only the files the matcher selects', () => {
-    expect(scanSkillFiles(fs, CWD, (path) => path.startsWith('plugins/'))).toStrictEqual([{ path: 'plugins/p/skills/gamma/SKILL.md', name: 'gamma' }]);
+    expect(scanSkillFiles(fs, CWD, (path) => path.startsWith('plugins/'), NOTHING_IGNORED)).toStrictEqual([{ path: 'plugins/p/skills/gamma/SKILL.md', name: 'gamma' }]);
+  });
+});
+
+describe('scanSkillFiles with ignore patterns', () => {
+  const fs = createMemoryFs({
+    ...tree,
+    [`${CWD}/dist/skills/alpha/SKILL.md`]: skill('alpha'),
+    [`${CWD}/skills/alpha-copy/SKILL.md`]: skill('alpha'),
+    [`${CWD}/.cache/build/skills/alpha/SKILL.md`]: skill('alpha'),
+  });
+  const paths = (ignores: readonly string[]) =>
+    scanSkillFiles(fs, CWD, () => true, createIgnoreMatcher(ignores))
+      .map((entry) => entry.path)
+      .sort();
+
+  it('does not descend into a directory the patterns ignore', () => {
+    expect(paths(['**/dist/', '.cache'])).toStrictEqual(['plugins/p/skills/gamma/SKILL.md', 'skills/alpha-copy/SKILL.md', 'skills/alpha/SKILL.md', 'skills/beta/SKILL.md']);
+  });
+
+  it('skips a file the patterns ignore and reads one a later ! pattern brings back', () => {
+    expect(paths(['**/SKILL.md', '!**/skills/alpha-copy/SKILL.md'])).toStrictEqual(['skills/alpha-copy/SKILL.md']);
+    expect(paths(['!**/skills/alpha-copy/SKILL.md', '**/SKILL.md'])).toStrictEqual([]);
   });
 });
 
@@ -136,11 +160,21 @@ describe('skill-name-unique', () => {
     ]);
   });
 
+  it('does not count a copy under a directory the ignores option names, which ESLint does not lint either', () => {
+    const fs = createMemoryFs({ ...tree, [`${CWD}/dist/skills/alpha/SKILL.md`]: skill('alpha') });
+    const own = `${CWD}/skills/alpha/SKILL.md`;
+    expect(lintWith(fs, skill('alpha'), own, { options: [{ ignores: ['**/dist/'] }] })).toStrictEqual([]);
+    expect(lintWith(fs, skill('alpha'), own, { options: [{ ignores: ['**/other/'] }] })).toStrictEqual([
+      'The skill name "alpha" is also defined in dist/skills/alpha/SKILL.md, so the skills CLI lists only one of them.',
+    ]);
+  });
+
   it('rejects an unknown option and an empty files list', () => {
     const fs = createMemoryFs(tree);
     const own = `${CWD}/skills/alpha/SKILL.md`;
     expect(() => lintWith(fs, skill('alpha'), own, { options: [{ file: [] }] })).toThrow(/should NOT have additional properties/u);
     expect(() => lintWith(fs, skill('alpha'), own, { options: [{ files: [] }] })).toThrow(/should NOT have fewer than 1 items/u);
+    expect(() => lintWith(fs, skill('alpha'), own, { options: [{ ignores: 'dist' }] })).toThrow(/should be array/u);
   });
 
   describe('scan caching', () => {
@@ -177,6 +211,15 @@ describe('skill-name-unique', () => {
       lintWith(fs, skill('alpha'), `${CWD}/skills/alpha/SKILL.md`, { options: [{ files: ['skills/*/SKILL.md'] }], rule });
       lintWith(fs, skill('alpha'), `${CWD}/skills/alpha/SKILL.md`, { rule });
       expect(scans()).toBe(SCANS_FOR_THREE_SELECTIONS);
+    });
+
+    it('scans again for a different ignore list', () => {
+      const { fs, scans } = countingFs(tree);
+      const rule = createSkillNameUniqueRule(fs);
+      lintWith(fs, skill('alpha'), `${CWD}/skills/alpha/SKILL.md`, { options: [{ ignores: ['**/dist/'] }], rule });
+      lintWith(fs, skill('alpha'), `${CWD}/skills/alpha/SKILL.md`, { options: [{ ignores: ['**/dist/'] }], rule });
+      lintWith(fs, skill('alpha'), `${CWD}/skills/alpha/SKILL.md`, { options: [{ ignores: ['**/build/'] }], rule });
+      expect(scans()).toBe(2);
     });
 
     it('scans again for a different working directory', () => {

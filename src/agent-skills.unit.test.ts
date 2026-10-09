@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { includeIgnoreFile } from '@eslint/config-helpers';
 import json from '@eslint/json';
 import markdown from '@eslint/markdown';
 import { ESLint } from 'eslint';
@@ -14,9 +15,11 @@ import {
   hasAgentSkillsLayout,
 } from './agent-skills';
 import { exadevConfig } from './create-config';
+import { buildGitignoreConfig } from './gitignore';
 import plugin from './plugin';
 import { createMemoryFs } from './rules/memory-fs';
 import { realWorkspaceFs } from './rules/workspace-fs';
+import { toPublicConfigArray } from './to-public-config-array';
 import type { RequireFn } from './optional-plugin';
 
 const CWD = '/repo';
@@ -175,6 +178,13 @@ describe('buildAgentSkillsConfig', () => {
     expect(() => buildAgentSkillsConfig({}, { fs: noSkills, cwd: CWD, requireFn: resolveOnly('@eslint/markdown') })).toThrow(`@exadev/eslint-config: Agent skills linting needs ${JSON_MISSING}`);
   });
 
+  it('hands the ignores it is given to skill-name-unique, and none when it is given none', () => {
+    const withIgnores = buildAgentSkillsConfig(true, { fs: noSkills, cwd: CWD, requireFn: both, ignores: ['**/dist/', '!**/dist/keep'] });
+    expect(withIgnores[0]?.rules?.['exadev/skill-name-unique']).toStrictEqual(['error', { files: DEFAULT_SKILL_FILES, ignores: ['**/dist/', '!**/dist/keep'] }]);
+    const without = buildAgentSkillsConfig(true, { fs: noSkills, cwd: CWD, requireFn: both, ignores: [] });
+    expect(without[0]?.rules?.['exadev/skill-name-unique']).toStrictEqual(['error', { files: DEFAULT_SKILL_FILES }]);
+  });
+
   it('detects from the process working directory by default, which holds neither skills nor a marketplace', () => {
     expect(buildAgentSkillsConfig(undefined)).toStrictEqual([]);
   });
@@ -190,6 +200,14 @@ describe('exadevConfig({ agentSkills })', () => {
   it('adds the blocks, with its globs, for an options object', () => {
     const skills = exadevConfig({ agentSkills: { skillFiles: ['s/*/SKILL.md'] } }).find((block) => block.language === 'markdown/gfm');
     expect(skills?.files).toStrictEqual(['s/*/SKILL.md']);
+  });
+
+  it('tells skill-name-unique what the .gitignore-derived ignores hide, as long as those ignores are on', () => {
+    const optionsOf = (config: readonly { readonly language?: string; readonly rules?: Readonly<Record<string, unknown>> }[]) => config.find((block) => block.language === 'markdown/gfm')?.rules?.['exadev/skill-name-unique'];
+    const derived = buildGitignoreConfig().flatMap(({ ignores = [] }) => ignores);
+    expect(derived).not.toStrictEqual([]);
+    expect(optionsOf(exadevConfig({ agentSkills: true }))).toStrictEqual(['error', { files: DEFAULT_SKILL_FILES, ignores: derived }]);
+    expect(optionsOf(exadevConfig({ agentSkills: true, gitignore: false }))).toStrictEqual(['error', { files: DEFAULT_SKILL_FILES }]);
   });
 
   it('adds nothing when off, or when auto-detection finds no skills', () => {
@@ -291,6 +309,18 @@ describe('linting a repository', () => {
       ],
       'skills/a/SKILL.md': ['exadev/skill-name-unique: The skill name "a" is also defined in .agents/skills/a2/SKILL.md, so the skills CLI lists only one of them.'],
     });
+  });
+
+  it('does not count a copy under a .gitignore-d directory as a duplicate, since ESLint does not lint it', async () => {
+    write('.gitignore', 'dist\n');
+    write('skills/a/SKILL.md', skill('a'));
+    write('dist/skills/a/SKILL.md', skill('a'));
+    const gitignore = includeIgnoreFile(join(cwd, '.gitignore'));
+    const { ignores = [] } = gitignore;
+    const overrideConfig = [gitignore, ...toPublicConfigArray(buildAgentSkillsConfig(true, { fs: realWorkspaceFs, cwd, ignores }))];
+    const results = await new ESLint({ cwd, overrideConfigFile: true, overrideConfig }).lintFiles(['.']);
+
+    expect(results.map((result) => [result.filePath.slice(cwd.length + 1), result.messages.map((message) => message.message)])).toStrictEqual([['skills/a/SKILL.md', []]]);
   });
 
   it('reports nothing for a consistent repository', async () => {
