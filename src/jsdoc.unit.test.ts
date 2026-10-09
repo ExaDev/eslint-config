@@ -1,6 +1,11 @@
 import type { Linter } from 'eslint';
 import { Linter as LinterClass } from 'eslint';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { ESLint } from 'eslint';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { exadevConfig } from './create-config';
 import tseslint from 'typescript-eslint';
 import jsdocAndTsdoc from './jsdoc';
 
@@ -14,8 +19,8 @@ function lint(code: string, filename: string) {
 }
 
 describe('jsdocAndTsdoc', () => {
-  it('has exactly two config blocks: the jsdoc bundle, then the standalone tsdoc rule', () => {
-    expect(jsdocAndTsdoc).toHaveLength(2);
+  it('has exactly these config blocks: the jsdoc bundle for JavaScript and TypeScript, then jsdoc/no-types and the standalone tsdoc rule, each for TypeScript only', () => {
+    expect(jsdocAndTsdoc.map((block) => block.files)).toStrictEqual([['**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}'], ['**/*.{ts,tsx,mts,cts}'], ['**/*.{ts,tsx,mts,cts}']]);
   });
 
   it('keeps a logical-tier jsdoc rule on (check-param-names): a documented @param that does not match the real parameter name is flagged', () => {
@@ -112,5 +117,66 @@ describe('jsdocAndTsdoc tag vocabulary', () => {
 
     expect(result.output).toBe(code);
     expect(result.messages.map((message) => message.ruleId)).toStrictEqual(['jsdoc/valid-types']);
+  });
+});
+
+// A JSDoc-typed function, the only way plain JavaScript carries a type for `tsc --checkJs`. `@type` is not a TSDoc tag, and `jsdoc/no-types` forbids the braces.
+const JSDOC_TYPED_CODE = '/** @type {(value: number) => number} */\nconst double = (value) => value * 2;\n\n/**\n * Adds one.\n * @param {number} value The input.\n * @returns {number} The input plus one.\n */\nfunction increment(value) {\n  return value + 1;\n}\n\nincrement(double(1));\n';
+const JSDOC_TYPE_RULES = ['jsdoc/no-types', 'tsdoc/syntax'];
+
+describe('jsdocAndTsdoc scope of the type-annotation rules', () => {
+  it.each(['foo.ts', 'foo.tsx', 'foo.mts', 'foo.cts'])('reports a JSDoc type annotation in %s with both jsdoc/no-types and tsdoc/syntax', (filename) => {
+    const ruleIds = lint(JSDOC_TYPED_CODE, filename);
+    for (const rule of JSDOC_TYPE_RULES) expect(ruleIds).toContain(rule);
+  });
+
+  it.each(['foo.js', 'foo.jsx', 'foo.mjs', 'foo.cjs'])('reports neither jsdoc/no-types nor tsdoc/syntax for the same annotations in %s', (filename) => {
+    const ruleIds = lint(JSDOC_TYPED_CODE, filename);
+    for (const rule of JSDOC_TYPE_RULES) expect(ruleIds).not.toContain(rule);
+  });
+
+  it('keeps the other jsdoc rules on plain JavaScript: a documented @param that does not match the real parameter name is still flagged', () => {
+    const code = '/**\n * @param {number} y unrelated\n */\nfunction f(x) {\n  return x;\n}\n';
+    expect(lint(code, 'foo.js')).toContain('jsdoc/check-param-names');
+  });
+
+  it('accepts a JSDoc-typed function in plain JavaScript with no report from any jsdoc or tsdoc rule', () => {
+    expect(lint(JSDOC_TYPED_CODE, 'foo.js').filter((id) => id?.startsWith('jsdoc/') === true || id?.startsWith('tsdoc/') === true)).toStrictEqual([]);
+  });
+});
+
+describe('exadevConfig on JSDoc-typed plain JavaScript', () => {
+  let cwd: string;
+
+  beforeEach(() => {
+    cwd = mkdtempSync(join(tmpdir(), 'exadev-eslint-config-jsdoc-'));
+    writeFileSync(join(cwd, 'tsconfig.json'), JSON.stringify({ compilerOptions: { allowJs: true, checkJs: true, noEmit: true, strict: true, module: 'nodenext', target: 'es2022' }, include: ['src'] }));
+    mkdirSync(join(cwd, 'src'));
+  });
+
+  afterEach(() => {
+    rmSync(cwd, { recursive: true, force: true });
+  });
+
+  async function lintFile(path: string, code: string): Promise<readonly string[]> {
+    writeFileSync(join(cwd, path), code);
+    const eslint = new ESLint({
+      cwd,
+      overrideConfigFile: true,
+      overrideConfig: [{ languageOptions: { parserOptions: { project: ['./tsconfig.json'], tsconfigRootDir: cwd } } }, ...exadevConfig({ react: false, nextjs: false, gitignore: false })],
+    });
+    const [result] = await eslint.lintFiles([path]);
+
+    return result?.messages.map((message) => `${message.ruleId ?? 'none'}: ${message.message}`) ?? [];
+  }
+
+  it('lints a JSDoc-typed .js file clean', async () => {
+    expect(await lintFile('src/typed.js', JSDOC_TYPED_CODE)).toStrictEqual([]);
+  });
+
+  it('still reports the same annotations in a .ts file', async () => {
+    const messages = await lintFile('src/typed.ts', JSDOC_TYPED_CODE);
+    expect(messages.some((message) => message.startsWith('jsdoc/no-types'))).toBe(true);
+    expect(messages.some((message) => message.startsWith('tsdoc/syntax'))).toBe(true);
   });
 });

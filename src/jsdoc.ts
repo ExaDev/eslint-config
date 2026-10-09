@@ -5,6 +5,9 @@ import type { ConfigArrayValue } from './config-types';
 // Neither jsdoc.configs['flat/recommended-tsdoc-error'] nor eslint-plugin-tsdoc's own rules carry a `files` key (confirmed directly against both packages) -- a doc-comment rule only makes sense against JS/TS source, but left unscoped it still gets matched against every other language a consumer lints in the same array (JSON, Markdown), which is at best a silent no-op and at worst a parser mismatch. Matches the identical fix and reasoning in recommended-type-checked.ts.
 const JS_TS_FILE_PATTERNS = '**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}';
 
+// The files where a type belongs in the syntax, not in a doc comment. In plain JavaScript a JSDoc `{type}` annotation is the only place a type can be written (`tsc --checkJs` reads `@type`, `@param {T}` and `@returns {T}` from it), so the two rules that forbid those annotations apply here and nowhere else.
+const TS_FILE_PATTERNS = '**/*.{ts,tsx,mts,cts}';
+
 // eslint-plugin-jsdoc's own `flat/recommended-tsdoc-error` (not the plain `flat/recommended-typescript-error`) is the right base for this package: it is the variant tuned to not fight a TSDoc-flavoured comment style (the `{@link Foo}` inline tag and `@remarks`/`@example` block tags this package's own global comment convention already asks for), where the plain typescript variant instead expects classic JSDoc phrasing. The `-error` suffix (over the bare `flat/recommended-tsdoc`) matches this file's own all-`error` severities elsewhere in the package -- nothing here is a `warn`, so a jsdoc violation should not be the one exception. `flat/recommended-tsdoc-error` is itself a single flat config object, not an array (confirmed directly), hence the object-literal merge below rather than a spread.
 const jsdocConfig = jsdoc.configs['flat/recommended-tsdoc-error'];
 
@@ -48,12 +51,20 @@ const jsdocAndTsdoc: ConfigArrayValue = [
       'jsdoc/check-tag-names': ['error', { typed: false }],
       // Its fixer deletes any prose written after a modifier tag (`@internal`, `@override`, `@readonly`), silently losing text, and fights `check-tag-names` over `@override`. `jsdoc/valid-types` still reports that prose, with no fixer, so the author decides what to do with it.
       'jsdoc/empty-tags': 'off',
+      // Re-enabled for TypeScript files by the block below: this block covers plain JavaScript too, where the annotations it forbids are the only way to give the type-aware rules a type.
+      'jsdoc/no-types': 'off',
       ...Object.fromEntries(REQUIREMENTS_TIER_RULES.map((rule) => [rule, 'off'])),
     },
   },
   {
+    // The preset's own severity for the rule. `jsdoc/no-types` reports every `{type}` in a doc comment because TypeScript already states the type; the plugin is registered by the block above.
+    files: [TS_FILE_PATTERNS],
+    rules: { 'jsdoc/no-types': 'error' },
+  },
+  {
     // eslint-plugin-tsdoc ships no `configs` export at all (confirmed: its only export is `{ rules: { syntax } }`), so the plugin registration and the rule's severity are both set by hand here rather than spread from a preset. `tsdoc/syntax` validates that a doc comment's tags and inline references actually parse as valid TSDoc -- a check eslint-plugin-jsdoc itself does not perform, since it validates JSDoc's own (looser) grammar, not the TSDoc spec a `{@link}`/`@remarks`-style comment is written against.
-    files: [JS_TS_FILE_PATTERNS],
+    // TypeScript files only: TSDoc has no `@type`, `@typedef` or `@param {T}` tags, so run over plain JavaScript it reports the JSDoc annotations that `tsc --checkJs` needs.
+    files: [TS_FILE_PATTERNS],
     plugins: { tsdoc },
     rules: {
       'tsdoc/syntax': 'error',

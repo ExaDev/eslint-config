@@ -100,6 +100,8 @@ export default defineConfig(
   - *Why:* a `default` branch cannot stand in for handling a newly added union member, and a switch over a non-union needs a `default` because the checker cannot prove its cases complete.
 - **Core robustness rules**: `eqeqeq`, `no-implicit-coercion`, `no-param-reassign`, `no-await-in-loop`, `require-atomic-updates`, `default-case-last`, `no-return-assign` and `max-depth`. See [Robustness rules](#robustness-rules).
 
+**JSDoc and TSDoc** (see [`src/jsdoc.ts`](src/jsdoc.ts)): [`eslint-plugin-jsdoc`](https://github.com/gajus/eslint-plugin-jsdoc)'s `flat/recommended-tsdoc-error` bundle checks an existing doc comment in every JavaScript and TypeScript file, with the requirements tier (whether a comment must exist) turned off, and [`eslint-plugin-tsdoc`](https://github.com/microsoft/tsdoc/tree/main/eslint-plugin)'s `tsdoc/syntax` validates its TSDoc syntax. Two rules apply to TypeScript files only (`.ts`, `.tsx`, `.mts`, `.cts`): `tsdoc/syntax` and `jsdoc/no-types`, which together forbid a `{type}` in a doc comment because TypeScript already states the type. In plain JavaScript (`.js`, `.jsx`, `.mjs`, `.cjs`) a JSDoc annotation (`@type {...}`, `@param {T}`, `@returns {T}`) is the only place a type can be written, and `tsc --checkJs` reads it, so both rules stay off there and the rest of the jsdoc bundle (tag names, parameter names, type validity) still applies.
+
 **Test files** (`**/*.{test,spec}.{ts,tsx,mts,cts,js,jsx,mjs,cjs}`) get two narrow relaxations of this package's own additions, and only these two:
 
 - **`@ts-expect-error`** reverts to `allow-with-description`.
