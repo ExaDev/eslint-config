@@ -31,7 +31,7 @@ function classEnd(pattern: string, open: number): number {
 /**
  * Whether a glob uses extglob syntax: `@(`, `+(`, `?(`, `*(` or `!(` outside a character class and not escaped. One leading `!` is the dialect's exclusion marker and is not part of the pattern, so `!(group)/**` excludes a directory named `(group)`. Text inside `[...]` (`[!(]`) and a backslash-escaped character (`\@(a)`) are literal. A scan, not a regular expression, because the two exemptions depend on position.
  */
-export function hasExtglob(glob: string): boolean {
+function hasExtglob(glob: string): boolean {
   const pattern = isExcludePattern(glob) ? glob.slice(1) : glob;
   let index = 0;
   while (index < pattern.length) {
