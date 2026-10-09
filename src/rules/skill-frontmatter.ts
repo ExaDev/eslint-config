@@ -47,10 +47,10 @@ function lengthOf(text: string): number {
 }
 
 function nameProblems(name: unknown, directory: string): readonly SkillFrontmatterProblem[] {
-  if (typeof name !== 'string' || name.length === 0) return [{ messageId: 'invalidName', data: {} }];
+  if (typeof name !== 'string' || name.trim().length === 0) return [{ messageId: 'invalidName', data: {} }];
   const problems: SkillFrontmatterProblem[] = [];
-  // As the reference validator does, judge the NFKC-normalised name and compare it with the normalised directory name, so a decomposed directory name (macOS stores file names that way) equals the composed name in the frontmatter.
-  const normalised = name.normalize('NFKC');
+  // As the reference validator does, judge the name stripped of surrounding whitespace and NFKC-normalised, and compare it with the normalised directory name, so a decomposed directory name (macOS stores file names that way) equals the composed name in the frontmatter.
+  const normalised = name.trim().normalize('NFKC');
   if (!SKILL_NAME_PATTERN.test(normalised) || normalised !== normalised.toLowerCase()) problems.push({ messageId: 'nameFormat', data: { name } });
   if (lengthOf(normalised) > MAX_SKILL_NAME_LENGTH) problems.push({ messageId: 'nameTooLong', data: { max: String(MAX_SKILL_NAME_LENGTH) } });
   if (normalised !== directory.normalize('NFKC')) problems.push({ messageId: 'nameMismatch', data: { name, directory } });
