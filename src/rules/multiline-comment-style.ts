@@ -27,6 +27,43 @@ function withoutDirectives(sourceCode: SourceCode): SourceCode {
   });
 }
 
+// Horizontal whitespace before a line end. Never significant inside a comment, and `git diff --check` reports it.
+const TRAILING_WHITESPACE_PATTERN = /[ \t]+$/gmu;
+
+// Every `RuleFixer` method that writes caller-supplied text, each taking the text as its second argument. `remove` and `removeRange` write none.
+const TEXT_WRITING_FIXER_METHODS: ReadonlySet<string | symbol> = new Set(['insertTextAfter', 'insertTextAfterRange', 'insertTextBefore', 'insertTextBeforeRange', 'replaceText', 'replaceTextRange']);
+
+/**
+ * `fixer` with trailing whitespace removed from the text of every edit made through it.
+ *
+ * The upstream fixer builds a rewritten comment line by line and leaves the padding it puts after the comment prefix on a blank line (`" * "`, `"// "`, or the indent under a bare block), plus any padding the source carried before a closing delimiter. Only the text written is touched, never the file, so no line outside the rewritten comment changes.
+ */
+function withoutTrailingWhitespaceFixer(fixer: Rule.RuleFixer): Rule.RuleFixer {
+  return new Proxy(fixer, {
+    get(target, property) {
+      const value: unknown = Reflect.get(target, property, target);
+      if (typeof value !== 'function' || !TEXT_WRITING_FIXER_METHODS.has(property)) return value;
+
+      return (range: unknown, text: string): unknown => {
+        const written: unknown = Reflect.apply(value, target, [range, text.replace(TRAILING_WHITESPACE_PATTERN, '')]);
+
+        return written;
+      };
+    },
+  });
+}
+
+/**
+ * `fix` run against a fixer that strips trailing whitespace from the text it writes, or `fix` itself when a report carries none (`undefined` or `null`).
+ *
+ * Exported for direct testing: the upstream rule always supplies a fix and may return `null` from it, so neither of those two branches is reachable through a lint run.
+ */
+export function withoutTrailingWhitespace(fix: Rule.ReportFixer | null | undefined): Rule.ReportFixer | null | undefined {
+  if (fix === undefined || fix === null) return fix;
+
+  return (fixer) => fix(withoutTrailingWhitespaceFixer(fixer));
+}
+
 /**
  * `@stylistic/eslint-plugin`'s `multiline-comment-style`, never merging a comment `exadev/prefer-doc-comment` treats as a directive into a block: the upstream rule's own `create()`, `meta` (options schema, defaults, messages, fixability) and fixer, run against a context whose source code hides those comments from the rule's grouping.
  *
@@ -38,10 +75,14 @@ const multilineCommentStyle: Rule.RuleModule = {
     const sourceCode = withoutDirectives(context.sourceCode);
 
     return upstreamRule.create(
-      new Proxy(context, {
-        get(target, property, receiver) {
+      // The proxy's target is a shallow copy of `context`, not `context` itself: ESLint defines `report` on the context as a read-only, non-configurable property, and a `get` trap may not return a different value for one of those. Every read is still answered from `context`.
+      new Proxy({ ...context }, {
+        get(_target, property, receiver) {
           if (property === 'sourceCode') return sourceCode;
-          const value: unknown = Reflect.get(target, property, receiver);
+          if (property === 'report') return (descriptor: Rule.ReportDescriptor): void => {
+            context.report({ ...descriptor, fix: withoutTrailingWhitespace(descriptor.fix) });
+          };
+          const value: unknown = Reflect.get(context, property, receiver);
 
           return value;
         },

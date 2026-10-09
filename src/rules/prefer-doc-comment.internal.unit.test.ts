@@ -194,6 +194,18 @@ describe('isBeforeByRange', () => {
 });
 
 describe('isDirectiveComment', () => {
+  // A managed-region marker is a whole comment of exactly `<word>:<word>:start|end`, matched by exact line by the tool that owns it.
+  it.each(['content:claude:start', 'content:claude:end', 'generated:docs:start', 'content:my-tool:end', 'content:claude:start  '])('recognises the marker %s as a directive', (text) => {
+    expect(isDirectiveComment(text, AST_TOKEN_TYPES.Line)).toBe(true);
+  });
+
+  it.each(['content:claude:start of the section', 'see content:claude:start', 'content:claude', 'content:claude:middle', 'a:b:c:start', ':claude:start'])(
+    'does not recognise %s as a marker, since it is not exactly a start or end pair',
+    (text) => {
+      expect(isDirectiveComment(text, AST_TOKEN_TYPES.Line)).toBe(false);
+    },
+  );
+
   // The two ESLint labels source-code.js's own getInlineConfigNodes/getDisableDirectives honour on a `//` Line comment, verified directly against the installed eslint's own source: recognised as directives in Line form too, not only Block.
   it.each(['eslint-disable-next-line no-console', 'eslint-disable-line no-console'])('recognises %s as a directive in Line form, one of the two labels ESLint itself honours there', (text) => {
     expect(isDirectiveComment(text, AST_TOKEN_TYPES.Line)).toBe(true);
