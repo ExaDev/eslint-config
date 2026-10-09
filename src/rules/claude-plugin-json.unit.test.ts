@@ -1,6 +1,6 @@
 import { parse } from '@humanwhocodes/momoa';
 import { describe, expect, it } from 'vitest';
-import { CLAUDE_PLUGIN_DIR, findMember, isNonEmptyString, PLUGIN_MANIFEST_FILE, readJsonFile } from './claude-plugin-json';
+import { CLAUDE_PLUGIN_DIR, claudeRootOf, findMember, isMarketplaceRoot, MARKETPLACE_FILE_NAME, isNonEmptyString, PLUGIN_MANIFEST_FILE, readJsonFile } from './claude-plugin-json';
 import { createMemoryFs } from './memory-fs';
 
 function objectOf(json: string) {
@@ -67,5 +67,22 @@ describe('readJsonFile', () => {
 
   it('lets a read error through, since only a syntax error is a finding about the file', () => {
     expect(() => readJsonFile(fs, '/r/missing.json')).toThrow(/ENOENT/u);
+  });
+});
+
+describe('claudeRootOf', () => {
+  it('is the directory holding the .claude-plugin directory a manifest sits in', () => {
+    expect(MARKETPLACE_FILE_NAME).toBe('marketplace.json');
+    expect(claudeRootOf('/r/sub/.claude-plugin/marketplace.json')).toBe('/r/sub');
+  });
+});
+
+describe('isMarketplaceRoot', () => {
+  const fs = createMemoryFs({ '/r/sub/.claude-plugin/marketplace.json': '{}', '/r/plain/.claude-plugin/plugin.json': '{}' });
+
+  it('is true for a directory holding a marketplace manifest and false for one holding only a plugin manifest', () => {
+    expect(isMarketplaceRoot(fs, '/r/sub')).toBe(true);
+    expect(isMarketplaceRoot(fs, '/r/plain')).toBe(false);
+    expect(isMarketplaceRoot(fs, '/r/missing')).toBe(false);
   });
 });

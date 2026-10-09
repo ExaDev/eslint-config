@@ -1,3 +1,4 @@
+import { dirname, join } from 'node:path';
 import type { MemberNode, ObjectNode, StringNode, ValueNode } from '@humanwhocodes/momoa';
 import { tryParseJsonc } from './jsonc';
 import { getMemberKeyName } from './json-member-key';
@@ -7,6 +8,25 @@ import type { WorkspaceFs } from './workspace-fs';
  * The directory a Claude Code plugin or marketplace keeps its manifest in, relative to the plugin or marketplace root.
  */
 export const CLAUDE_PLUGIN_DIR = '.claude-plugin';
+
+/**
+ * The name of a marketplace manifest inside `CLAUDE_PLUGIN_DIR`.
+ */
+export const MARKETPLACE_FILE_NAME = 'marketplace.json';
+
+/**
+ * The directory a manifest file belongs to, the one holding the `.claude-plugin` directory it sits in: a marketplace's root (the directory its local sources are relative to) or a plugin's directory. Both manifest rules resolve it through this function, so they agree on where a marketplace or a plugin is.
+ */
+export function claudeRootOf(manifestFile: string): string {
+  return dirname(dirname(manifestFile));
+}
+
+/**
+ * Whether `directory` is a marketplace root, that is whether it holds a marketplace manifest. A plugin in such a directory is the one a marketplace entry with source `./` names, so its directory is the checkout or marketplace folder and not a name chosen for the plugin.
+ */
+export function isMarketplaceRoot(fs: WorkspaceFs, directory: string): boolean {
+  return fs.existsSync(join(directory, CLAUDE_PLUGIN_DIR, MARKETPLACE_FILE_NAME));
+}
 
 /**
  * The name of a plugin's own manifest inside `CLAUDE_PLUGIN_DIR`.

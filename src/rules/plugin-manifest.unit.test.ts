@@ -11,7 +11,10 @@ const NO_VERSION = `${CWD}/plugins/c/.claude-plugin/plugin.json`;
 const ROOT = `${CWD}/.claude-plugin/plugin.json`;
 const NOT_OBJECT = `${CWD}/plugins/d/.claude-plugin/plugin.json`;
 
+const NESTED_ROOT = `${CWD}/sub/.claude-plugin/plugin.json`;
+
 const files = {
+  [`${CWD}/sub/.claude-plugin/marketplace.json`]: '{}',
   [`${CWD}/plugins/a/package.json`]: JSON.stringify({ name: 'a', version: '1.2.3' }),
   [`${CWD}/plugins/c/package.json`]: JSON.stringify({ name: 'c' }),
   [`${CWD}/plugins/d/package.json`]: '[]',
@@ -42,6 +45,8 @@ ruleTester.run('plugin-manifest', rule, {
     { code: manifest({ name: 'd' }), filename: NOT_OBJECT },
     // A plugin at ESLint's working directory (a marketplace entry with source "./") has a directory named after the checkout, which says nothing about the plugin.
     { code: manifest({ name: 'myplugin' }), filename: ROOT },
+    // A plugin beside a marketplace manifest is at that marketplace's root, wherever the marketplace sits, which is where a source "./" points.
+    { code: manifest({ name: 'myplugin' }), filename: NESTED_ROOT },
     // The plugin directory is the one holding .claude-plugin, whatever the nesting.
     { code: manifest({ name: 'deep' }), filename: `${CWD}/a/b/deep/.claude-plugin/plugin.json` },
   ],
@@ -51,6 +56,7 @@ ruleTester.run('plugin-manifest', rule, {
     // A root plugin still has to name itself, but not after the checkout directory.
     { code: manifest({ version: '1.2.3' }), filename: ROOT, errors: [{ messageId: 'rootNameMissing' }] },
     { code: manifest({ name: '' }), filename: ROOT, errors: [{ messageId: 'rootNameMissing' }] },
+    { code: manifest({ name: '' }), filename: NESTED_ROOT, errors: [{ messageId: 'rootNameMissing' }] },
     { code: manifest({ name: 3 }), filename: ROOT, errors: [{ messageId: 'rootNameMissing' }] },
     { code: manifest({ name: 3, version: '1.2.3' }), filename: A, errors: [{ messageId: 'nameMissing' }] },
     { code: manifest({ name: 'other', version: '1.2.3' }), filename: A, errors: [{ messageId: 'nameMismatch', data: { name: 'other', directory: 'a' } }] },

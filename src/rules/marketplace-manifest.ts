@@ -1,8 +1,8 @@
-import { dirname, join, posix } from 'node:path';
+import { join, posix } from 'node:path';
 import type { JSONRuleDefinition, JSONRuleVisitor } from '@eslint/json';
 import type { ObjectNode, StringNode } from '@humanwhocodes/momoa';
 import { isRecord } from '../is-record';
-import { CLAUDE_PLUGIN_DIR, findMember, isNonEmptyString, PLUGIN_MANIFEST_FILE, readJsonFile } from './claude-plugin-json';
+import { CLAUDE_PLUGIN_DIR, claudeRootOf, findMember, isNonEmptyString, PLUGIN_MANIFEST_FILE, readJsonFile } from './claude-plugin-json';
 import { listSubdirectoriesThroughLinks, realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
 
 /**
@@ -71,7 +71,7 @@ export function createMarketplaceManifestRule(fs: WorkspaceFs = realWorkspaceFs)
       },
     },
     create(context) {
-      const marketplaceRoot = dirname(dirname(context.filename));
+      const marketplaceRoot = claudeRootOf(context.filename);
       const manifestPathOf = (directory: string): string => join(marketplaceRoot, directory, CLAUDE_PLUGIN_DIR, PLUGIN_MANIFEST_FILE);
 
       function checkEntry(entry: ObjectNode, index: number, listed: Set<string>, names: Set<string>): void {
