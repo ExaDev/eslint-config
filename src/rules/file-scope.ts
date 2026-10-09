@@ -170,10 +170,11 @@ function hasEscapedCaretClass(glob: string): boolean {
 }
 
 /**
- * Throws when `glob` uses syntax this package's glob dialect reads differently from the minimatch ESLint applies to the same glob, so that the two would select different files: extglob (`assertNoExtglob`), a POSIX character class (`[[:alpha:]]`), a backslash in a segment that starts with `*` or `?` (`*\.js`), a rooted, directory-only or empty-segment shape, a second `!` or a leading `#`, a `.` or `..` segment in a file glob, an extglob that braces assemble, a class opening with an escaped caret (`[\^a]`), a brace form (an escape before a brace, comma or backslash, a group with no comma or one that leaves an empty or dot path segment, an unbalanced brace), or a character class that is not valid, a reversed range such as `[c-a]`. The error names `optionName` and the glob. The one check every reader of a glob or specifier list calls.
+ * Throws when `glob` uses syntax this package's glob dialect reads differently from the minimatch ESLint applies to the same glob, so that the two would select different files: extglob (`assertNoExtglob`), a POSIX character class (`[[:alpha:]]`), a backslash in a segment that starts with `*` or `?` (`*\.js`), in a file glob, a rooted, directory-only or empty-segment shape, a second `!` or a leading `#` and a `.` or `..` segment, and in either kind an extglob that braces assemble, a class opening with an escaped caret (`[\^a]`), a brace form (an escape before a brace, comma or backslash, a group with no comma or one that leaves an empty or dot path segment, an unbalanced brace), or a character class that is not valid, a reversed range such as `[c-a]`. The error names `optionName` and the glob. The one check every reader of a glob or specifier list calls.
  */
 export function assertSupportedGlob(glob: string, optionName: string, kind: GlobKind = 'file'): void {
-  assertShapeSupported(glob, optionName);
+  // The shape rules protect agreement with minimatch, which only a file glob reaches (ESLint selects files with it); a specifier pattern goes through this package's matcher alone, so `#internal/*`, `https://x/y` and `/abs/x` are fine.
+  if (kind === 'file') assertShapeSupported(glob, optionName);
   assertNoExtglob(glob, optionName);
   if (hasPosixClass(glob)) {
     throw new Error(`@exadev/eslint-config: "${optionName}" must not use a POSIX character class, which this package's glob dialect does not support: "${glob}". List the characters or a range instead.`);
