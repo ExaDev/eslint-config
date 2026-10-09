@@ -54,6 +54,18 @@ describe('skill names beyond ASCII, as the specification reference validator rea
     expect(problemIds('\uff41'.repeat(MAX_SKILL_NAME_LENGTH + 1), 'a'.repeat(MAX_SKILL_NAME_LENGTH + 1))).toStrictEqual(['nameTooLong']);
   });
 
+  it.each([
+    ['a leading space', ' a'],
+    ['a trailing space', 'a '],
+    ['a tab and a newline', '\ta\n'],
+  ])('strips surrounding whitespace before judging the name, as the reference validator does: %s', (_label, name) => {
+    expect(problemIds(name, 'a')).toStrictEqual([]);
+  });
+
+  it('reports a name of only whitespace as missing', () => {
+    expect(problemIds(' \t\n', 'a')).toStrictEqual(['invalidName']);
+  });
+
   it('still reports a name that differs from its directory once both are normalised', () => {
     expect(problemIds(nfc, 'cafe')).toStrictEqual(['nameMismatch']);
   });
