@@ -83,6 +83,33 @@ describe('assertSupportedGlob', () => {
   });
 });
 
+describe('brace forms', () => {
+  it.each(['{}', '{a}', '{a..c}', '{1..3}', 'x/{b}/y', '{a,{b}}', 'x{1..3}y'])('rejects the group with no comma in %s, naming the option and the whole glob', (glob) => {
+    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(new RegExp(`^@exadev/eslint-config: "opt" has a brace group with no comma, ".*", in "${glob.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}", which minimatch`, 'u'));
+  });
+
+  it.each(['{a,}', '{,a}', '{a,,b}', 'x/{a,}/y', '{a,.}', '{a,..}', 'a{/,x}', '{/a,b}c', 'a/{b,./c}', '.{,x}'])('rejects the group that leaves an empty or dot segment in %s', (glob) => {
+    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(/has a brace group that leaves an empty or dot path segment/u);
+  });
+
+  it.each(['a\\{b,c}', '{a\\,b,c}', '{a\\\\b,c}', '{a,b\\}', 'x/\\{a,b}'])('rejects the escape in the braced glob %s', (glob) => {
+    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`"opt" must not escape a backslash, brace or comma in a glob that uses braces, since minimatch and this package's glob dialect read the escape differently: "${glob}"`);
+  });
+
+  it.each(['{a,b', 'x/{a,{b,c}/y', '!{a,b', '[{]a'])('names the option and the whole glob for an unbalanced brace in %s', (glob) => {
+    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`@exadev/eslint-config: "opt" has an unmatched "{" in "${glob}" (brace expansion). Rewrite it with balanced braces.`);
+  });
+
+  it.each(['{a,b}x', '*.fake{,.js}', 'x/{a,b/c}/y', './x/{a,b}', '{a,{b,c}}x', 'x{a,b}{c,d}', '{ab,cd,ef}', 'a\\.b', '{a,b}[cd]'])('accepts %s, and it selects what minimatch selects', (glob) => {
+    expect(() => { assertSupportedGlob(glob, 'opt'); }).not.toThrow();
+    const matches = createPathMatcher([glob], 'any');
+    const oracle = new Minimatch(glob, { dot: true });
+    const alphabet = ['a', 'b', 'c', 'd', 'e', 'f', 'x', '{', '}', ',', '.', '\\', '[', ']'];
+    const candidates = ['', ...alphabet, ...alphabet.flatMap((first) => alphabet.map((second) => `${first}${second}`)), 'axc', 'xac', 'bxd', 'abx', 'cdx', 'efx', 'xad', 'xbc', 'xbd', 'a.b', '{a'];
+    for (const candidate of candidates.filter((item) => item !== '')) expect([glob, candidate, matches(candidate)]).toStrictEqual([glob, candidate, oracle.match(candidate)]);
+  });
+});
+
 describe('assertNoExtglob', () => {
   it('words the whole error, hint included', () => {
     expect(() => { assertNoExtglob('a/@(b)', 'opt'); }).toThrow(

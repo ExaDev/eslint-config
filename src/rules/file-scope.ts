@@ -1,5 +1,5 @@
 import { relative, sep } from 'node:path';
-import { expandBraces, isExcludePattern, normalizeGlobSegments, segmentRequestsDotMatch, segmentToRegExp } from './workspace-glob';
+import { expandBraces, findMatchingBrace, isExcludePattern, normalizeGlobSegments, segmentRequestsDotMatch, segmentToRegExp, splitTopLevelAlternatives } from './workspace-glob';
 import { requireChar, splitPathSegments } from './workspace-path';
 
 /**
@@ -85,6 +85,47 @@ function hasPosixClass(glob: string): boolean {
   return false;
 }
 
+// Throws for a brace group `findMatchingBrace` cannot close, or one with no top-level comma, anywhere in `pattern` (checking each alternative's own groups too).
+function assertBraceGroups(pattern: string, glob: string, optionName: string): void {
+  let from = pattern.indexOf('{');
+  while (from !== -1) {
+    const close = findMatchingBrace(pattern, from);
+    if (close === -1) {
+      throw new Error(`@exadev/eslint-config: "${optionName}" has an unmatched "{" in "${glob}" (brace expansion). Rewrite it with balanced braces.`);
+    }
+    const alternatives = splitTopLevelAlternatives(pattern.slice(from + 1, close));
+    if (alternatives.length < 2) {
+      throw new Error(`@exadev/eslint-config: "${optionName}" has a brace group with no comma, "${pattern.slice(from, close + 1)}", in "${glob}", which minimatch and this package's glob dialect read differently. Write at least two alternatives, "{a,b}", or drop the braces.`);
+    }
+    for (const alternative of alternatives) assertBraceGroups(alternative, glob, optionName);
+    from = pattern.indexOf('{', close + 1);
+  }
+}
+
+// Whether a glob has an empty path segment (a leading, trailing or doubled slash, or nothing at all) or a `.` or `..` segment. The package's dialect drops those and minimatch does not, so a glob that has one differs from it.
+function hasUnreadableSegment(glob: string): boolean {
+  const segments = glob.split('/');
+
+  return glob === '' || segments.some((segment) => segment === '.' || segment === '..' || (segment === '' && segments.length > 1));
+}
+
+// Rejects the brace forms the two matchers read differently: a backslash before a backslash, a brace or a comma in a glob that uses braces (minimatch expands the braces before it reads escapes, so the escape does not protect the character), and a group whose alternative leaves an empty or dot path segment (`{a,}/x` expands to `/x`, which the package reads as `x`, and `{a,.}` leaves a dot segment the package drops), a group with no comma (`{a}` is literal to one and an alternative of one to the other, `{1..3}` a range to minimatch). Also names the option and the whole glob for an unbalanced brace.
+function assertBracesSupported(glob: string, optionName: string): void {
+  const pattern = isExcludePattern(glob) ? glob.slice(1) : glob;
+  if (!pattern.includes('{')) return;
+  if (/\\[\\{},]/u.test(pattern)) {
+    throw new Error(`@exadev/eslint-config: "${optionName}" must not escape a backslash, brace or comma in a glob that uses braces, since minimatch and this package's glob dialect read the escape differently: "${glob}". Put the character in a character class, "[,]", instead.`);
+  }
+  assertBraceGroups(pattern, glob, optionName);
+  // A segment the glob already has without its braces is not the braces' doing, and is read the same whatever they hold.
+  let skeleton = pattern;
+  for (let next = skeleton.replace(/\{[^{}]*\}/gu, 'x'); next !== skeleton; next = skeleton.replace(/\{[^{}]*\}/gu, 'x')) skeleton = next;
+  if (hasUnreadableSegment(skeleton)) return;
+  if (expandBraces(pattern).some(hasUnreadableSegment)) {
+    throw new Error(`@exadev/eslint-config: "${optionName}" has a brace group that leaves an empty or dot path segment in "${glob}", which minimatch and this package's glob dialect read differently. Name each alternative with a real path segment, or drop the group.`);
+  }
+}
+
 const ESCAPED_CARET = '\\^';
 
 // Whether a character class opens with an escaped caret that is not the whole class (`[\^a]`). minimatch reads such a class as negated, by de-escaping the caret after the fact, but only when more follows it; `[\^]` is a caret and `[\^-x]` a set holding `-` and `x`. The dialect has no consistent reading to match, so the form is rejected.
@@ -109,7 +150,7 @@ function hasEscapedCaretClass(glob: string): boolean {
 }
 
 /**
- * Throws when `glob` uses syntax this package's glob dialect reads differently from the minimatch ESLint applies to the same glob, so that the two would select different files: extglob (`assertNoExtglob`), a POSIX character class (`[[:alpha:]]`), a class opening with an escaped caret (`[\^a]`), or a character class that is not valid, a reversed range such as `[c-a]`. The error names `optionName` and the glob. The one check every reader of a glob or specifier list calls.
+ * Throws when `glob` uses syntax this package's glob dialect reads differently from the minimatch ESLint applies to the same glob, so that the two would select different files: extglob (`assertNoExtglob`), a POSIX character class (`[[:alpha:]]`), a class opening with an escaped caret (`[\^a]`), a brace form (an escape before a brace, comma or backslash, a group with no comma or one that leaves an empty or dot path segment, an unbalanced brace), or a character class that is not valid, a reversed range such as `[c-a]`. The error names `optionName` and the glob. The one check every reader of a glob or specifier list calls.
  */
 export function assertSupportedGlob(glob: string, optionName: string): void {
   assertNoExtglob(glob, optionName);
@@ -119,6 +160,7 @@ export function assertSupportedGlob(glob: string, optionName: string): void {
   if (hasEscapedCaretClass(glob)) {
     throw new Error(`@exadev/eslint-config: "${optionName}" must not open a character class with an escaped caret, which this package's glob dialect cannot read the way ESLint does: "${glob}". Use "[^...]" to negate, or put the caret after the first member.`);
   }
+  assertBracesSupported(glob, optionName);
   const body = isExcludePattern(glob) ? glob.slice(1) : glob;
   for (const expanded of expandBraces(body)) {
     for (const segment of normalizeGlobSegments(splitPathSegments(expanded))) {
