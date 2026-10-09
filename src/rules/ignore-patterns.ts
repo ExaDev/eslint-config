@@ -1,32 +1,36 @@
-import { createPathMatcher, type PathMatcher } from './file-scope';
+import { Minimatch } from 'minimatch';
 
 /**
- * Decides whether ESLint, given the patterns, would ignore a forward-slash path relative to its working directory. `isDirectory` says whether the path names a directory, which a pattern ending in `/` selects alone.
+ * Decides whether ESLint, given the patterns, would ignore a forward-slash path relative to its working directory. `isDirectory` says whether the path names a directory, which ESLint matches as the path with a trailing slash.
  */
 export type IgnoreMatcher = (path: string, isDirectory: boolean) => boolean;
 
 interface IgnoreRule {
   readonly negated: boolean;
-  readonly directoriesOnly: boolean;
-  readonly matches: PathMatcher;
+  readonly matcher: Minimatch;
+}
+
+// ESLint strips one leading "./" from an ignore pattern before it compiles it, after the negation marker.
+function withoutDotSlash(pattern: string): string {
+  return pattern.startsWith('./') ? pattern.slice(2) : pattern;
 }
 
 function compileRule(pattern: string): IgnoreRule {
   const negated = pattern.startsWith('!');
-  const body = negated ? pattern.slice(1) : pattern;
-  const directoriesOnly = body.endsWith('/');
 
-  // ESLint's ignore matching reads a pattern with a leading slash as an absolute path, which no path relative to the working directory is, so such a pattern selects nothing (a `.gitignore` entry like `/dist` reaches ESLint already rewritten by includeIgnoreFile, without the slash).
-  const matches: PathMatcher = body.startsWith('/') ? () => false : createPathMatcher([directoriesOnly ? body.slice(0, -1) : body], { dotMatching: 'any' });
-
-  return { negated, directoriesOnly, matches };
+  return { negated, matcher: new Minimatch(withoutDotSlash(negated ? pattern.slice(1) : pattern), { dot: true }) };
 }
 
 /**
- * Compiles the entries of a flat config's `ignores` into an `IgnoreMatcher`. The entries are evaluated in order and the last one that selects a path decides it: a plain entry ignores the path, a `!` entry brings it back. Wildcards and `**` match dot-prefixed segments, as they do in the minimatch ESLint applies, and an entry starting with `/` selects nothing, as in ESLint (checked against its Node API). An ignored directory is ignored with everything under it, so a caller prunes it without asking about its contents. Compile once per rule `create()` or per options object, not per path.
+ * Compiles the entries of a flat config's `ignores` into an `IgnoreMatcher`, deciding every path the way ESLint's config array does: a file is matched as it is and a directory as the path with a trailing slash, through minimatch with `dot: true` and the original pattern, so `x/`, `x/**`, `x/**` followed by a slash and brace or extglob forms that expand to a trailing slash agree with ESLint. The entries are evaluated in order and the last one that selects a path decides it: a plain entry ignores the path, a `!` entry brings it back. An ignored directory is ignored with everything under it, so a caller prunes it without asking about its contents. Compile once per rule `create()` or per options object, not per path.
  */
 export function createIgnoreMatcher(patterns: readonly string[]): IgnoreMatcher {
   const rules = patterns.map(compileRule);
 
-  return (path, isDirectory) => rules.reduce((ignored, rule) => (rule.directoriesOnly && !isDirectory) || !rule.matches(path) ? ignored : !rule.negated, false);
+  return (path, isDirectory) => {
+    if (path === '..' || path.startsWith('../')) return false;
+    const subject = isDirectory ? `${path}/` : path;
+
+    return rules.reduce((ignored, rule) => (rule.matcher.match(subject) ? !rule.negated : ignored), false);
+  };
 }
