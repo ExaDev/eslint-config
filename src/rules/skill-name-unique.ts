@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import type { MarkdownRuleDefinition } from '@eslint/markdown';
-import { assertNoExtglob, createPathMatcher, fileGlobsSchema, relativeToCwd, type PathMatcher } from './file-scope';
+import { assertSupportedGlob, createPathMatcher, fileGlobsSchema, relativeToCwd, type PathMatcher } from './file-scope';
 import { createIgnoreMatcher, type IgnoreMatcher } from './ignore-patterns';
 import { parseFrontmatter, readSkillName, SKILL_FILE_NAME } from './skill-document';
 import { listEntriesOrEmpty, realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
@@ -98,7 +98,7 @@ export function createSkillNameUniqueRule(fs: WorkspaceFs = realWorkspaceFs): Sk
     },
     create(context) {
       const [options] = context.options;
-      for (const glob of options.files ?? []) assertNoExtglob(glob, 'skill-name-unique.files');
+      for (const glob of options.files ?? []) assertSupportedGlob(glob, 'skill-name-unique.files');
       // Absence is a legitimate branch here, not an error: the scan is cached for the life of the process, so a cached entry can name a skill that has since been renamed or removed, and the linted file can be an unsaved buffer with no copy on disk. A path that does not exist names itself.
       const realPathOf = (path: string): string => (fs.existsSync(path) ? fs.realpathSync(path) : path);
       const ownRealPath = realPathOf(context.filename);

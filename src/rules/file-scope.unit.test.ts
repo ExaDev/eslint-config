@@ -1,6 +1,6 @@
 import { Minimatch } from 'minimatch';
 import { describe, expect, it } from 'vitest';
-import { assertNoExtglob, createFileScope, createPathMatcher, fileGlobsSchema, readFileGlobs, relativeToCwd } from './file-scope';
+import { assertNoExtglob, assertSupportedGlob, createFileScope, createPathMatcher, fileGlobsSchema, readFileGlobs, relativeToCwd } from './file-scope';
 
 const CWD = '/repo';
 
@@ -16,7 +16,7 @@ describe('fileGlobsSchema', () => {
 
 // ESLint selects files with minimatch, so for every class form below the package matcher must select exactly the candidates minimatch does: a glob handed to both would otherwise lint files the duplicate check cannot match.
 describe('character classes against minimatch', () => {
-  const candidates = ['\\x', '\\\\x', ']x', '\\]x', 'ax', 'bx', 'x', 'a/a/x', 'a/]/x', 'a/b/x', 'a/\\b]/x', 'a]', 'b]', ']', 'a', 'b', '-', '^', '!', 'c', '[', '\\'];
+  const candidates = ['ax', 'cx', '-x', '^x', '!x', '[x', 'bx', '\\x', '\\\\x', ']x', '\\]x', 'ax', 'bx', 'x', 'a/a/x', 'a/]/x', 'a/b/x', 'a/\\b]/x', 'a]', 'b]', ']', 'a', 'b', '-', '^', '!', 'c', '[', '\\'];
   it.each([
     '[\\]]x',
     'a/[a\\]b]/x',
@@ -36,6 +36,12 @@ describe('character classes against minimatch', () => {
     '[\\\\]x',
     '[\\\\\\]]x',
     '[\\\\]]x',
+    '[\\a]x',
+    '[\\-]x',
+    '[a\\-c]x',
+    '[\\^a]x',
+    '[\\!a]x',
+    '[\\[]x',
   ])('selects what minimatch selects for %s', (glob) => {
     const matches = createPathMatcher([glob], 'any');
     const oracle = new Minimatch(glob, { dot: true });
@@ -49,6 +55,20 @@ describe('character classes against minimatch', () => {
     ['[!a]x', 'ax', false],
   ])('negates %s: %s is %s', (glob, candidate, expected) => {
     expect(createPathMatcher([glob])(candidate)).toBe(expected);
+  });
+});
+
+describe('assertSupportedGlob', () => {
+  it.each(['[[:alpha:]]x', 'a/[[:digit:]a]/x', '!a/[[:alpha:]]'])('rejects the POSIX class in %s, naming the option and the glob', (glob) => {
+    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`@exadev/eslint-config: "opt" must not use a POSIX character class, which this package's glob dialect does not support: "${glob}". List the characters or a range instead.`);
+  });
+
+  it.each(['[c-a]x', 'a/[a-\\]]/x', 'a/{b,[z-a]}/x'])('rejects the reversed range in %s, naming the option and the glob', (glob) => {
+    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(new RegExp(`^@exadev/eslint-config: "opt" has a character class in "${glob.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}" that is not valid: `, 'u'));
+  });
+
+  it.each(['[a-c]x', '[^a-c]x', '[]-a]x', '[a-]x', '[\\]]x', 'a/[[]x', '[x'])('accepts the ordinary class in %s', (glob) => {
+    expect(() => { assertSupportedGlob(glob, 'opt'); }).not.toThrow();
   });
 });
 
@@ -109,6 +129,10 @@ describe('assertNoExtglob', () => {
 describe('readFileGlobs', () => {
   it.each(['skills/@(a|b)/SKILL.md', 'skills/+(a)/SKILL.md', 'skills/!(a)/SKILL.md', 'skills/?(a)/SKILL.md', 'skills/*(a)/SKILL.md', '!skills/@(a)/**'])('rejects the extglob form %s, naming the option and the glob', (glob) => {
     expect(() => readFileGlobs(['**/SKILL.md', glob], 'someOption')).toThrow(`"someOption" must not use extglob syntax, which this package's glob dialect does not support: "${glob}"`);
+  });
+
+  it.each(['[[:alpha:]]x', '[c-a]x'])('rejects the unsupported class in %s through the reader', (glob) => {
+    expect(() => readFileGlobs(['**/*.ts', glob], 'someOption')).toThrow(/"someOption"/u);
   });
 
   it.each(['app/(marketing)/**', '!(group)/**', '!app/(marketing)/**', '**/[!(]x.ts'])('accepts the route group or class form %s', (glob) => {
