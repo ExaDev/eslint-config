@@ -9,7 +9,7 @@ import type { RequireFn } from './optional-plugin';
 import plugin from './plugin';
 import { assertOnlyKeys } from './rules/file-entry';
 import { readFileGlobs } from './rules/file-scope';
-import { CLAUDE_PLUGIN_DIR, PLUGIN_MANIFEST_FILE } from './rules/claude-plugin-json';
+import { CLAUDE_PLUGIN_DIR, MARKETPLACE_FILE_NAME, PLUGIN_MANIFEST_FILE } from './rules/claude-plugin-json';
 import { PLUGINS_DIR } from './rules/marketplace-manifest';
 import { SKILL_FILE_NAME } from './rules/skill-document';
 import { listSubdirectoriesThroughLinks, realWorkspaceFs, type WorkspaceFs } from './rules/workspace-fs';
@@ -18,7 +18,6 @@ import { toPublicConfigArray } from './to-public-config-array';
 const OPTION_NAME = 'agentSkills';
 const FEATURE = 'Agent skills linting';
 const SKILLS_DIR = 'skills';
-const MARKETPLACE_FILE_NAME = 'marketplace.json';
 
 /**
  * The SKILL.md files linted unless `skillFiles` says otherwise: a skill is `skills/<name>/SKILL.md`, at the repository root or inside a plugin.

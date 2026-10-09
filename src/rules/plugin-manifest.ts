@@ -1,7 +1,7 @@
-import { basename, dirname, join } from 'node:path';
+import { basename, join } from 'node:path';
 import type { JSONRuleDefinition, JSONRuleVisitor } from '@eslint/json';
 import { isRecord } from '../is-record';
-import { findMember, isNonEmptyString, readJsonFile } from './claude-plugin-json';
+import { claudeRootOf, findMember, isMarketplaceRoot, isNonEmptyString, readJsonFile } from './claude-plugin-json';
 import { relativeToCwd } from './file-scope';
 import { realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
 
@@ -13,7 +13,7 @@ export type PluginManifestRuleDefinition = JSONRuleDefinition<{
 }>;
 
 /**
- * Checks a Claude Code plugin's `.claude-plugin/plugin.json`. Its `name` must equal the plugin directory's name (the directory holding `.claude-plugin`), because the marketplace entry, the `/<plugin>:<skill>` command prefix and the directory are all read as one identifier and drift silently when they differ. A plugin whose directory is ESLint's working directory (a marketplace entry with source `./`) is the exception: that directory is the checkout, whose name depends on where it was cloned, so the manifest need only name itself with a non-empty string. It must carry no `skills` key: Claude Code scans the plugin's `skills/` directory by default, so declaring one adds a second scan of the same skills. When a `package.json` beside `.claude-plugin` declares a `version`, the manifest's `version` must equal it: the release tool bumps `package.json`, and Claude Code prefers the plugin manifest's version over the marketplace entry's, so a manifest left behind keeps announcing the old release. The filesystem is injectable so a test drives it from an in-memory tree.
+ * Checks a Claude Code plugin's `.claude-plugin/plugin.json`. Its `name` must equal the plugin directory's name (the directory holding `.claude-plugin`), because the marketplace entry, the `/<plugin>:<skill>` command prefix and the directory are all read as one identifier and drift silently when they differ. A plugin whose directory is ESLint's working directory, or that holds a `marketplace.json` (the plugin a marketplace entry with source `./` names), is the exception: that directory is the checkout or marketplace folder, whose name depends on where it was cloned, so the manifest need only name itself with a non-empty string. It must carry no `skills` key: Claude Code scans the plugin's `skills/` directory by default, so declaring one adds a second scan of the same skills. When a `package.json` beside `.claude-plugin` declares a `version`, the manifest's `version` must equal it: the release tool bumps `package.json`, and Claude Code prefers the plugin manifest's version over the marketplace entry's, so a manifest left behind keeps announcing the old release. The filesystem is injectable so a test drives it from an in-memory tree.
  */
 export function createPluginManifestRule(fs: WorkspaceFs = realWorkspaceFs): PluginManifestRuleDefinition {
   return {
@@ -45,10 +45,10 @@ export function createPluginManifestRule(fs: WorkspaceFs = realWorkspaceFs): Plu
 
             return;
           }
-          const pluginDirectory = dirname(dirname(context.filename));
+          const pluginDirectory = claudeRootOf(context.filename);
           const directory = basename(pluginDirectory);
           const nameMember = findMember(root, 'name');
-          if (relativeToCwd(pluginDirectory, context.cwd) === '') {
+          if (relativeToCwd(pluginDirectory, context.cwd) === '' || isMarketplaceRoot(fs, pluginDirectory)) {
             if (nameMember === undefined || !isNonEmptyString(nameMember.value)) {
               context.report({ loc: nameMember?.value.loc ?? root.loc, messageId: 'rootNameMissing' });
             }

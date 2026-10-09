@@ -330,6 +330,22 @@ describe('linting a repository', () => {
     expect(await lint()).toStrictEqual({ '.claude-plugin/marketplace.json': [], '.claude-plugin/plugin.json': [] });
   });
 
+  it('does not hold a plugin at a nested marketplace root to the name of that directory either', async () => {
+    write('sub/.claude-plugin/marketplace.json', JSON.stringify({ name: 'm', owner: { name: 'o' }, plugins: [{ name: 'solo', source: './' }] }));
+    write('sub/.claude-plugin/plugin.json', JSON.stringify({ name: 'solo' }));
+    const eslint = new ESLint({
+      cwd,
+      overrideConfigFile: true,
+      overrideConfig: agentSkillsConfig({ marketplaceFiles: ['sub/.claude-plugin/marketplace.json'], pluginFiles: ['sub/.claude-plugin/plugin.json'] }),
+    });
+    const results = await eslint.lintFiles(['sub']);
+
+    expect(results.map((result) => [result.filePath.slice(cwd.length + 1), result.messages.map((message) => message.message)])).toStrictEqual([
+      ['sub/.claude-plugin/marketplace.json', []],
+      ['sub/.claude-plugin/plugin.json', []],
+    ]);
+  });
+
   it('reports nothing for a consistent repository', async () => {
     write('skills/word-count/SKILL.md', skill('word-count'));
     write('plugins/p/skills/other/SKILL.md', skill('other'));
