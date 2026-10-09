@@ -1,7 +1,11 @@
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { parse } from '@humanwhocodes/momoa';
 import { describe, expect, it } from 'vitest';
 import { CLAUDE_PLUGIN_DIR, claudeRootOf, findMember, isMarketplaceRoot, MARKETPLACE_FILE_NAME, isNonEmptyString, PLUGIN_MANIFEST_FILE, readJsonFile } from './claude-plugin-json';
 import { createMemoryFs } from './memory-fs';
+import { realWorkspaceFs } from './workspace-fs';
 
 function objectOf(json: string) {
   const { body } = parse(json);
@@ -65,8 +69,18 @@ describe('readJsonFile', () => {
     expect(result.reason).toMatch(/JSON/u);
   });
 
-  it('lets a read error through, since only a syntax error is a finding about the file', () => {
-    expect(() => readJsonFile(fs, '/r/missing.json')).toThrow(/ENOENT/u);
+  it('throws for a read error, naming the file and the cause, since only a syntax error is a finding about the file', () => {
+    expect(() => readJsonFile(fs, '/r/missing.json')).toThrow(/^@exadev\/eslint-config: cannot read "\/r\/missing\.json": .*ENOENT/u);
+  });
+
+  it('names a directory that stands where the file should be', () => {
+    const root = mkdtempSync(join(tmpdir(), 'exadev-eslint-config-json-file-'));
+    try {
+      mkdirSync(join(root, 'plugin.json'));
+      expect(() => readJsonFile(realWorkspaceFs, join(root, 'plugin.json'))).toThrow(/cannot read ".*plugin\.json": .*EISDIR/u);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 
