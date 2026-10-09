@@ -1,3 +1,51 @@
+# [2.36.0](https://github.com/ExaDev/eslint-config/compare/v2.35.4...v2.36.0) (2026-10-09)
+
+
+### Bug Fixes
+
+* accept skill names the specification's reference validator accepts ([b8a3d60](https://github.com/ExaDev/eslint-config/commit/b8a3d6050a99562c865459b1d9a0138f60e6ae4e))
+* apply the glob shape checks to file globs only, not specifier patterns ([10aa74f](https://github.com/ExaDev/eslint-config/commit/10aa74f2c32cac3c0e9177f86a42052d873e1949))
+* compare skill names trimmed in skill-name-unique ([a4f279e](https://github.com/ExaDev/eslint-config/commit/a4f279eb9ea70842eb0991a391351a2923394097))
+* decide directory ignores the way ESLint's config array does ([422ef3c](https://github.com/ExaDev/eslint-config/commit/422ef3ca7e59573ded7ba89197e9a3aafa75e09c))
+* do not report a skill reached through a link as a duplicate of its target ([59f82dc](https://github.com/ExaDev/eslint-config/commit/59f82dcdf4c241934d9dffa1279f11cc4b9a9817))
+* do not require a root plugin to be named after its checkout directory ([d2c84f1](https://github.com/ExaDev/eslint-config/commit/d2c84f1d1076f60af134a1cd95aaf29218f52320))
+* do not throw for a cached skill path that no longer exists ([4c60408](https://github.com/ExaDev/eslint-config/commit/4c60408d8c2ae949becdced34bbf0726aa6956d4))
+* exempt a plugin at any marketplace root from the directory-name match ([9cf0077](https://github.com/ExaDev/eslint-config/commit/9cf0077477315eec3b019966e1aa1e9f72d7d243))
+* keep a backslash-escaped ] literal inside a glob character class ([5053f79](https://github.com/ExaDev/eslint-config/commit/5053f79e0d84ead3cea5342b67725c3e6992f8fb))
+* keep SKILL.md frontmatter YAML when markdownHeadings uses another format ([5015aee](https://github.com/ExaDev/eslint-config/commit/5015aee6c52764fe1e2941488129ac56c196fea3))
+* leave ESLint-ignored directories out of the skill-name-unique scan ([bb26e27](https://github.com/ExaDev/eslint-config/commit/bb26e27e133ec1d64ad2ca77df2b9a285fd4eb5b))
+* match dot-prefixed directories in the skill-name-unique scan as ESLint does ([21d8b92](https://github.com/ExaDev/eslint-config/commit/21d8b92ff22731013871775026bd142de2be4c20))
+* match nothing for an ignores entry with a leading slash ([beabe51](https://github.com/ExaDev/eslint-config/commit/beabe5190a71c8912b39821acac65c22c1727528))
+* name the file when a sibling JSON file cannot be read ([7541e14](https://github.com/ExaDev/eslint-config/commit/7541e14797bcc74899404dc365e4eb7ad9ae231e))
+* quote the duplicate marketplace entry name once ([e555fd9](https://github.com/ExaDev/eslint-config/commit/e555fd96b5a9a8ef83e8cc6ea177c6826a53116e))
+* read a glob class like minimatch and reject the forms it cannot share ([557b133](https://github.com/ExaDev/eslint-config/commit/557b133fe8459018f5e05f2ebd6f3123a41c9650))
+* read a negated ignore entry whole, as ESLint's config array does ([dbd1ad3](https://github.com/ExaDev/eslint-config/commit/dbd1ad348ea46e5f3a930d458f7b74e9be24abbc))
+* read sibling plugin JSON tolerantly and report it when it is invalid ([d84ee31](https://github.com/ExaDev/eslint-config/commit/d84ee319e8cd52a50e60d062d0777761ef861425))
+* recognise extglob by position instead of by a pattern ([16c9490](https://github.com/ExaDev/eslint-config/commit/16c9490c4bb6e14f7d3f5551f9fcf4da8330ce50))
+* reject a brace group right after a dollar sign in a file glob ([e2281cd](https://github.com/ExaDev/eslint-config/commit/e2281cd768eedcccfd1c65417d38b48426b67a7c))
+* reject a file glob that starts or ends with a slash ([4bf8a33](https://github.com/ExaDev/eslint-config/commit/4bf8a33056fb1c03ffbee4e364535dfd7b6b3b0b))
+* reject a glob class opening with an escaped caret instead of guessing ([3da5084](https://github.com/ExaDev/eslint-config/commit/3da5084a56427aaecb3d6378554cab36dad7a6d2))
+* reject brace forms that minimatch and the glob dialect read differently ([da1912d](https://github.com/ExaDev/eslint-config/commit/da1912df4e1d31d63983d81ecf6761eab78817c5))
+* reject extglob in import specifier pattern lists ([41a0d1b](https://github.com/ExaDev/eslint-config/commit/41a0d1b1e7b6cd8c057b000572f9fe9c338f9364))
+* reject extglob in the skill-name-unique files option ([d85da8a](https://github.com/ExaDev/eslint-config/commit/d85da8af1cd0860e7f2708366a132a7d41c52922))
+* reject extglob syntax in file glob options ([af3b367](https://github.com/ExaDev/eslint-config/commit/af3b367d43b5436557cf54452b83ab456b89d8a9))
+* reject glob forms that minimatch reads as something else ([cb62534](https://github.com/ExaDev/eslint-config/commit/cb6253483c5bfdde8aa0efada6db0b2ca6182efd))
+* report a whitespace-only skill description as empty ([ab415d3](https://github.com/ExaDev/eslint-config/commit/ab415d3a6711abd246b39a65beb8a3933b61ebae))
+* report a YAML alias that cannot be resolved as invalid frontmatter ([e06d979](https://github.com/ExaDev/eslint-config/commit/e06d97976496d7a6266a5848abf0bc26bc896f98))
+* report unlisted plugins in name order ([253cd9e](https://github.com/ExaDev/eslint-config/commit/253cd9e7c5a2fd7bd52ca8d167ca5e25e360616e))
+* see plugin and skill directories that are symbolic links ([3b39e4f](https://github.com/ExaDev/eslint-config/commit/3b39e4f5e4ad678c398653868a714249ea3df05b))
+* select the subpaths of a specifier pattern that ends in a wildcard ([e05bd85](https://github.com/ExaDev/eslint-config/commit/e05bd8521db8b2460ac55573d957defc2fca76f0))
+* skip directories the skill-name-unique scan may not list ([7d0d2b5](https://github.com/ExaDev/eslint-config/commit/7d0d2b5b82d55abc9cca693d50f8ff5d35122996))
+* strip surrounding whitespace from a skill name before judging it ([a2a16d2](https://github.com/ExaDev/eslint-config/commit/a2a16d23cbf3caea7a7de06737be9731145fbc52))
+* treat a path that cannot be listed as empty during layout detection ([82feed5](https://github.com/ExaDev/eslint-config/commit/82feed540367baa0f496befed44d34e7ab183b2b))
+* validate the skill-name-unique files option once, not per linted file ([9f521f7](https://github.com/ExaDev/eslint-config/commit/9f521f7fac53a1cb79de5e7cbf54dbc1199a37a5))
+
+
+### Features
+
+* add rules for agent SKILL.md files and Claude Code plugin manifests ([b9aba88](https://github.com/ExaDev/eslint-config/commit/b9aba88c7a4fddfd346830c9046ad7afb782d01b))
+* add the agentSkills option and agentSkillsConfig preset ([31f25fd](https://github.com/ExaDev/eslint-config/commit/31f25fd491c2c29a239fae4ceb55f92c9b308b24))
+
 ## [2.35.4](https://github.com/ExaDev/eslint-config/compare/v2.35.3...v2.35.4) (2026-10-09)
 
 
