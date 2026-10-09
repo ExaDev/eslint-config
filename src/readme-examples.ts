@@ -1,7 +1,7 @@
 import { defineConfig } from 'eslint/config';
 import depend from 'eslint-plugin-depend';
 import tseslint from 'typescript-eslint';
-import { exadevConfig, importPolicyConfig, plugin, pureModulesConfig, workspaceArchitectureConfig } from './index';
+import { agentSkillsConfig, exadevConfig, importPolicyConfig, plugin, pureModulesConfig, workspaceArchitectureConfig } from './index';
 
 type DefinedConfig = ReturnType<typeof defineConfig>;
 
@@ -208,4 +208,33 @@ export function buildViaDefensiveFallbackAllow(): DefinedConfig {
       ],
     },
   });
+}
+
+/**
+ * README's "Agent skills and plugin marketplaces" section: the standalone form with its own globs, spread into defineConfig() alongside exadevConfig().
+ */
+export function buildViaAgentSkills(): DefinedConfig {
+  return defineConfig(
+    ...exadevConfig({ react: false, nextjs: false }),
+    ...agentSkillsConfig({
+      skillFiles: ['skills/*/SKILL.md', 'plugins/*/skills/*/SKILL.md', '!plugins/legacy/**'],
+      pluginFiles: ['plugins/*/.claude-plugin/plugin.json'],
+    }),
+  );
+}
+
+/**
+ * README's "Agent skills and plugin marketplaces" section: the same object passed through exadevConfig().
+ */
+export function buildViaAgentSkillsOption(): DefinedConfig {
+  return defineConfig(
+    exadevConfig({
+      react: false,
+      nextjs: false,
+      agentSkills: {
+        skillFiles: ['skills/*/SKILL.md', 'plugins/*/skills/*/SKILL.md', '!plugins/legacy/**'],
+        pluginFiles: ['plugins/*/.claude-plugin/plugin.json'],
+      },
+    }),
+  );
 }
