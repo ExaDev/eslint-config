@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import type { MarkdownRuleDefinition } from '@eslint/markdown';
-import { createPathMatcher, fileGlobsSchema, relativeToCwd, type PathMatcher } from './file-scope';
+import { assertNoExtglob, createPathMatcher, fileGlobsSchema, relativeToCwd, type PathMatcher } from './file-scope';
 import { createIgnoreMatcher, type IgnoreMatcher } from './ignore-patterns';
 import { parseFrontmatter, readSkillName, SKILL_FILE_NAME } from './skill-document';
 import { realWorkspaceFs, type DirEntry, type WorkspaceFs } from './workspace-fs';
@@ -113,6 +113,7 @@ export function createSkillNameUniqueRule(fs: WorkspaceFs = realWorkspaceFs): Sk
     },
     create(context) {
       const [options] = context.options;
+      for (const glob of options.files ?? []) assertNoExtglob(glob, 'skill-name-unique.files');
       const ownPath = relativeToCwd(context.filename, context.cwd);
       // The linted file as the file system names it, which is what makes two paths one skill. A file that is not on disk (an unsaved buffer) is its own path.
       const ownRealPath = fs.existsSync(context.filename) ? fs.realpathSync(context.filename) : context.filename;
