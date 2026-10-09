@@ -39,12 +39,27 @@ export function listSubdirectories(fs: WorkspaceFs, dir: string): readonly strin
     .map((entry) => entry.name);
 }
 
+// The error codes that mean a path cannot be listed as a directory: it is a file (ENOTDIR) or the process may not read it (EACCES, EPERM). The one definition of them, shared by every listing that treats such a path as empty.
+const UNLISTABLE_CODES: ReadonlySet<string> = new Set(['ENOTDIR', 'EACCES', 'EPERM']);
+
+/**
+ * The entries of `dir`, or none when it cannot be listed as a directory because it is a file or the process may not read it. Absence of a directory is a legitimate branch for every caller: a repository may have a file where a layout directory could be, and ESLint lints nothing in a directory it may not read, so there is nothing to find there. Any other error (an I/O failure, say) propagates.
+ */
+export function listEntriesOrEmpty(fs: WorkspaceFs, dir: string): readonly DirEntry[] {
+  try {
+    return fs.readdirSync(dir);
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && typeof error.code === 'string' && UNLISTABLE_CODES.has(error.code)) return [];
+    throw error;
+  }
+}
+
 // Whether `path` is a symbolic link, directly or through further links, to a directory: its fully resolved path is listed as a directory by its own parent. A dangling link has no target to resolve and is not one.
 function isLinkToDirectory(fs: WorkspaceFs, path: string): boolean {
   if (!fs.existsSync(path)) return false;
   const target = fs.realpathSync(path);
 
-  return fs.readdirSync(dirname(target)).some((entry) => entry.name === basename(target) && entry.isDirectory());
+  return listEntriesOrEmpty(fs, dirname(target)).some((entry) => entry.name === basename(target) && entry.isDirectory());
 }
 
 /**
@@ -53,8 +68,7 @@ function isLinkToDirectory(fs: WorkspaceFs, path: string): boolean {
 export function listSubdirectoriesThroughLinks(fs: WorkspaceFs, dir: string): readonly string[] {
   if (!fs.existsSync(dir)) return [];
 
-  return fs
-    .readdirSync(dir)
+  return listEntriesOrEmpty(fs, dir)
     .filter((entry) => entry.isDirectory() || isLinkToDirectory(fs, join(dir, entry.name)))
     .map((entry) => entry.name);
 }

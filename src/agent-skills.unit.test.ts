@@ -5,7 +5,7 @@ import { includeIgnoreFile } from '@eslint/config-helpers';
 import json from '@eslint/json';
 import markdown from '@eslint/markdown';
 import { ESLint } from 'eslint';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   agentSkillsConfig,
   buildAgentSkillsConfig,
@@ -191,6 +191,42 @@ describe('buildAgentSkillsConfig', () => {
 
   it('detects from the process working directory by default, which holds neither skills nor a marketplace', () => {
     expect(buildAgentSkillsConfig(undefined)).toStrictEqual([]);
+  });
+});
+
+describe('layout detection over a skills or plugins path that is a file', () => {
+  let cwd: string;
+
+  beforeEach(() => {
+    cwd = mkdtempSync(join(tmpdir(), 'exadev-eslint-config-agent-skills-detect-'));
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    rmSync(cwd, { recursive: true, force: true });
+  });
+
+  it.each([
+    ['skills at the working directory', 'skills'],
+    ['plugins at the working directory', 'plugins'],
+    ['skills inside a plugin', 'plugins/x/skills'],
+  ])('reports no layout, and builds nothing, when %s is a regular file', (_label, path) => {
+    mkdirSync(dirname(join(cwd, path)), { recursive: true });
+    writeFileSync(join(cwd, path), 'not a directory');
+
+    expect(hasAgentSkillsLayout(realWorkspaceFs, cwd)).toBe(false);
+    expect(buildAgentSkillsConfig(undefined, { cwd })).toStrictEqual([]);
+    // exadevConfig() auto-detects from the process working directory, so a repository with such a file must still load its config.
+    vi.spyOn(process, 'cwd').mockReturnValue(cwd);
+    expect(() => exadevConfig()).not.toThrow();
+  });
+
+  it('still finds a layout beside such a file', () => {
+    writeFileSync(join(cwd, 'skills'), 'not a directory');
+    mkdirSync(join(cwd, 'plugins', 'p', 'skills', 'a'), { recursive: true });
+    writeFileSync(join(cwd, 'plugins', 'p', 'skills', 'a', 'SKILL.md'), '');
+
+    expect(hasAgentSkillsLayout(realWorkspaceFs, cwd)).toBe(true);
   });
 });
 
