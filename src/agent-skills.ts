@@ -38,11 +38,11 @@ export const DEFAULT_PLUGIN_FILES: readonly string[] = [`**/${CLAUDE_PLUGIN_DIR}
  * The `agentSkills` option of `exadevConfig` in its object form, and the argument of `agentSkillsConfig`. Every field is a list of globs, relative to ESLint's working directory, in the dialect of every file glob in this package, where a leading `!` excludes.
  */
 export interface AgentSkillsOptions {
-  // The SKILL.md files to lint with `exadev/skill-frontmatter`. `exadev/skill-name-unique` compares names across this same selection. Defaults to DEFAULT_SKILL_FILES.
+  /** The SKILL.md files to lint with `exadev/skill-frontmatter`. `exadev/skill-name-unique` compares names across this same selection. Defaults to DEFAULT_SKILL_FILES. */
   readonly skillFiles?: readonly string[];
-  // The Claude Code marketplace manifests to lint with `exadev/marketplace-manifest`. Defaults to DEFAULT_MARKETPLACE_FILES.
+  /** The Claude Code marketplace manifests to lint with `exadev/marketplace-manifest`. Defaults to DEFAULT_MARKETPLACE_FILES. */
   readonly marketplaceFiles?: readonly string[];
-  // The Claude Code plugin manifests to lint with `exadev/plugin-manifest`. Defaults to DEFAULT_PLUGIN_FILES.
+  /** The Claude Code plugin manifests to lint with `exadev/plugin-manifest`. Defaults to DEFAULT_PLUGIN_FILES. */
   readonly pluginFiles?: readonly string[];
 }
 
