@@ -157,6 +157,19 @@ describe('scanSkillFiles over a tree it cannot read', () => {
     expect(() => scanSkillFiles(realWorkspaceFs, root, () => true, NOTHING_IGNORED)).toThrow(/cannot read ".*skills\/b\/SKILL\.md".*EACCES/u);
   });
 
+  it.each(['EACCES', 'EPERM'])('treats a directory refused with %s as empty', (code) => {
+    const inner = createMemoryFs({ [`${CWD}/skills/a/SKILL.md`]: skill('a'), [`${CWD}/data/secret/x.txt`]: 'x' });
+    const refusing: WorkspaceFs = {
+      ...inner,
+      readdirSync: (path) => {
+        if (path.endsWith('/data')) throw new CodedError(`${code}: refused`, code);
+
+        return inner.readdirSync(path);
+      },
+    };
+    expect(scanSkillFiles(refusing, CWD, () => true, NOTHING_IGNORED).map((entry) => entry.path)).toStrictEqual(['skills/a/SKILL.md']);
+  });
+
   it('rethrows a listing error that is not a permission error', () => {
     const failing: WorkspaceFs = {
       ...createMemoryFs({}),
@@ -246,6 +259,7 @@ describe('skill-name-unique', () => {
     expect(() => lintWith(fs, skill('alpha'), own, { options: [{ file: [] }] })).toThrow(/should NOT have additional properties/u);
     expect(() => lintWith(fs, skill('alpha'), own, { options: [{ files: [] }] })).toThrow(/should NOT have fewer than 1 items/u);
     expect(() => lintWith(fs, skill('alpha'), own, { options: [{ ignores: 'dist' }] })).toThrow(/should be array/u);
+    expect(() => lintWith(fs, skill('alpha'), own, { options: [{ files: ['skills/*/SKILL.md', 'other/@(a|b)/SKILL.md'] }] })).toThrow(/"skill-name-unique\.files" must not use extglob syntax.*"other\/@\(a\|b\)\/SKILL\.md"/u);
     expect(() => lintWith(fs, skill('alpha'), own, { options: [{ files: ['skills/@(a|b)/SKILL.md'] }] })).toThrow(/"skill-name-unique\.files" must not use extglob syntax.*"skills\/@\(a\|b\)\/SKILL\.md"/u);
   });
 

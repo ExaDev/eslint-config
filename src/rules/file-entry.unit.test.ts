@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assertOnlyKeys, createEntryScope, readEntryFiles, readEntryRecords, readRequiredString, readRequiredStrings } from './file-entry';
+import { assertOnlyKeys, createEntryScope, readEntryFiles, readEntryRecords, readRequiredString, readRequiredStrings, readSpecifierPatterns } from './file-entry';
 
 const CWD = '/repo';
 
@@ -58,5 +58,17 @@ describe('option readers', () => {
     expect(() => {
       assertOnlyKeys({ a: 1, b: 2 }, ['a'], 'o');
     }).toThrow(/unknown key "b".*Allowed keys: a\./u);
+  });
+});
+
+describe('readSpecifierPatterns', () => {
+  it('returns a list without extglob unchanged', () => {
+    expect(readSpecifierPatterns({ s: ['fs', '@scope/pkg', 'src/(group)/x'] }, 's', 'o')).toStrictEqual(['fs', '@scope/pkg', 'src/(group)/x']);
+  });
+
+  it.each([0, 1, 2])('rejects an extglob entry at position %i, naming the option, the field and the pattern', (position) => {
+    const list = ['fs', 'path', 'os'];
+    list[position] = '@(a|b)';
+    expect(() => readSpecifierPatterns({ s: list }, 's', 'o')).toThrow('"o.s" must not use extglob syntax, which this package\'s glob dialect does not support: "@(a|b)"');
   });
 });
