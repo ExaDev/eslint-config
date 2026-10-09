@@ -156,7 +156,8 @@ export function createMarketplaceManifestRule(fs: WorkspaceFs = realWorkspaceFs)
             }
             checkEntry(element.value, index, listed, names);
           }
-          for (const name of listSubdirectoriesThroughLinks(fs, join(marketplaceRoot, PLUGINS_DIR))) {
+          // Sorted, since every finding shares one location and ESLint keeps report order, which would otherwise follow the file system's listing order.
+          for (const name of [...listSubdirectoriesThroughLinks(fs, join(marketplaceRoot, PLUGINS_DIR))].sort()) {
             const directory = `${PLUGINS_DIR}/${name}`;
             if (!listed.has(directory) && fs.existsSync(manifestPathOf(directory))) {
               context.report({ loc: pluginsMember.value.loc, messageId: 'unlistedPlugin', data: { directory } });
