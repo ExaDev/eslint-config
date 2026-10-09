@@ -1,5 +1,5 @@
 import { AST_NODE_TYPES, ESLintUtils, type TSESLint, type TSESTree } from '@typescript-eslint/utils';
-import { assertOnlyKeys, createEntryScope, entryFilesSchema, readEntryFiles, readEntryRecords, readRequiredStrings } from './file-entry';
+import { assertOnlyKeys, createEntryScope, entryFilesSchema, readEntryFiles, readEntryRecords, readSpecifierPatterns } from './file-entry';
 import { createSpecifierMatcher } from './specifier-match';
 
 const OPTION_NAME = 'exadev/required-imports';
@@ -23,7 +23,7 @@ export interface ReadEntry {
 function readFrom(entry: Readonly<Record<string, unknown>>): readonly string[] {
   const { from } = entry;
 
-  return readRequiredStrings({ from: typeof from === 'string' ? [from] : from }, 'from', OPTION_NAME);
+  return readSpecifierPatterns({ from: typeof from === 'string' ? [from] : from }, 'from', OPTION_NAME);
 }
 
 /**

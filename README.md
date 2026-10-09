@@ -501,6 +501,7 @@ Each unsatisfied entry reports once on the program node.
 - Patterns use the file-glob dialect, and each also selects everything beneath it, so `fs` selects `fs/promises` and `@scope/pkg` selects `@scope/pkg/sub`.
 - A leading `node:` is ignored on both sides, so `fs` and `node:fs` are one builtin.
 - A relative specifier is resolved against the linted file's directory to a path relative to the working directory, then matched only by patterns containing a `/`. A bare pattern such as `fs` therefore never selects `./fs`. A relative specifier that leaves the working directory matches nothing.
+- Extglob (`@(a|b)`, `+(a)`, `!(a)`, `?(a)`, `*(a)`) is not part of the dialect and is rejected when the option is read, in a specifier list as in a file glob, since a pattern that never matches would leave a hole in a policy.
 - Nothing is resolved through `node_modules` or the TypeScript path map, so an alias such as `@/db` is matched as the string it is.
 
 ## Import policy

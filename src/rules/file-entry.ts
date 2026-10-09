@@ -1,6 +1,6 @@
 import type { JSONSchema4 } from '@typescript-eslint/utils/json-schema';
 import { isRecord } from '../is-record';
-import { createFileScope, readFileGlobs, type FileScope } from './file-scope';
+import { assertNoExtglob, createFileScope, readFileGlobs, type FileScope } from './file-scope';
 import { isExcludePattern } from './workspace-glob';
 
 /**
@@ -50,6 +50,16 @@ export function readRequiredStrings(entry: Readonly<Record<string, unknown>>, fi
   }
 
   return value;
+}
+
+/**
+ * Reads a specifier pattern list as `readRequiredStrings` does and rejects extglob in every entry, since specifier patterns are in the same glob dialect as file globs: ESLint-style `@(fs|path)` would be accepted and then never match, leaving a policy with a silent hole. Throws naming `optionName`, `field` and the pattern.
+ */
+export function readSpecifierPatterns(entry: Readonly<Record<string, unknown>>, field: string, optionName: string): readonly string[] {
+  const patterns = readRequiredStrings(entry, field, optionName);
+  for (const pattern of patterns) assertNoExtglob(pattern, `${optionName}.${field}`);
+
+  return patterns;
 }
 
 /**

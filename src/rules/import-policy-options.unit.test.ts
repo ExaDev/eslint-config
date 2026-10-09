@@ -38,6 +38,8 @@ describe('readImportPolicies', () => {
 
   it('rejects unknown keys at every level', () => {
     expect(() => readImportPolicies([{ files: ['a'], deny: [DENY], nope: 1 }])).toThrow(/unknown key "nope"/u);
+    expect(() => readImportPolicies([{ files: ['a'], deny: [{ ...DENY, specifiers: ['@(fs|path)'] }] }])).toThrow(/"importPolicies\.deny\.specifiers" must not use extglob syntax.*"@\(fs\|path\)"/u);
+    expect(() => readImportPolicies([{ files: ['a'], confine: [{ specifiers: ['pkg/+(a|b)'], onlyIn: ['a'] }] }])).toThrow(/\.confine\.specifiers" must not use extglob syntax/u);
     expect(() => readImportPolicies([{ files: ['a'], deny: [{ ...DENY, nope: 1 }] }])).toThrow(/unknown key "nope"/u);
     expect(() => readImportPolicies([{ files: ['a'], confine: [{ specifiers: ['x'], onlyIn: ['a'], nope: 1 }] }])).toThrow(/unknown key "nope"/u);
     expect(() => readImportPolicies([{ files: ['a'], deny: [DENY], exceptEdges: [{ file: 'a', specifier: 'fs', reason: 'r', nope: 1 }] }])).toThrow(/unknown key "nope"/u);
