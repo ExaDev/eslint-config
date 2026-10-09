@@ -1,3 +1,10 @@
+## [2.35.3](https://github.com/ExaDev/eslint-config/compare/v2.35.2...v2.35.3) (2026-10-09)
+
+
+### Bug Fixes
+
+* keep agentGuidance in turbo.json in the key order json/sort-keys requires ([5bde537](https://github.com/ExaDev/eslint-config/commit/5bde53763bffe51990bc62d184dccf305f0b1da6))
+
 ## [2.35.2](https://github.com/ExaDev/eslint-config/compare/v2.35.1...v2.35.2) (2026-10-03)
 
 ## [2.35.1](https://github.com/ExaDev/eslint-config/compare/v2.35.0...v2.35.1) (2026-10-03)
