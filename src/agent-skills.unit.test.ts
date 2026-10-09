@@ -323,6 +323,13 @@ describe('linting a repository', () => {
     expect(results.map((result) => [result.filePath.slice(cwd.length + 1), result.messages.map((message) => message.message)])).toStrictEqual([['skills/a/SKILL.md', []]]);
   });
 
+  it('does not hold a plugin at the working directory to the name of the checkout folder', async () => {
+    write('.claude-plugin/marketplace.json', JSON.stringify({ name: 'm', owner: { name: 'o' }, plugins: [{ name: 'solo', source: './' }] }));
+    write('.claude-plugin/plugin.json', JSON.stringify({ name: 'solo' }));
+
+    expect(await lint()).toStrictEqual({ '.claude-plugin/marketplace.json': [], '.claude-plugin/plugin.json': [] });
+  });
+
   it('reports nothing for a consistent repository', async () => {
     write('skills/word-count/SKILL.md', skill('word-count'));
     write('plugins/p/skills/other/SKILL.md', skill('other'));
