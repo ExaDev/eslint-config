@@ -1,3 +1,10 @@
+## [2.35.4](https://github.com/ExaDev/eslint-config/compare/v2.35.3...v2.35.4) (2026-10-09)
+
+
+### Bug Fixes
+
+* keep a leftover Stryker sandbox out of the test run ([404a53b](https://github.com/ExaDev/eslint-config/commit/404a53bd7f98bd4604ac5a3bb57bfb2876656741))
+
 ## [2.35.3](https://github.com/ExaDev/eslint-config/compare/v2.35.2...v2.35.3) (2026-10-09)
 
 
