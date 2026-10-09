@@ -52,11 +52,20 @@ export function isNonEmptyString(node: ValueNode): node is StringNode {
  */
 export type JsonFileResult = { readonly kind: 'parsed'; readonly value: unknown } | { readonly kind: 'invalid'; readonly reason: string };
 
+// A file that cannot be read is not a finding about its content, so the error propagates, but with the path in it: the bare operating system error for a directory standing where the file should be names nothing.
+function readFile(fs: WorkspaceFs, path: string): string {
+  try {
+    return fs.readFileSync(path);
+  } catch (error) {
+    throw new Error(`@exadev/eslint-config: cannot read "${path}": ${String(error)}`, { cause: error });
+  }
+}
+
 /**
- * Reads and parses a sibling JSON file through `fs` with the repository's tolerant JSONC reader, so a byte order mark or a trailing comma, which editors and the file's own lint treat separately, does not make this read fail. A syntax error comes back as the `invalid` result for the calling rule to report on the file that points here, since throwing would abort the whole ESLint run and hide every other finding. A read error (a file that cannot be read) is not a finding about the file's content and propagates.
+ * Reads and parses a sibling JSON file through `fs` with the repository's tolerant JSONC reader, so a byte order mark or a trailing comma, which editors and the file's own lint treat separately, does not make this read fail. A syntax error comes back as the `invalid` result for the calling rule to report on the file that points here, since throwing would abort the whole ESLint run and hide every other finding. A read error (a file that cannot be read) is not a finding about the file's content and propagates, wrapped in an error that names the path.
  */
 export function readJsonFile(fs: WorkspaceFs, path: string): JsonFileResult {
-  const result = tryParseJsonc(fs.readFileSync(path), path);
+  const result = tryParseJsonc(readFile(fs, path), path);
 
   return result.kind === 'parsed' ? result : { kind: 'invalid', reason: result.error.message };
 }
