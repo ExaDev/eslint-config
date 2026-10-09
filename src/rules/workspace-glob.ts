@@ -73,10 +73,8 @@ export function segmentToRegExp(segment: string): RegExp {
       // A '!' or '^' negation marker is consumed first, then a ']' sitting in the very next body position (right after '[', or right after that marker) is itself a literal member of the class, not its closing bracket: the same POSIX/picomatch convention that makes an empty class otherwise meaningless. Only a ']' found strictly after that leading position closes the class, so the search always starts one character past bodyStart (which a consumed marker has already advanced past its own position): when segment[bodyStart] genuinely is ']', that skips over it (the leading-position exception above); when it is not, starting the search there instead of at bodyStart finds the exact same first real ']' either way, since indexOf can never match a character that is not there.
       let bodyStart = index + 1;
       const marker = segment[bodyStart];
-      // minimatch also reads an escaped caret in the leading position (`[\^a]`) as the negation marker, which ESLint's matching therefore does; the same here, so the two select the same files.
-      const escapedCaret = marker === '\\' && segment[bodyStart + 1] === '^';
-      const negated = marker === '!' || marker === '^' || escapedCaret;
-      if (negated) bodyStart += escapedCaret ? 2 : 1;
+      const negated = marker === '!' || marker === '^';
+      if (negated) bodyStart += 1;
       const closeIndex = classCloseIndex(segment, bodyStart);
       if (closeIndex === -1) {
         // An unmatched '[' is not a character class at all, just a literal character: escaped the same way every other non-wildcard character is, rather than left to open a regex class that never closes.
@@ -85,7 +83,7 @@ export function segmentToRegExp(segment: string): RegExp {
         continue;
       }
       const body = segment.slice(bodyStart, closeIndex);
-      // A backslash before ']' or before another backslash makes that character a literal member, as in minimatch: the escaped ']' does not close the class (classCloseIndex) and is a plain member here. Any other backslash stays a literal backslash member, exactly as before. Every member is regex-escaped, since a 'u'-flag class treats an unescaped ']' as its close and a backslash would start an escape; every other character (including a "-" range or a "^" past the first position) is passed through verbatim, since glob and regex character classes share that core syntax.
+      // A backslash makes the character after it a literal member, as in minimatch (escapeClassBody): an escaped ']' does not close the class (classCloseIndex). The member list is regex-escaped there, since a 'u'-flag class treats an unescaped ']' as its close and a backslash would start an escape; an unescaped '-' keeps its range meaning and an unescaped '^' past the first position is itself.
       const classBody = escapeClassBody(body);
       source += `[${negated ? '^' : ''}${classBody}]`;
       index = closeIndex + 1;

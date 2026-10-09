@@ -85,13 +85,39 @@ function hasPosixClass(glob: string): boolean {
   return false;
 }
 
+const ESCAPED_CARET = '\\^';
+
+// Whether a character class opens with an escaped caret that is not the whole class (`[\^a]`). minimatch reads such a class as negated, by de-escaping the caret after the fact, but only when more follows it; `[\^]` is a caret and `[\^-x]` a set holding `-` and `x`. The dialect has no consistent reading to match, so the form is rejected.
+function hasEscapedCaretClass(glob: string): boolean {
+  const pattern = isExcludePattern(glob) ? glob.slice(1) : glob;
+  let index = 0;
+  while (index < pattern.length) {
+    if (pattern[index] === '\\') {
+      index += 2;
+      continue;
+    }
+    const end = pattern[index] === '[' ? classEnd(pattern, index) : -1;
+    if (end === -1) {
+      index += 1;
+      continue;
+    }
+    if (pattern.startsWith(ESCAPED_CARET, index + 1) && end - (index + 1) > ESCAPED_CARET.length) return true;
+    index = end + 1;
+  }
+
+  return false;
+}
+
 /**
- * Throws when `glob` uses syntax this package's glob dialect reads differently from the minimatch ESLint applies to the same glob, so that the two would select different files: extglob (`assertNoExtglob`), a POSIX character class (`[[:alpha:]]`), or a character class that is not valid, a reversed range such as `[c-a]`. The error names `optionName` and the glob. The one check every reader of a glob or specifier list calls.
+ * Throws when `glob` uses syntax this package's glob dialect reads differently from the minimatch ESLint applies to the same glob, so that the two would select different files: extglob (`assertNoExtglob`), a POSIX character class (`[[:alpha:]]`), a class opening with an escaped caret (`[\^a]`), or a character class that is not valid, a reversed range such as `[c-a]`. The error names `optionName` and the glob. The one check every reader of a glob or specifier list calls.
  */
 export function assertSupportedGlob(glob: string, optionName: string): void {
   assertNoExtglob(glob, optionName);
   if (hasPosixClass(glob)) {
     throw new Error(`@exadev/eslint-config: "${optionName}" must not use a POSIX character class, which this package's glob dialect does not support: "${glob}". List the characters or a range instead.`);
+  }
+  if (hasEscapedCaretClass(glob)) {
+    throw new Error(`@exadev/eslint-config: "${optionName}" must not open a character class with an escaped caret, which this package's glob dialect cannot read the way ESLint does: "${glob}". Use "[^...]" to negate, or put the caret after the first member.`);
   }
   const body = isExcludePattern(glob) ? glob.slice(1) : glob;
   for (const expanded of expandBraces(body)) {
