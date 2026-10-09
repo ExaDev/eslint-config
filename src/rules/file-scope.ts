@@ -29,6 +29,10 @@ export function assertSupportedGlob(glob: string, optionName: string, kind: Glob
     if (!(error instanceof Error)) throw error;
     throw new Error(`@exadev/eslint-config: "${optionName}" has a glob that minimatch cannot compile: "${glob}": ${error.message}`, { cause: error });
   }
+  // ESLint and minimatch read a leading slash as an absolute path and a trailing slash as a directory, and a file path is neither, so such a file glob selects nothing. A specifier pattern may start with a slash (`/abs/x`).
+  if (kind === 'file' && (body.startsWith('/') || body.endsWith('/'))) {
+    throw new Error(`@exadev/eslint-config: "${optionName}" has a file glob that starts or ends with a slash: "${glob}". A file path is neither absolute nor a directory, so this selects nothing. Write the path relative to the working directory, such as "src/**" for "/src/**" or "src/**/", and "src/**/*" for "src/".`);
+  }
   if (matcher.comment) {
     throw new Error(`@exadev/eslint-config: "${optionName}" has a glob that starts with "#", which minimatch reads as a comment that matches nothing: "${glob}". Match a leading "#" with a character class, "[#]".`);
   }
