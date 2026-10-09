@@ -174,6 +174,12 @@ describe('exadevConfig on JSDoc-typed plain JavaScript', () => {
     expect(await lintFile('src/typed.js', JSDOC_TYPED_CODE)).toStrictEqual([]);
   });
 
+  it('lints an exported JSDoc-typed function in a .js file clean, since explicit-module-boundary-types reads only written type annotations and is scoped to TypeScript', async () => {
+    const code = '/**\n * Adds one.\n * @param {number} value The input.\n * @returns {number} The input plus one.\n */\nexport function increment(value) {\n  return value + 1;\n}\n';
+    expect(await lintFile('src/exported.js', code)).toStrictEqual([]);
+    expect((await lintFile('src/exported.ts', code)).some((message) => message.startsWith('@typescript-eslint/explicit-module-boundary-types'))).toBe(true);
+  });
+
   it('still reports the same annotations in a .ts file', async () => {
     const messages = await lintFile('src/typed.ts', JSDOC_TYPED_CODE);
     expect(messages.some((message) => message.startsWith('jsdoc/no-types'))).toBe(true);
