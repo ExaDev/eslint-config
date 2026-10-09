@@ -396,6 +396,17 @@ describe('linting a repository', () => {
     expect(result?.messages.map((message) => message.message)).toStrictEqual(['The skill name "foo" must equal its directory name "foo2".']);
   });
 
+  it('lints the text of a skill that is not on disk yet, comparing it with the skills that are', async () => {
+    write('skills/foo/SKILL.md', skill('foo'));
+    const eslint = new ESLint({ cwd, overrideConfigFile: true, overrideConfig: agentSkillsConfig() });
+    const [result] = await eslint.lintText(skill('foo'), { filePath: join(cwd, 'skills', 'draft', 'SKILL.md') });
+
+    expect(result?.messages.map((message) => message.message)).toStrictEqual([
+      'The skill name "foo" must equal its directory name "draft".',
+      'The skill name "foo" is also defined in skills/foo/SKILL.md, so the skills CLI lists only one of them.',
+    ]);
+  });
+
   it('still reports a copy that is a different file', async () => {
     write('skills/foo/SKILL.md', skill('foo'));
     write('plugins/p/skills/foo/SKILL.md', skill('foo'));
