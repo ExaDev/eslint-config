@@ -3,7 +3,7 @@ import type { MarkdownRuleDefinition } from '@eslint/markdown';
 import { assertNoExtglob, createPathMatcher, fileGlobsSchema, relativeToCwd, type PathMatcher } from './file-scope';
 import { createIgnoreMatcher, type IgnoreMatcher } from './ignore-patterns';
 import { parseFrontmatter, readSkillName, SKILL_FILE_NAME } from './skill-document';
-import { realWorkspaceFs, type DirEntry, type WorkspaceFs } from './workspace-fs';
+import { listEntriesOrEmpty, realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
 
 /**
  * The options of `skill-name-unique`. `files` limits which SKILL.md files are compared (the glob dialect of this package, a leading `!` excluding, but with a wildcard and `**` matching a dot-prefixed directory as they do in an ESLint config's `files`, so the comparison covers the files ESLint lints); omitted, every SKILL.md under the working directory counts.
@@ -32,21 +32,6 @@ export interface SkillEntry {
   readonly name: string;
 }
 
-// Whether `error` is the operating system refusing access, as opposed to a path that is missing or not a directory.
-function isPermissionError(error: unknown): boolean {
-  return error instanceof Error && 'code' in error && (error.code === 'EACCES' || error.code === 'EPERM');
-}
-
-// A directory the process may not list is empty to the scan: ESLint lints nothing in it either, so no skill there can duplicate one it lints. Every other failure propagates.
-function listDirectory(fs: WorkspaceFs, directory: string): readonly DirEntry[] {
-  try {
-    return fs.readdirSync(directory);
-  } catch (error) {
-    if (isPermissionError(error)) return [];
-    throw error;
-  }
-}
-
 // A SKILL.md the scan found but cannot read is not skipped, since a duplicate could hide in it; the error names the file, which the bare operating system error does not always.
 function readSkillFile(fs: WorkspaceFs, path: string): string {
   try {
@@ -62,7 +47,7 @@ function readSkillFile(fs: WorkspaceFs, path: string): string {
 export function scanSkillFiles(fs: WorkspaceFs, root: string, matches: PathMatcher, isIgnored: IgnoreMatcher): readonly SkillEntry[] {
   const found: SkillEntry[] = [];
   const visit = (directory: string): void => {
-    for (const entry of listDirectory(fs, directory)) {
+    for (const entry of listEntriesOrEmpty(fs, directory)) {
       const path = join(directory, entry.name);
       const relativePath = relativeToCwd(path, root);
       if (entry.isDirectory()) {

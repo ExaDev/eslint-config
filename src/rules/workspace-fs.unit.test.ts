@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { listEntryNames, listFileNames, listSubdirectories, listSubdirectoriesThroughLinks, realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
+import { listEntryNames, listFileNames, listSubdirectories, listEntriesOrEmpty, listSubdirectoriesThroughLinks, realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
 
 function fakeFs(tree: Record<string, readonly string[]>): WorkspaceFs {
   return {
@@ -92,5 +92,57 @@ describe('listSubdirectoriesThroughLinks', () => {
 
     expect([...listSubdirectoriesThroughLinks(realWorkspaceFs, join(root, 'plugins'))].sort()).toEqual(['chained', 'linked', 'plain']);
     expect(listSubdirectories(realWorkspaceFs, join(root, 'plugins'))).toEqual(['plain']);
+  });
+});
+
+class CodedError extends Error {
+  constructor(
+    message: string,
+    readonly code: string,
+  ) {
+    super(message);
+  }
+}
+
+function refusingFs(code: string): WorkspaceFs {
+  return {
+    existsSync: () => true,
+    readFileSync: () => {
+      throw new Error('not used in these tests');
+    },
+    readdirSync: () => {
+      throw new CodedError(`${code}: refused`, code);
+    },
+    realpathSync: (path) => path,
+  };
+}
+
+describe('listEntriesOrEmpty', () => {
+  it.each(['ENOTDIR', 'EACCES', 'EPERM'])('lists a path refused with %s as empty', (code) => {
+    expect(listEntriesOrEmpty(refusingFs(code), '/root/x')).toEqual([]);
+  });
+
+  it('lets any other error through', () => {
+    expect(() => listEntriesOrEmpty(refusingFs('EIO'), '/root/x')).toThrow(/EIO/u);
+  });
+
+  it('lists a directory', () => {
+    expect(listEntriesOrEmpty(fakeFs({ '/root': ['a'] }), '/root').map((entry) => entry.name)).toEqual(['a']);
+  });
+});
+
+describe('listSubdirectoriesThroughLinks over a path that cannot be listed', () => {
+  it.each(['ENOTDIR', 'EACCES', 'EPERM'])('is empty for %s', (code) => {
+    expect(listSubdirectoriesThroughLinks(refusingFs(code), '/root/skills')).toEqual([]);
+  });
+
+  it('is empty for a regular file where a directory would be', () => {
+    const root = mkdtempSync(join(tmpdir(), 'exadev-eslint-config-workspace-fs-file-'));
+    try {
+      writeFileSync(join(root, 'skills'), 'not a directory');
+      expect(listSubdirectoriesThroughLinks(realWorkspaceFs, join(root, 'skills'))).toEqual([]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
