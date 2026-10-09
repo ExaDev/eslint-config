@@ -287,6 +287,14 @@ describe('skill-name-unique', () => {
     ]);
   });
 
+  it('validates each distinct files list, so a valid list does not vouch for an invalid one', () => {
+    const fs = createMemoryFs(tree);
+    const rule = createSkillNameUniqueRule(fs);
+    const own = `${CWD}/skills/alpha/SKILL.md`;
+    expect(lintWith(fs, skill('alpha'), own, { options: [{ files: ['skills/*/SKILL.md'] }], rule })).toStrictEqual([]);
+    expect(() => lintWith(fs, skill('alpha'), own, { options: [{ files: ['/x/**'] }], rule })).toThrow(/"skill-name-unique\.files" has a file glob that starts or ends with a slash/u);
+  });
+
   it('validates the files option once for a lint of many skills, not once per file', () => {
     const SKILLS = 200;
     const files: Record<string, string> = {};
