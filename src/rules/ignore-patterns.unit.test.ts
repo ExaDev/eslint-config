@@ -117,9 +117,15 @@ describe('createIgnoreMatcher', () => {
     expect(createIgnoreMatcher(['!**/keep.log', '**/*.log'])('a/keep.log', false)).toBe(true);
   });
 
-  it('matches a path exactly as it is given, outside the working directory too, as minimatch does', () => {
-    expect(createIgnoreMatcher(['**'])('../x', false)).toBe(new Minimatch('**', { dot: true }).match('../x'));
-    expect(createIgnoreMatcher(['x'])('../x', true)).toBe(new Minimatch('x', { dot: true }).match('../x/'));
+  it.each([
+    [['../x'], '../x', false],
+    [['../x'], '../x', true],
+    [['../**'], '../x/y', false],
+    [['../**'], '../x', true],
+  ] as const)('matches the path as given, outside the working directory too, as minimatch does: %j against %s', (list, path, isDirectory) => {
+    const expected = new Minimatch(list[0], { dot: true }).match(isDirectory ? `${path}/` : path);
+    expect(expected).toBe(true);
+    expect(createIgnoreMatcher(list)(path, isDirectory)).toBe(true);
   });
 
   it.each([['./x', 'x'], ['!./x', 'x']])('strips the leading ./ of %s as ESLint does', (pattern, path) => {
