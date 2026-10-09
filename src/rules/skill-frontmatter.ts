@@ -13,8 +13,8 @@ export const MAX_SKILL_NAME_LENGTH = 64;
  */
 export const MAX_SKILL_DESCRIPTION_LENGTH = 1024;
 
-// Lower-case letters and digits in hyphen-separated runs: the specification's shape for a skill name, which also keeps a name safe to use as a directory name and a slash-command suffix.
-const SKILL_NAME_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/u;
+// Letters and digits of any script in hyphen-separated runs, so no leading, trailing or doubled hyphen: the shape the specification's reference validator (skills-ref) accepts for a skill name once it is NFKC-normalised. The name must also be its own lower-case form, which is checked beside this pattern.
+const SKILL_NAME_PATTERN = /^[\p{L}\p{N}]+(-[\p{L}\p{N}]+)*$/u;
 
 export type SkillFrontmatterMessageIds =
   | 'missingFrontmatter'
@@ -49,9 +49,11 @@ function lengthOf(text: string): number {
 function nameProblems(name: unknown, directory: string): readonly SkillFrontmatterProblem[] {
   if (typeof name !== 'string' || name.length === 0) return [{ messageId: 'invalidName', data: {} }];
   const problems: SkillFrontmatterProblem[] = [];
-  if (!SKILL_NAME_PATTERN.test(name)) problems.push({ messageId: 'nameFormat', data: { name } });
-  if (lengthOf(name) > MAX_SKILL_NAME_LENGTH) problems.push({ messageId: 'nameTooLong', data: { max: String(MAX_SKILL_NAME_LENGTH) } });
-  if (name !== directory) problems.push({ messageId: 'nameMismatch', data: { name, directory } });
+  // As the reference validator does, judge the NFKC-normalised name and compare it with the normalised directory name, so a decomposed directory name (macOS stores file names that way) equals the composed name in the frontmatter.
+  const normalised = name.normalize('NFKC');
+  if (!SKILL_NAME_PATTERN.test(normalised) || normalised !== normalised.toLowerCase()) problems.push({ messageId: 'nameFormat', data: { name } });
+  if (lengthOf(normalised) > MAX_SKILL_NAME_LENGTH) problems.push({ messageId: 'nameTooLong', data: { max: String(MAX_SKILL_NAME_LENGTH) } });
+  if (normalised !== directory.normalize('NFKC')) problems.push({ messageId: 'nameMismatch', data: { name, directory } });
 
   return problems;
 }
@@ -71,7 +73,7 @@ function internalProblems(metadata: unknown): readonly SkillFrontmatterProblem[]
 }
 
 /**
- * Checks a parsed SKILL.md frontmatter mapping against the parts of the Agent Skills specification that decide whether a skill loads: `name` (non-empty, hyphenated lower case, within its length limit, equal to `directory`), `description` (not empty or only whitespace, within its length limit) and `metadata.internal` (a boolean when present). Any other key is accepted, since the specification keeps growing (`argument-hint`, `disable-model-invocation`, `allowed-tools`, `model` and `metadata` among them). `directory` is the name of the directory holding the SKILL.md.
+ * Checks a parsed SKILL.md frontmatter mapping against the parts of the Agent Skills specification that decide whether a skill loads: `name` (non-empty, lower-case letters and digits of any script in hyphen-separated runs, within its length limit, equal to `directory`, all judged after NFKC normalisation as the specification's reference validator does), `description` (not empty or only whitespace, within its length limit) and `metadata.internal` (a boolean when present). Any other key is accepted, since the specification keeps growing (`argument-hint`, `disable-model-invocation`, `allowed-tools`, `model` and `metadata` among them). `directory` is the name of the directory holding the SKILL.md.
  */
 export function checkSkillFrontmatter(frontmatter: Readonly<Record<string, unknown>>, directory: string): readonly SkillFrontmatterProblem[] {
   return [...nameProblems(frontmatter['name'], directory), ...descriptionProblems(frontmatter['description']), ...internalProblems(frontmatter['metadata'])];
@@ -95,7 +97,7 @@ export const skillFrontmatter: SkillFrontmatterRuleDefinition = {
       invalidYaml: 'The frontmatter is not valid YAML: {{message}}',
       notMapping: 'The frontmatter must be a YAML mapping of keys to values.',
       invalidName: 'The frontmatter must set "name" to a non-empty string, or the skills CLI skips the skill.',
-      nameFormat: 'The skill name "{{name}}" must be lower-case letters and digits in hyphen-separated runs.',
+      nameFormat: 'The skill name "{{name}}" must be lower-case letters and digits, of any script, in hyphen-separated runs with no leading, trailing or doubled hyphen.',
       nameTooLong: 'The skill name must be at most {{max}} characters.',
       nameMismatch: 'The skill name "{{name}}" must equal its directory name "{{directory}}".',
       invalidDescription: 'The frontmatter must set "description" to a string with text in it; agents match it against the task.',
