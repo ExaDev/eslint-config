@@ -123,7 +123,7 @@ export function readPureModuleOptions(value: unknown, optionName: string): PureM
   assertOnlyKeys(value, ['allowImports'], optionName);
   const { allowImports } = value;
   if (allowImports === undefined) return {};
-  const entries = readFileGlobs(allowImports, `${optionName}.allowImports`);
+  const entries = readFileGlobs(allowImports, `${optionName}.allowImports`, 'specifier');
   for (const entry of entries) {
     if (entry.startsWith('!')) throw new Error(`@exadev/eslint-config: "${optionName}.allowImports" entry "${entry}" is an exclude. The list only exempts modules, so name the modules to allow.`);
     const specifier = entry.replace(/^node:/u, '');

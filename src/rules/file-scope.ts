@@ -126,6 +126,26 @@ function assertBracesSupported(glob: string, optionName: string): void {
   }
 }
 
+/**
+ * What a glob list selects: `file` paths relative to the working directory, where a `.` or `..` segment has no meaning, or module `specifier` patterns, where a relative specifier such as `./x` or `../x/**` is written as it is imported.
+ */
+export type GlobKind = 'file' | 'specifier';
+
+// Rejects a glob shape minimatch reads as something other than a relative path pattern: a leading or trailing slash or an empty segment (rooted, directory-only), a second leading `!` (negation) and a leading `#` (a comment that matches nothing). The one leading `!` the dialect treats as an exclusion marker is not part of the pattern.
+function assertShapeSupported(glob: string, optionName: string): void {
+  const pattern = isExcludePattern(glob) ? glob.slice(1) : glob;
+  if (pattern.startsWith('/') || pattern.endsWith('/') || pattern.includes('//')) {
+    throw new Error(`@exadev/eslint-config: "${optionName}" must not start or end with a slash or hold an empty segment, since minimatch reads a rooted or directory-only pattern differently from this package's glob dialect: "${glob}". Write a path relative to the working directory, such as "src/**".`);
+  }
+  if (pattern.startsWith('!') || pattern.startsWith('#')) {
+    throw new Error(`@exadev/eslint-config: "${optionName}" must not start with a second "!" or a "#" after any exclusion marker, since minimatch reads them as negation and as a comment: "${glob}". Match a leading "#" with a character class, "[#]".`);
+  }
+}
+
+// The two segment shapes minimatch matches with a fast path that compares the text after the wildcards literally, a backslash included, while the dialect reads the backslash as an escape: stars then plain characters, and question marks then plain characters.
+const STAR_LED_SEGMENT = /^\*+[^+@!?*[(]*$/u;
+const QMARK_LED_SEGMENT = /^\?+[^+@!?*[(]*$/u;
+
 const ESCAPED_CARET = '\\^';
 
 // Whether a character class opens with an escaped caret that is not the whole class (`[\^a]`). minimatch reads such a class as negated, by de-escaping the caret after the fact, but only when more follows it; `[\^]` is a caret and `[\^-x]` a set holding `-` and `x`. The dialect has no consistent reading to match, so the form is rejected.
@@ -150,9 +170,10 @@ function hasEscapedCaretClass(glob: string): boolean {
 }
 
 /**
- * Throws when `glob` uses syntax this package's glob dialect reads differently from the minimatch ESLint applies to the same glob, so that the two would select different files: extglob (`assertNoExtglob`), a POSIX character class (`[[:alpha:]]`), a class opening with an escaped caret (`[\^a]`), a brace form (an escape before a brace, comma or backslash, a group with no comma or one that leaves an empty or dot path segment, an unbalanced brace), or a character class that is not valid, a reversed range such as `[c-a]`. The error names `optionName` and the glob. The one check every reader of a glob or specifier list calls.
+ * Throws when `glob` uses syntax this package's glob dialect reads differently from the minimatch ESLint applies to the same glob, so that the two would select different files: extglob (`assertNoExtglob`), a POSIX character class (`[[:alpha:]]`), a backslash in a segment that starts with `*` or `?` (`*\.js`), a rooted, directory-only or empty-segment shape, a second `!` or a leading `#`, a `.` or `..` segment in a file glob, an extglob that braces assemble, a class opening with an escaped caret (`[\^a]`), a brace form (an escape before a brace, comma or backslash, a group with no comma or one that leaves an empty or dot path segment, an unbalanced brace), or a character class that is not valid, a reversed range such as `[c-a]`. The error names `optionName` and the glob. The one check every reader of a glob or specifier list calls.
  */
-export function assertSupportedGlob(glob: string, optionName: string): void {
+export function assertSupportedGlob(glob: string, optionName: string, kind: GlobKind = 'file'): void {
+  assertShapeSupported(glob, optionName);
   assertNoExtglob(glob, optionName);
   if (hasPosixClass(glob)) {
     throw new Error(`@exadev/eslint-config: "${optionName}" must not use a POSIX character class, which this package's glob dialect does not support: "${glob}". List the characters or a range instead.`);
@@ -163,7 +184,19 @@ export function assertSupportedGlob(glob: string, optionName: string): void {
   assertBracesSupported(glob, optionName);
   const body = isExcludePattern(glob) ? glob.slice(1) : glob;
   for (const expanded of expandBraces(body)) {
+    // minimatch expands braces before it reads anything else, so an extglob opener that the braces assemble (`{*,a}(b)` is `*(b)`) is an extglob to it.
+    assertNoExtglob(expanded, optionName);
+    for (const raw of expanded.split('/')) {
+      // A `.` or `..` segment, written plainly or escaped (`\.\.`), which the dialect drops and minimatch matches or resolves differently.
+      const unescaped = raw.replace(/\\(.)/gu, '$1');
+      if (kind === 'file' && (unescaped === '.' || unescaped === '..')) {
+        throw new Error(`@exadev/eslint-config: "${optionName}" must not have a "." or ".." path segment, since this package's glob dialect drops it and minimatch does not: "${glob}". Write the path without it.`);
+      }
+    }
     for (const segment of normalizeGlobSegments(splitPathSegments(expanded))) {
+      if (segment.includes('\\') && (STAR_LED_SEGMENT.test(segment) || QMARK_LED_SEGMENT.test(segment))) {
+        throw new Error(`@exadev/eslint-config: "${optionName}" must not use a backslash in a segment that starts with "*" or "?", since minimatch reads such a segment literally and this package's glob dialect reads the backslash as an escape: "${glob}". Put the character in a character class, "[.]", instead.`);
+      }
       try {
         segmentToRegExp(segment);
       } catch (error) {
@@ -181,14 +214,14 @@ function isNonEmptyString(value: unknown): value is string {
 /**
  * Validates a file-glob option value, enforcing everything `fileGlobsSchema` does plus one include: an array of non-empty strings with no duplicates, at least one of which does not start with `!` (a list of excludes alone would match nothing), balanced braces in every pattern, and no extglob syntax (`@(a|b)`, `+(a)`, `!(a)`, `?(a)`, `*(a)`), which ESLint accepts and the dialect does not. Returns the same array; throws naming `optionName` and the specific failure otherwise.
  */
-export function readFileGlobs(value: unknown, optionName: string): readonly string[] {
+export function readFileGlobs(value: unknown, optionName: string, kind: GlobKind = 'file'): readonly string[] {
   const prefix = `@exadev/eslint-config: "${optionName}" must`;
   if (!Array.isArray(value)) throw new Error(`${prefix} be an array of glob strings.`);
   if (!value.every(isNonEmptyString)) throw new Error(`${prefix} contain only non-empty strings.`);
   if (new Set(value).size !== value.length) throw new Error(`${prefix} not contain duplicate globs.`);
   if (!value.some((item) => !isExcludePattern(item))) throw new Error(`${prefix} contain at least one glob that does not start with "!".`);
   for (const pattern of value) {
-    assertSupportedGlob(pattern, optionName);
+    assertSupportedGlob(pattern, optionName, kind);
   }
 
   return value;

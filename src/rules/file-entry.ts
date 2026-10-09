@@ -57,7 +57,7 @@ export function readRequiredStrings(entry: Readonly<Record<string, unknown>>, fi
  */
 export function readSpecifierPatterns(entry: Readonly<Record<string, unknown>>, field: string, optionName: string): readonly string[] {
   const patterns = readRequiredStrings(entry, field, optionName);
-  for (const pattern of patterns) assertSupportedGlob(pattern, `${optionName}.${field}`);
+  for (const pattern of patterns) assertSupportedGlob(pattern, `${optionName}.${field}`, 'specifier');
 
   return patterns;
 }
