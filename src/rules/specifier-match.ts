@@ -27,6 +27,9 @@ function withSubpaths(pattern: string): readonly string[] {
   const prefix = isExcludePattern(pattern) ? '!' : '';
   const body = bodyOf(pattern);
 
+  // A pattern ending in `/**` also selects the directory it names (`src/db/**` selects an import that resolves to `src/db`), which minimatch's `a/**` does not.
+  if (body.endsWith('/**')) return [pattern, `${prefix}${body.slice(0, -'/**'.length)}`];
+
   return body.endsWith('**') ? [pattern] : [pattern, `${prefix}${body}/**`];
 }
 
@@ -37,13 +40,13 @@ function bodyOf(pattern: string): string {
 /**
  * Compiles a specifier pattern list. Syntactic only: nothing is resolved through the module graph or `node_modules`, so a pattern works when the package is not installed.
  *
- * Patterns use the `fileGlobsSchema` dialect and each also selects everything beneath it. A leading `node:` is ignored on both sides, so `fs` and `node:fs` are the same builtin. A bare specifier (`zod`, `@scope/pkg/sub`) is matched as written. A relative specifier is first resolved against the linted file's directory to a path relative to the working directory, then matched only by patterns containing a `/`, which are the ones that can name a path; a bare pattern such as `fs` never selects `./fs`. A relative specifier that leaves the working directory matches nothing.
+ * Patterns are minimatch globs (with `#` a subpath import and not a comment) and each also selects everything beneath it. A leading `node:` is ignored on both sides, so `fs` and `node:fs` are the same builtin. A bare specifier (`zod`, `@scope/pkg/sub`) is matched as written. A relative specifier is first resolved against the linted file's directory to a path relative to the working directory, then matched only by patterns containing a `/`, which are the ones that can name a path; a bare pattern such as `fs` never selects `./fs`. A relative specifier that leaves the working directory matches nothing.
  */
 export function createSpecifierMatcher(patterns: readonly string[]): SpecifierMatcher {
   const stripped = patterns.map(stripNodePrefixFromPattern);
-  const matchesBare = createPathMatcher(stripped.flatMap(withSubpaths));
+  const matchesBare = createPathMatcher(stripped.flatMap(withSubpaths), { kind: 'specifier' });
   const pathLike = stripped.filter((pattern) => bodyOf(pattern).includes('/'));
-  const matchesPath: PathMatcher | undefined = pathLike.some((pattern) => !isExcludePattern(pattern)) ? createPathMatcher(pathLike.flatMap(withSubpaths)) : undefined;
+  const matchesPath: PathMatcher | undefined = pathLike.some((pattern) => !isExcludePattern(pattern)) ? createPathMatcher(pathLike.flatMap(withSubpaths), { kind: 'specifier' }) : undefined;
 
   return (specifier, filename, cwd) => {
     if (!isRelativeSpecifier(specifier)) return matchesBare(stripNodePrefix(specifier));

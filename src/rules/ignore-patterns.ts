@@ -17,7 +17,7 @@ function compileRule(pattern: string): IgnoreRule {
   const directoriesOnly = body.endsWith('/');
 
   // ESLint's ignore matching reads a pattern with a leading slash as an absolute path, which no path relative to the working directory is, so such a pattern selects nothing (a `.gitignore` entry like `/dist` reaches ESLint already rewritten by includeIgnoreFile, without the slash).
-  const matches: PathMatcher = body.startsWith('/') ? () => false : createPathMatcher([directoriesOnly ? body.slice(0, -1) : body], 'any');
+  const matches: PathMatcher = body.startsWith('/') ? () => false : createPathMatcher([directoriesOnly ? body.slice(0, -1) : body], { dotMatching: 'any' });
 
   return { negated, directoriesOnly, matches };
 }

@@ -262,6 +262,13 @@ describe('skill-name-unique', () => {
     expect(lintWith(fs, skill('alpha'), own, { options: [{ files: ['**/SKILL.md', '!skills/alpha-copy/**', '!fixtures/**'] }] })).toStrictEqual([]);
   });
 
+  it('selects files with an extglob in the files option, as ESLint does', () => {
+    const fs = createMemoryFs({ ...tree, [`${CWD}/skills/alpha-copy/SKILL.md`]: skill('alpha'), [`${CWD}/skills/beta-copy/SKILL.md`]: skill('alpha') });
+    expect(lintWith(fs, skill('alpha'), `${CWD}/skills/alpha/SKILL.md`, { options: [{ files: ['skills/@(alpha|alpha-copy)/SKILL.md'] }] })).toStrictEqual([
+      'The skill name "alpha" is also defined in skills/alpha-copy/SKILL.md, so the skills CLI lists only one of them.',
+    ]);
+  });
+
   it('matches a dot-prefixed directory with a wildcard or ** in the files option, as ESLint does', () => {
     const fs = createMemoryFs({ ...tree, [`${CWD}/.agents/skills/copy/SKILL.md`]: skill('alpha') });
     expect(lintWith(fs, skill('alpha'), `${CWD}/skills/alpha/SKILL.md`, { options: [{ files: ['**/skills/*/SKILL.md'] }] })).toStrictEqual([
@@ -284,8 +291,7 @@ describe('skill-name-unique', () => {
     expect(() => lintWith(fs, skill('alpha'), own, { options: [{ file: [] }] })).toThrow(/should NOT have additional properties/u);
     expect(() => lintWith(fs, skill('alpha'), own, { options: [{ files: [] }] })).toThrow(/should NOT have fewer than 1 items/u);
     expect(() => lintWith(fs, skill('alpha'), own, { options: [{ ignores: 'dist' }] })).toThrow(/should be array/u);
-    expect(() => lintWith(fs, skill('alpha'), own, { options: [{ files: ['skills/*/SKILL.md', 'other/@(a|b)/SKILL.md'] }] })).toThrow(/"skill-name-unique\.files" must not use extglob syntax.*"other\/@\(a\|b\)\/SKILL\.md"/u);
-    expect(() => lintWith(fs, skill('alpha'), own, { options: [{ files: ['skills/@(a|b)/SKILL.md'] }] })).toThrow(/"skill-name-unique\.files" must not use extglob syntax.*"skills\/@\(a\|b\)\/SKILL\.md"/u);
+    expect(() => lintWith(fs, skill('alpha'), own, { options: [{ files: ['skills/*/SKILL.md', '{[,]}[:alpha:]],'] }] })).toThrow(/"skill-name-unique\.files" has a glob that minimatch cannot compile: "\{\[,\]\}\[:alpha:\]\],"/u);
   });
 
   describe('scan caching', () => {

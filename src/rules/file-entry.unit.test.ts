@@ -66,9 +66,13 @@ describe('readSpecifierPatterns', () => {
     expect(readSpecifierPatterns({ s: ['fs', '@scope/pkg', 'src/(group)/x'] }, 's', 'o')).toStrictEqual(['fs', '@scope/pkg', 'src/(group)/x']);
   });
 
-  it.each([0, 1, 2])('rejects an extglob entry at position %i, naming the option, the field and the pattern', (position) => {
+  it.each(['#internal/*', 'https://x/y', '/abs/x', './x', '../x', '../../contract/src/*conformance*', '@scope/pkg/sub', 'node:fs', '@(a|b)/x', '~/x/*', 'virtual:*'])('accepts the specifier pattern %s', (pattern) => {
+    expect(readSpecifierPatterns({ s: [pattern] }, 's', 'o')).toStrictEqual([pattern]);
+  });
+
+  it.each([0, 1, 2])('rejects a pattern minimatch cannot compile at position %i, naming the option, the field and the pattern', (position) => {
     const list = ['fs', 'path', 'os'];
-    list[position] = '@(a|b)';
-    expect(() => readSpecifierPatterns({ s: list }, 's', 'o')).toThrow('"o.s" must not use extglob syntax, which this package\'s glob dialect does not support: "@(a|b)"');
+    list[position] = '{[,]}[:alpha:]],';
+    expect(() => readSpecifierPatterns({ s: list }, 's', 'o')).toThrow('"o.s" has a glob that minimatch cannot compile: "{[,]}[:alpha:]],"');
   });
 });

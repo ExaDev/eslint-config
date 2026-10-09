@@ -1,8 +1,10 @@
-import { Minimatch } from 'minimatch';
+import { ESLint } from 'eslint';
 import { describe, expect, it } from 'vitest';
-import { assertNoExtglob, assertSupportedGlob, createFileScope, createPathMatcher, fileGlobsSchema, readFileGlobs, relativeToCwd } from './file-scope';
+import { isRecord } from '../is-record';
+import { assertSupportedGlob, createFileScope, createPathMatcher, fileGlobsSchema, readFileGlobs, relativeToCwd } from './file-scope';
 
 const CWD = '/repo';
+const ORACLE_CWD = '/repo-oracle';
 
 function inScope(globs: readonly string[], relativePath: string): boolean {
   return createFileScope(globs)(`${CWD}/${relativePath}`, CWD);
@@ -14,235 +16,88 @@ describe('fileGlobsSchema', () => {
   });
 });
 
-// ESLint selects files with minimatch, so for every class form below the package matcher must select exactly the candidates minimatch does: a glob handed to both would otherwise lint files the duplicate check cannot match.
-describe('character classes against minimatch', () => {
-  const candidates = ['ax', 'cx', '-x', '^x', '!x', '[x', 'bx', '\\x', '\\\\x', ']x', '\\]x', 'ax', 'bx', 'x', 'a/a/x', 'a/]/x', 'a/b/x', 'a/\\b]/x', 'a]', 'b]', ']', 'a', 'b', '-', '^', '!', 'c', '[', '\\'];
-  it.each([
-    '[\\]]x',
-    'a/[a\\]b]/x',
-    '[a\\]]',
-    '[^\\]]x',
-    '[!\\]]x',
-    '[\\]a]x',
-    '[\\]\\]x',
-    '[]]x',
-    '[]a]x',
-    '[^]]x',
-    '[a-c]x',
-    '[^a]x',
-    '[!a]x',
-    '[ab]',
-    'a/[\\]]/x',
-    '[\\\\]x',
-    '[\\\\\\]]x',
-    '[\\\\]]x',
-    '[\\a]x',
-    '[\\-]x',
-    '[a\\-c]x',
-    '[\\!a]x',
-    '[\\[]x',
-    '[\\^]x',
-    '[\\^]]x',
-    '[c][\\^]x',
-    '[a\\^]x',
-  ])('selects what minimatch selects for %s', (glob) => {
-    const matches = createPathMatcher([glob], 'any');
-    const oracle = new Minimatch(glob, { dot: true });
-    for (const candidate of candidates) expect([glob, candidate, matches(candidate)]).toStrictEqual([glob, candidate, oracle.match(candidate)]);
-  });
+// ESLint is the oracle: a glob must select, through this package's matcher, exactly the paths ESLint selects through a config's `files`. Every row is a form that once made the two diverge, or a form the package used to reject, and each is compared on candidates that hold the metacharacters literally.
+const CANDIDATES = [
+  'ax', 'bx', 'cx', 'x', 'é', '日本/a', 'a/b', 'a/x', 'a.js', 'b.js', 'a.md', 'b.md', '.a', 'skills/a/SKILL.md', 'skills/b/SKILL.md', '|', 'a|', 'zz', '$', '[', ':', ']', '\\', '\\x', 'a\\x', 'a\\.js', 'a}', '^x', '!x', '-x', ']x', 'a/]/x', 'a]', 'a/a/x', 'a/b/x',
+  '{a,b}.md', 'a{b,c}', 'ab', 'abc', 'a.fake', 'a.fake.js', 'x/a/y', 'x/b/c/y', 'a,b', '(a)', 'a(b)', '@a', 'ba', 'aa', '!a', '+a', 'a', 'b', 'c', 'd', 'ab.md',
+];
 
-  it.each([
-    ['[^a]x', 'bx', true],
-    ['[^a]x', 'ax', false],
-    ['[!a]x', 'bx', true],
-    ['[!a]x', 'ax', false],
-  ])('negates %s: %s is %s', (glob, candidate, expected) => {
-    expect(createPathMatcher([glob])(candidate)).toBe(expected);
+const ORACLE_GLOBS = [
+  // Character classes, escaped members, negation and POSIX classes.
+  '[\\]]x', 'a/[a\\]b]/x', '[a\\]]', '[^\\]]x', '[!\\]]x', '[\\]a]x', '[\\]\\]x', '[]]x', '[]a]x', '[^]]x', '[a-c]x', '[^a]x', '[!a]x', '[ab]', '[\\\\]x', '[\\\\\\]]x', '[\\\\]]x', '[\\a]x', '[\\-]x', '[a\\-c]x', '[\\!a]x', '[\\[]x', '[\\^]x', '[\\^]]x', '[c][\\^]x', '[a\\^]x', '[\\^a]x', '[\\^-x]x',
+  '[[:alpha:]]x', '[[:digit:]a]x', '[[:ab]', '[:alpha:]', '[a-]x', '[]-a]x', '[(]x/**', '**/[!(]x.ts', 'a/[unclosed(x', '[$]a',
+  // Braces, including nested, empty alternatives and the ${ form minimatch leaves literal.
+  '{a,b}x', '{a,{b,c}}x', 'x{a,b}{c,d}', '*.fake{,.js}', 'x/{a,b/c}/y', '{a,b}[cd]', '{a}', '{a,}', '{,a}', '{a..c}', '{1..3}', '${a,b}.md', 'a${b,c}', '{a,b}${c,d}', 'a\\{b,c}', '{a\\,b,c}', '{a,b',
+  // Extglob, written plainly and assembled by braces.
+  '@(a|b)x', '+(a)b', 'x!(a)', '?(a)x', '*(a)x', 'skills/@(a|b)/SKILL.md', 'skills/!(a)/SKILL.md', '{*,a}(b)', 'a/{@,x}(b|c)', '(a)', 'a(b)', '@scope/(x)', 'app/!(group)/**',
+  // Escapes before wildcards, including the escaped pipe that compiles to an alternation.
+  '*\\x', '*\\.js', '?\\x', 'a/*\\x', '*.\\x', '\\*x', 'x\\*', '*[\\x]', '\\|*', 'a\\|?', '\\|?a', '\\|a', '\\||', '\\|[a]', '[|]*', '[\\|]*', '\\.\\./a',
+  // Brace-assembled classes from the review.
+  '{[,}\\^a]', '{,[}\\^a]', '[{,\\^a]}', '{[,]}[:alpha:]', '[{],[:alpha:]}', '{,[}][:alpha:]', '{{,[},]}[:alpha:]',
+  // Wildcards, dotfiles, globstars and unicode.
+  '*.js', '.*', '**/*.md', '**/.hidden/**', '**', '**/a', 'a/**', 'a/**/x', '*/x', '?x', '??', 'é*', '[à-ü]x', '日本/*', '*', 'skills/*/SKILL.md', '**/skills/*/SKILL.md', './a', './a/**',
+  // Shapes that were once rejected: rooted, directory-only, doubled slash, dot segments, comment, negation.
+  '/a', 'a//b', 'a/./b', '../a', '#a', '!!a', 'a$',
+];
+
+describe('createPathMatcher against ESLint', () => {
+  it.each(ORACLE_GLOBS)('selects what ESLint selects for %s', async (glob) => {
+    
+    let compiled = true;
+    try {
+      assertSupportedGlob(glob, 'opt');
+    } catch {
+      compiled = false;
+    }
+    // A glob this package rejects when the option is read (a comment, a negation, or minimatch cannot compile it) is not compared: ESLint would match nothing or crash on it.
+    if (!compiled) return;
+    const matches = createPathMatcher([glob], { dotMatching: 'any' });
+    const eslint = new ESLint({ cwd: ORACLE_CWD, overrideConfigFile: true, overrideConfig: [{ files: [glob], rules: { 'no-console': 'error' } }, { files: ['**/?*'], rules: {} }] });
+    // ESLint gives a file a configuration only when a pattern that is not universal (`*`, `a/*`, `a/**`, a `!` pattern) matches it, so a second configuration whose pattern matches every name stands in for the extension a real project names; whether the glob selects the file is then the rule the glob's own configuration sets.
+    const selectedByEslint = await Promise.all(
+      CANDIDATES.map(async (candidate) => {
+        const config: unknown = await eslint.calculateConfigForFile(`${ORACLE_CWD}/${candidate}`);
+
+        return isRecord(config) && isRecord(config['rules']) && config['rules']['no-console'] !== undefined;
+      }),
+    );
+    expect(CANDIDATES.map((candidate) => [glob, candidate, matches(candidate)])).toStrictEqual(CANDIDATES.map((candidate, index) => [glob, candidate, selectedByEslint[index]]));
   });
 });
 
 describe('assertSupportedGlob', () => {
-  it.each(['[[:alpha:]]x', 'a/[[:digit:]a]/x', '!a/[[:alpha:]]'])('rejects the POSIX class in %s, naming the option and the glob', (glob) => {
-    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`@exadev/eslint-config: "opt" must not use a POSIX character class, which this package's glob dialect does not support: "${glob}". List the characters or a range instead.`);
+  it.each(['{[,]}[:alpha:]],', '[{][:alpha:]]-,}', ',{,[}][:alpha:]]', '[{],[:alpha:]]}-'])('rejects %s, which minimatch cannot compile, naming the option and the whole glob', (glob) => {
+    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`@exadev/eslint-config: "opt" has a glob that minimatch cannot compile: "${glob}"`);
   });
 
-  it.each(['[\\^a]x', '[\\^-x]x', 'a/[\\^b]/x', '!a/[\\^-.]x'])('rejects the class opening with an escaped caret in %s, which minimatch reads as negated only sometimes', (glob) => {
-    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`@exadev/eslint-config: "opt" must not open a character class with an escaped caret, which this package's glob dialect cannot read the way ESLint does: "${glob}". Use "[^...]" to negate, or put the caret after the first member.`);
+  it.each(['#a', '!#a'])('rejects the comment %s, which matches nothing', (glob) => {
+    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`@exadev/eslint-config: "opt" has a glob that starts with "#", which minimatch reads as a comment that matches nothing: "${glob}"`);
   });
 
-  it.each(['[\\^]x', '[\\^]]x', '[a\\^]x'])('accepts %s, where the escaped caret is a plain member', (glob) => {
+  it.each(['!!a'.replace('!!a', '!!a')])('rejects the second exclusion marker in %s', (glob) => {
+    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(/has a glob with a second "!"/u);
+  });
+
+  it.each(['@(a|b)/x', '[[:alpha:]]', 'x/[c-a]'.replace('c-a', 'a-c'), '{a,b', '${a,b}', '*\\x', '/a', './a', '../a', 'a//b', '{a}'])('accepts %s, which minimatch compiles', (glob) => {
     expect(() => { assertSupportedGlob(glob, 'opt'); }).not.toThrow();
   });
 
-  it.each(['[c-a]x', 'a/[a-\\]]/x', 'a/{b,[z-a]}/x'])('rejects the reversed range in %s, naming the option and the glob', (glob) => {
-    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(new RegExp(`^@exadev/eslint-config: "opt" has a character class in "${glob.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}" that is not valid: `, 'u'));
-  });
-
-  it.each(['[a-c]x', '[^a-c]x', '[]-a]x', '[a-]x', '[\\]]x', 'a/[[]x', '[x'])('accepts the ordinary class in %s', (glob) => {
-    expect(() => { assertSupportedGlob(glob, 'opt'); }).not.toThrow();
-  });
-});
-
-describe('a backslash in a segment that starts with a wildcard', () => {
-  it.each(['*\\x', '*\\.js', '*\\}', '*.\\x', '?\\x', 'a/*\\x', '{*\\x,b}', '!**/*\\.md', 'a/??\\x'])('rejects %s, naming the option and the whole glob', (glob) => {
-    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`@exadev/eslint-config: "opt" must not use a backslash in a segment that starts with "*" or "?", since minimatch reads such a segment literally and this package's glob dialect reads the backslash as an escape: "${glob}". Put the character in a character class, "[.]", instead.`);
-  });
-
-  it.each(['\\*x', 'x\\*', '*[\\x]', '*[.]js', 'a\\.b', '*.js', '?[\\.]x'])('accepts %s, and it selects what minimatch selects', (glob) => {
-    expect(() => { assertSupportedGlob(glob, 'opt'); }).not.toThrow();
-    const matches = createPathMatcher([glob], 'any');
-    const oracle = new Minimatch(glob, { dot: true });
-    for (const candidate of ['ax', 'a\\x', 'a.js', 'a}', '*x', 'x*', '\\x', 'a.b', 'a\\.b', 'xjs', '.js', 'a\\']) expect([glob, candidate, matches(candidate)]).toStrictEqual([glob, candidate, oracle.match(candidate)]);
-  });
-});
-
-describe('glob shapes minimatch reads differently', () => {
-  it.each(['/a', 'a/', '/', 'a//b', '!/a', 'src/**/'])('rejects the rooted, directory-only or empty-segment glob %s', (glob) => {
-    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`"opt" must not start or end with a slash or hold an empty segment`);
-  });
-
-  it.each(['!!a', '#a', '!#a', '!!!a'])('rejects the negation or comment shape %s', (glob) => {
-    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`"opt" must not start with a second "!" or a "#" after any exclusion marker`);
-  });
-
-  it.each(['./a', 'a/./b', 'a/.', 'a/..', '../a', '\\.\\./a', 'a/\\.', '{a,b}/.'])('rejects the dot segment in the file glob %s', (glob) => {
-    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`"opt" must not have a "." or ".." path segment`);
-  });
-
-  it.each(['#internal/*', 'https://x/y', '/abs/x', './x', '../x', '../../contract/src/*conformance*', '@scope/pkg/sub', 'node:fs', '@scope/*', 'node:*', './x/**', '~/x/*', '@/lib/*', 'virtual:*', 'a/'])('accepts the specifier pattern %s, which only the package matcher reads', (pattern) => {
+  it.each(['#internal/*', 'https://x/y', '/abs/x', './x', '../x', '../../contract/src/*conformance*', '@scope/pkg/sub', 'node:fs', '@scope/*', 'node:*', '~/x/*', '@/lib/*', 'virtual:*', '!x'])('accepts the specifier pattern %s, which only this package reads', (pattern) => {
     expect(() => { assertSupportedGlob(pattern, 'opt', 'specifier'); }).not.toThrow();
   });
 
-  it.each([['@(fs|path)', /extglob/u], ['[[:alpha:]]', /POSIX/u], ['x/[c-a]', /not valid/u], ['{a}', /no comma/u], ['{a,b', /unmatched/u]])('still rejects %s in a specifier pattern, which the package matcher cannot read as written', (pattern, message) => {
-    expect(() => { assertSupportedGlob(pattern, 'opt', 'specifier'); }).toThrow(message);
-  });
-
-  it('allows a relative specifier pattern its dot segments, since it is written as imported', () => {
-    expect(() => { assertSupportedGlob('./a', 'opt', 'specifier'); }).not.toThrow();
-    expect(() => { assertSupportedGlob('../a/**', 'opt', 'specifier'); }).not.toThrow();
-  });
-
-  it.each(['{*,a}(b)', 'x/{@,a}(b|c)', '{+,a}(b)', '{?,a}(b)'])('rejects the extglob that the braces of %s assemble', (glob) => {
-    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`"opt" must not use extglob syntax`);
-  });
-});
-
-describe('a brace group after a dollar sign', () => {
-  it.each(['${a,b}.md', 'a${b,c}', '{a,b}${c,d}', 'x/${a,b}/y'])('rejects %s, which minimatch leaves literal', (glob) => {
-    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`@exadev/eslint-config: "opt" must not put a brace group right after a "$", since minimatch leaves it literal and this package's glob dialect expands it: "${glob}". Put the "$" in a character class, "[$]", or drop it.`);
-  });
-
-  it.each(['a[$]{b,c}', '{a,b}$', 'a$b', '$a'])('accepts %s', (glob) => {
-    expect(() => { assertSupportedGlob(glob, 'opt'); }).not.toThrow();
-  });
-
-  it('leaves a specifier pattern alone, since only the package matcher reads it', () => {
-    expect(() => { assertSupportedGlob('${a,b}/x', 'opt', 'specifier'); }).not.toThrow();
-  });
-});
-
-describe('brace forms', () => {
-  it.each(['{}', '{a}', '{a..c}', '{1..3}', 'x/{b}/y', '{a,{b}}', 'x{1..3}y'])('rejects the group with no comma in %s, naming the option and the whole glob', (glob) => {
-    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(new RegExp(`^@exadev/eslint-config: "opt" has a brace group with no comma, ".*", in "${glob.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}", which minimatch`, 'u'));
-  });
-
-  it.each(['{a,}', '{,a}', '{a,,b}', 'x/{a,}/y', '{a,.}', '{a,..}', 'a{/,x}', '{/a,b}c', 'a/{b,./c}', '.{,x}'])('rejects the group that leaves an empty or dot segment in %s', (glob) => {
-    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(/has a brace group that leaves an empty or dot path segment/u);
-  });
-
-  it.each(['a\\{b,c}', '{a\\,b,c}', '{a\\\\b,c}', '{a,b\\}', 'x/\\{a,b}'])('rejects the escape in the braced glob %s', (glob) => {
-    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`"opt" must not escape a backslash, brace or comma in a glob that uses braces, since minimatch and this package's glob dialect read the escape differently: "${glob}"`);
-  });
-
-  it.each(['{a,b', 'x/{a,{b,c}/y', '!{a,b', '[{]a'])('names the option and the whole glob for an unbalanced brace in %s', (glob) => {
-    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`@exadev/eslint-config: "opt" has an unmatched "{" in "${glob}" (brace expansion). Rewrite it with balanced braces.`);
-  });
-
-  it.each(['{a,b}x', '*.fake{,.js}', 'x/{a,b/c}/y', 'x/{a,b}', '{a,{b,c}}x', 'x{a,b}{c,d}', '{ab,cd,ef}', 'a\\.b', '{a,b}[cd]'])('accepts %s, and it selects what minimatch selects', (glob) => {
-    expect(() => { assertSupportedGlob(glob, 'opt'); }).not.toThrow();
-    const matches = createPathMatcher([glob], 'any');
-    const oracle = new Minimatch(glob, { dot: true });
-    const alphabet = ['a', 'b', 'c', 'd', 'e', 'f', 'x', '{', '}', ',', '.', '\\', '[', ']'];
-    const candidates = ['', ...alphabet, ...alphabet.flatMap((first) => alphabet.map((second) => `${first}${second}`)), 'axc', 'xac', 'bxd', 'abx', 'cdx', 'efx', 'xad', 'xbc', 'xbd', 'a.b', '{a'];
-    for (const candidate of candidates.filter((item) => item !== '')) expect([glob, candidate, matches(candidate)]).toStrictEqual([glob, candidate, oracle.match(candidate)]);
-  });
-});
-
-describe('assertNoExtglob', () => {
-  it('words the whole error, hint included', () => {
-    expect(() => { assertNoExtglob('a/@(b)', 'opt'); }).toThrow(
-      new Error('@exadev/eslint-config: "opt" must not use extglob syntax, which this package\'s glob dialect does not support: "a/@(b)". Use braces, "*", "?" and "[...]", or several globs.'),
-    );
-  });
-
-  const accepted = [
-    'app/(marketing)/**',
-    'src/(group)/**',
-    '(group)/**',
-    '!app/(marketing)/**',
-    'app/@modal/(.)photo/**',
-    'a/{(b),c}/**',
-    'a/{b,(c)}',
-    '[(]x/**',
-    '@scope/(x)',
-    '@scope/pkg',
-    '!(group)/**',
-    '**/[!(]x.ts',
-    '**/[^(]x.ts',
-    '**/[]!(]x.ts',
-    '\\@(a)',
-    'a/\\!(b)/c',
-    'src\\(a)\\x',
-    'a/(b|c)/**',
-    'notes (old)/*.md',
-    'a/[@+?*!](b)/c',
-    'a/[unclosed(x',
-    '[^]@(b)]x',
-    '[!]@(b)]x',
-    '[]@(b)]x',
-    '**/*.ts',
-    'skills/*/SKILL.md',
-    'a/*/b',
-  ];
-  const rejected = [
-    'skills/@(a|b)/SKILL.md',
-    'src/+(a|b)/x',
-    'a/!(b)/c',
-    'a/?(b)/c',
-    'a/*(b)/c',
-    '@(a|b)/x',
-    '!skills/@(a)/**',
-    '!a/!(b)/c',
-    'a/{@(b),c}/**',
-    'a/[x]@(b)/c',
-    'a/\\@x/@(b)',
-    '**/+(a).ts',
-  ];
-
-  it.each(accepted)('accepts %s', (glob) => {
-    expect(() => { assertNoExtglob(glob, 'opt'); }).not.toThrow();
-  });
-
-  it.each(rejected)('rejects %s, naming the option and the glob', (glob) => {
-    expect(() => { assertNoExtglob(glob, 'opt'); }).toThrow(`@exadev/eslint-config: "opt" must not use extglob syntax, which this package's glob dialect does not support: "${glob}"`);
+  it('rejects, for a specifier pattern too, one minimatch cannot compile', () => {
+    expect(() => { assertSupportedGlob('{[,]}[:alpha:]],', 'opt', 'specifier'); }).toThrow(/has a glob that minimatch cannot compile/u);
   });
 });
 
 describe('readFileGlobs', () => {
-  it.each(['skills/@(a|b)/SKILL.md', 'skills/+(a)/SKILL.md', 'skills/!(a)/SKILL.md', 'skills/?(a)/SKILL.md', 'skills/*(a)/SKILL.md', '!skills/@(a)/**'])('rejects the extglob form %s, naming the option and the glob', (glob) => {
-    expect(() => readFileGlobs(['**/SKILL.md', glob], 'someOption')).toThrow(`"someOption" must not use extglob syntax, which this package's glob dialect does not support: "${glob}"`);
-  });
-
-  it.each(['[[:alpha:]]x', '[c-a]x'])('rejects the unsupported class in %s through the reader', (glob) => {
-    expect(() => readFileGlobs(['**/*.ts', glob], 'someOption')).toThrow(/"someOption"/u);
-  });
-
-  it.each(['app/(marketing)/**', '!(group)/**', '!app/(marketing)/**', '**/[!(]x.ts'])('accepts the route group or class form %s', (glob) => {
+  it.each(['skills/@(a|b)/SKILL.md', 'skills/+(a)/SKILL.md', 'app/(marketing)/**', '!(group)/**', '!app/(marketing)/**', '**/[!(]x.ts', '[[:alpha:]]x', 'skills/{a,b}/[cd]*.md', 'notes (old)/*.md', '*\\x'])('accepts the minimatch glob %s', (glob) => {
     expect(readFileGlobs(['**/*.ts', glob], 'someOption')).toStrictEqual(['**/*.ts', glob]);
   });
 
-  it('still accepts braces, classes and a literal parenthesis', () => {
-    expect(readFileGlobs(['skills/{a,b}/[cd]*.md', 'notes (old)/*.md'], 'someOption')).toStrictEqual(['skills/{a,b}/[cd]*.md', 'notes (old)/*.md']);
+  it('rejects a glob minimatch cannot compile, naming the option and the glob', () => {
+    expect(() => readFileGlobs(['**/*.ts', '{[,]}[:alpha:]],'], 'someOption')).toThrow('"someOption" has a glob that minimatch cannot compile: "{[,]}[:alpha:]],"');
   });
 
   it('returns a valid list unchanged', () => {
@@ -259,10 +114,6 @@ describe('readFileGlobs', () => {
     ['excludes only', ['!a', '!b'], 'contain at least one glob that does not start with "!".'],
   ])('rejects %s with a message naming the option and the failure', (_label, value, failure) => {
     expect(() => readFileGlobs(value, 'myOption')).toThrow(`@exadev/eslint-config: "myOption" must ${failure}`);
-  });
-
-  it('rejects a pattern with unbalanced braces', () => {
-    expect(() => readFileGlobs(['{a,b'], 'files')).toThrow(/unmatched "\{"/);
   });
 });
 
@@ -294,7 +145,7 @@ describe('createFileScope', () => {
     expect(inScope(['packages/**/tsconfig.json'], 'packages/a/b/tsconfig.json')).toBe(true);
     expect(inScope(['packages/**/tsconfig.json'], 'apps/a/tsconfig.json')).toBe(false);
     expect(inScope(['packages/**'], 'packages/a/b.json')).toBe(true);
-    expect(inScope(['packages/**'], 'packages')).toBe(true);
+    expect(inScope(['packages/**'], 'packages')).toBe(false);
   });
 
   it('matches * within one segment only', () => {
@@ -381,7 +232,7 @@ describe('createPathMatcher', () => {
 
 describe('createPathMatcher with dot matching on any segment', () => {
   it('lets a wildcard and ** match a dot-prefixed segment, as ESLint does for a config\'s files', () => {
-    const matches = createPathMatcher(['**/skills/*/SKILL.md', 'docs/*'], 'any');
+    const matches = createPathMatcher(['**/skills/*/SKILL.md', 'docs/*'], { dotMatching: 'any' });
     expect(matches('.agents/skills/x/SKILL.md')).toBe(true);
     expect(matches('a/.hidden/skills/x/SKILL.md')).toBe(true);
     expect(matches('skills/.x/SKILL.md')).toBe(true);
@@ -389,15 +240,15 @@ describe('createPathMatcher with dot matching on any segment', () => {
   });
 
   it('still honours a ! exclude, a literal segment and the length of the path', () => {
-    const matches = createPathMatcher(['**/skills/*/SKILL.md', '!.agents/**'], 'any');
+    const matches = createPathMatcher(['**/skills/*/SKILL.md', '!.agents/**'], { dotMatching: 'any' });
     expect(matches('skills/x/SKILL.md')).toBe(true);
     expect(matches('.agents/skills/x/SKILL.md')).toBe(false);
     expect(matches('.agents/skills/x/y/SKILL.md')).toBe(false);
-    expect(createPathMatcher(['**'], 'any')('../x')).toBe(false);
+    expect(createPathMatcher(['**'], { dotMatching: 'any' })('../x')).toBe(false);
   });
 
   it('is not what the default dialect does, where neither a wildcard nor ** crosses a dot-prefixed segment', () => {
-    for (const matches of [createPathMatcher(['**/skills/*/SKILL.md']), createPathMatcher(['**/skills/*/SKILL.md'], 'explicit')]) {
+    for (const matches of [createPathMatcher(['**/skills/*/SKILL.md']), createPathMatcher(['**/skills/*/SKILL.md'], { dotMatching: 'explicit' })]) {
       expect(matches('.agents/skills/x/SKILL.md')).toBe(false);
       expect(matches('skills/x/SKILL.md')).toBe(true);
     }
