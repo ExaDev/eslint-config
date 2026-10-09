@@ -147,7 +147,7 @@ function walkPattern(fs: WorkspaceFs, root: string, segments: readonly string[],
   return results;
 }
 
-export function findMatchingBrace(pattern: string, openIndex: number): number {
+function findMatchingBrace(pattern: string, openIndex: number): number {
   let depth = 0;
   for (let index = openIndex; index < pattern.length; index += 1) {
     const char = requireChar(pattern, index);

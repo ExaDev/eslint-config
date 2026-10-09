@@ -137,11 +137,9 @@ describe('option validation', () => {
     ['an unknown key', { skills: [] }, /"agentSkills" has an unknown key "skills". Allowed keys: skillFiles, marketplaceFiles, pluginFiles/u],
     ['a non-array skillFiles', { skillFiles: 'a' }, /"agentSkills.skillFiles" must be an array of glob strings/u],
     ['an exclude-only marketplaceFiles', { marketplaceFiles: ['!a'] }, /"agentSkills.marketplaceFiles" must contain at least one glob that does not start with "!"/u],
-    ['an extglob skillFiles entry', { skillFiles: ['skills/@(a|b)/SKILL.md'] }, /"agentSkills.skillFiles" must not use extglob syntax.*"skills\/@\(a\|b\)\/SKILL\.md"/u],
-    ['a POSIX class in skillFiles', { skillFiles: ['skills/[[:alpha:]]/SKILL.md'] }, /"agentSkills.skillFiles" must not use a POSIX character class.*"skills\/\[\[:alpha:\]\]\/SKILL\.md"/u],
-    ['a reversed range in pluginFiles', { pluginFiles: ['plugins/[c-a]/.claude-plugin/plugin.json'] }, /"agentSkills.pluginFiles" has a character class in .* that is not valid: .*out of order/u],
-    ['an extglob marketplaceFiles entry', { marketplaceFiles: ['+(a)/.claude-plugin/marketplace.json'] }, /"agentSkills.marketplaceFiles" must not use extglob syntax/u],
-    ['an extglob pluginFiles entry', { pluginFiles: ['a/!(b)/.claude-plugin/plugin.json', '**/.claude-plugin/plugin.json'] }, /"agentSkills.pluginFiles" must not use extglob syntax/u],
+    ['a skillFiles glob minimatch cannot compile', { skillFiles: ['{[,]}[:alpha:]],'] }, /"agentSkills\.skillFiles" has a glob that minimatch cannot compile: "\{\[,\]\}\[:alpha:\]\],"/u],
+    ['a skillFiles glob starting with #', { skillFiles: ['#skills/*/SKILL.md'] }, /"agentSkills\.skillFiles" has a glob that starts with "#"/u],
+    ['a pluginFiles glob with a second exclusion marker', { pluginFiles: ['**/.claude-plugin/plugin.json', '!!a/**'] }, /"agentSkills\.pluginFiles" has a glob with a second "!"/u],
     ['an empty-string pluginFiles entry', { pluginFiles: [''] }, /"agentSkills.pluginFiles" must contain only non-empty strings/u],
   ])('rejects %s', (_label, given, message) => {
     // The options are deliberately malformed, which the declared option type would reject at compile time.

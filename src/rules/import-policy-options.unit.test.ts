@@ -4,6 +4,14 @@ import { importPoliciesSchema, readImportPolicies } from './import-policy-option
 
 const DENY = { specifiers: ['fs'], message: 'not in workers' };
 
+describe('readImportPolicies specifier patterns', () => {
+  it.each(['#internal/*', 'https://x/y', '/abs/x', '@scope/pkg/sub', 'node:fs'])('accepts %s in deny and confine specifiers', (specifier) => {
+    const [policy] = readImportPolicies([{ files: ['src/**'], deny: [{ ...DENY, specifiers: [specifier] }], confine: [{ specifiers: [specifier], onlyIn: ['src/a.ts'] }] }]);
+    expect(policy?.deny?.[0]?.specifiers).toStrictEqual([specifier]);
+    expect(policy?.confine?.[0]?.specifiers).toStrictEqual([specifier]);
+  });
+});
+
 describe('readImportPolicies', () => {
   it('returns the normalised policies, keeping only the fields given', () => {
     expect(
@@ -38,8 +46,8 @@ describe('readImportPolicies', () => {
 
   it('rejects unknown keys at every level', () => {
     expect(() => readImportPolicies([{ files: ['a'], deny: [DENY], nope: 1 }])).toThrow(/unknown key "nope"/u);
-    expect(() => readImportPolicies([{ files: ['a'], deny: [{ ...DENY, specifiers: ['@(fs|path)'] }] }])).toThrow(/"importPolicies\.deny\.specifiers" must not use extglob syntax.*"@\(fs\|path\)"/u);
-    expect(() => readImportPolicies([{ files: ['a'], confine: [{ specifiers: ['pkg/+(a|b)'], onlyIn: ['a'] }] }])).toThrow(/\.confine\.specifiers" must not use extglob syntax/u);
+    expect(() => readImportPolicies([{ files: ['a'], deny: [{ ...DENY, specifiers: ['{[,]}[:alpha:]],'] }] }])).toThrow(/"importPolicies\.deny\.specifiers" has a glob that minimatch cannot compile: "\{\[,\]\}\[:alpha:\]\],"/u);
+    expect(() => readImportPolicies([{ files: ['a'], confine: [{ specifiers: ['pkg/{[,]}[:alpha:]],'], onlyIn: ['a'] }] }])).toThrow(/\.confine\.specifiers" has a glob that minimatch cannot compile/u);
     expect(() => readImportPolicies([{ files: ['a'], deny: [{ ...DENY, nope: 1 }] }])).toThrow(/unknown key "nope"/u);
     expect(() => readImportPolicies([{ files: ['a'], confine: [{ specifiers: ['x'], onlyIn: ['a'], nope: 1 }] }])).toThrow(/unknown key "nope"/u);
     expect(() => readImportPolicies([{ files: ['a'], deny: [DENY], exceptEdges: [{ file: 'a', specifier: 'fs', reason: 'r', nope: 1 }] }])).toThrow(/unknown key "nope"/u);

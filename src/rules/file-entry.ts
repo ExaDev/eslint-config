@@ -53,7 +53,7 @@ export function readRequiredStrings(entry: Readonly<Record<string, unknown>>, fi
 }
 
 /**
- * Reads a specifier pattern list as `readRequiredStrings` does and rejects extglob in every entry, since specifier patterns are in the same glob dialect as file globs: ESLint-style `@(fs|path)` would be accepted and then never match, leaving a policy with a silent hole. Throws naming `optionName`, `field` and the pattern.
+ * Reads a specifier pattern list as `readRequiredStrings` does and rejects, in every entry, a pattern minimatch cannot compile, since one that never matched would leave a policy with a silent hole. Specifier patterns are minimatch globs read by this package alone, so `#internal/*`, `https://x/y` and `/abs/x` are valid. Throws naming `optionName`, `field` and the pattern.
  */
 export function readSpecifierPatterns(entry: Readonly<Record<string, unknown>>, field: string, optionName: string): readonly string[] {
   const patterns = readRequiredStrings(entry, field, optionName);

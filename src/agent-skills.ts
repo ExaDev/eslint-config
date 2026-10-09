@@ -35,7 +35,7 @@ export const DEFAULT_MARKETPLACE_FILES: readonly string[] = [`${CLAUDE_PLUGIN_DI
 export const DEFAULT_PLUGIN_FILES: readonly string[] = [`**/${CLAUDE_PLUGIN_DIR}/${PLUGIN_MANIFEST_FILE}`];
 
 /**
- * The `agentSkills` option of `exadevConfig` in its object form, and the argument of `agentSkillsConfig`. Every field is a list of globs, relative to ESLint's working directory, in the dialect of every file glob in this package, where a leading `!` excludes.
+ * The `agentSkills` option of `exadevConfig` in its object form, and the argument of `agentSkillsConfig`. Every field is a list of globs, relative to ESLint's working directory, matched exactly as ESLint matches a config's `files` (minimatch with `dot: true`), where a leading `!` excludes.
  */
 export interface AgentSkillsOptions {
   /** The SKILL.md files to lint with `exadev/skill-frontmatter`. `exadev/skill-name-unique` compares names across this same selection. Defaults to every `skills/<name>/SKILL.md`, at any depth. */

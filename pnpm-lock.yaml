@@ -190,6 +190,9 @@ importers:
       eslint-plugin-tsdoc:
         specifier: ^0.5.2
         version: 0.5.2(eslint@10.8.0(jiti@2.6.1)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)
+      minimatch:
+        specifier: 10.2.6
+        version: 10.2.6
       ts-api-utils:
         specifier: ^2.5.0
         version: 2.5.0(typescript@6.0.3)
@@ -281,9 +284,6 @@ importers:
       lint-staged:
         specifier: ^17.2.0
         version: 17.3.0
-      minimatch:
-        specifier: 10.2.6
-        version: 10.2.6
       publint:
         specifier: ^0.3.21
         version: 0.3.22
