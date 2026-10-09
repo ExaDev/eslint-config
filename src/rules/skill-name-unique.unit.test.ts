@@ -246,6 +246,7 @@ describe('skill-name-unique', () => {
     expect(() => lintWith(fs, skill('alpha'), own, { options: [{ file: [] }] })).toThrow(/should NOT have additional properties/u);
     expect(() => lintWith(fs, skill('alpha'), own, { options: [{ files: [] }] })).toThrow(/should NOT have fewer than 1 items/u);
     expect(() => lintWith(fs, skill('alpha'), own, { options: [{ ignores: 'dist' }] })).toThrow(/should be array/u);
+    expect(() => lintWith(fs, skill('alpha'), own, { options: [{ files: ['skills/@(a|b)/SKILL.md'] }] })).toThrow(/"skill-name-unique\.files" must not use extglob syntax.*"skills\/@\(a\|b\)\/SKILL\.md"/u);
   });
 
   describe('scan caching', () => {
