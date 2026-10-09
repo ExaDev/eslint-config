@@ -986,7 +986,7 @@ The two limits are `MAX_SKILL_DESCRIPTION_LENGTH` and `MAX_SKILL_NAME_LENGTH` in
 - The directory a local `source` names holds `.claude-plugin/plugin.json`, whose `name` equals the entry's, and no two entries name the same directory.
 - Every directory directly under `plugins/` that holds a `.claude-plugin/plugin.json` is listed by some entry.
 
-An object `source` (`github`, `git-subdir` and the like) points at another repository and is checked only for being an object. A `plugin.json` that is not valid JSON makes the rule throw, naming the file, rather than being read as absent.
+An object `source` (`github`, `git-subdir` and the like) points at another repository and is checked only for being an object. A sibling `plugin.json` or `package.json` is read as JSON with comments, trailing commas and a leading byte order mark allowed, as the other JSON-reading rules here read a file they do not lint, so a file an editor accepts is not reported for it. One that is not valid JSON at all is reported on the marketplace entry that lists it (`marketplace-manifest`) or on the manifest it sits beside (`plugin-manifest`), with the parse error, instead of aborting the run; its own lint reports the syntax error where it is linted.
 
 `exadev/plugin-manifest` checks each plugin manifest:
 

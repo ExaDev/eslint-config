@@ -83,15 +83,33 @@ export function stripJsonc(text: string): string {
 }
 
 /**
- * Parses JSONC text (comments and trailing commas allowed, a leading UTF-8 byte order mark ignored as ESLint and TypeScript ignore it) to an `unknown` value the caller must narrow. A syntax error is rethrown naming `sourcePath`, with the original error as its cause.
+ * The outcome of `tryParseJsonc`: the parsed value, or the syntax error as a value for a caller that reports it instead of throwing.
  */
-export function parseJsonc(text: string, sourcePath: string): unknown {
-  try {
-    const parsed: unknown = JSON.parse(stripJsonc(text.replace(/^\uFEFF/u, '')));
+export type JsoncParseResult = { readonly kind: 'parsed'; readonly value: unknown } | { readonly kind: 'invalid'; readonly error: Error };
 
-    return parsed;
+/**
+ * Parses JSONC text (comments and trailing commas allowed, a leading UTF-8 byte order mark ignored as ESLint and TypeScript ignore it) without throwing on a syntax error, which comes back as the `invalid` result. `sourcePath` only names the file in the context of an unreachable internal failure.
+ */
+export function tryParseJsonc(text: string, sourcePath: string): JsoncParseResult {
+  try {
+    const value: unknown = JSON.parse(stripJsonc(text.replace(/^\uFEFF/u, '')));
+
+    return { kind: 'parsed', value };
   } catch (error) {
     assertIsError(error, jsonParseContext(sourcePath));
-    throw new Error(`@exadev/eslint-config: could not parse "${sourcePath}" as JSON with comments: ${error.message}`, { cause: error });
+
+    return { kind: 'invalid', error };
   }
+}
+
+/**
+ * Parses JSONC text as `tryParseJsonc` does to an `unknown` value the caller must narrow. A syntax error is rethrown naming `sourcePath`, with the original error as its cause.
+ */
+export function parseJsonc(text: string, sourcePath: string): unknown {
+  const result = tryParseJsonc(text, sourcePath);
+  if (result.kind === 'invalid') {
+    throw new Error(`@exadev/eslint-config: could not parse "${sourcePath}" as JSON with comments: ${result.error.message}`, { cause: result.error });
+  }
+
+  return result.value;
 }

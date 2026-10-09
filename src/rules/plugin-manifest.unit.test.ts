@@ -57,10 +57,25 @@ ruleTester.run('plugin-manifest', rule, {
   ],
 });
 
-describe('a package.json that is not JSON', () => {
-  it('fails loudly, naming the file', () => {
-    const broken = createPluginManifestRule(createMemoryFs({ [`${CWD}/plugins/a/package.json`]: '{' }));
-    const config = [{ files: ['**/*.json'], language: 'json/json', plugins: { json, test: { rules: { 'plugin-manifest': broken } } }, rules: { 'test/plugin-manifest': 'error' } }];
-    expect(() => new Linter({ cwd: CWD }).verify(manifest({ name: 'a' }), config as never, { filename: A })).toThrow(/plugins\/a\/package\.json" as JSON/u);
+// The name mismatch, the skills key and the unreadable package.json.
+const NAME_SKILLS_AND_PACKAGE_JSON_FINDINGS = 3;
+
+function lintWithPackageJson(packageJson: string, text: string): readonly string[] {
+  const custom = createPluginManifestRule(createMemoryFs({ [`${CWD}/plugins/a/package.json`]: packageJson }));
+  const config = [{ files: ['**/*.json'], language: 'json/json', plugins: { json, test: { rules: { 'plugin-manifest': custom } } }, rules: { 'test/plugin-manifest': 'error' } }];
+
+  return new Linter({ cwd: CWD }).verify(text, config as never, { filename: A }).map((message) => message.message);
+}
+
+describe('a package.json that is not valid JSON', () => {
+  it('is reported on the manifest, together with the manifest\'s other findings', () => {
+    const messages = lintWithPackageJson('{', manifest({ name: 'x', skills: [] }));
+    expect(messages).toHaveLength(NAME_SKILLS_AND_PACKAGE_JSON_FINDINGS);
+    expect(messages.filter((message) => message.startsWith('The package.json beside the plugin is not valid JSON, so its version cannot be compared: '))).toHaveLength(1);
+  });
+
+  it.each([['a byte order mark', '\uFEFF{"version":"1.2.3"}'], ['a trailing comma', '{"version":"1.2.3",}']])('reads the version of a package.json with %s', (_label, packageJson) => {
+    expect(lintWithPackageJson(packageJson, manifest({ name: 'a', version: '1.2.3' }))).toStrictEqual([]);
+    expect(lintWithPackageJson(packageJson, manifest({ name: 'a', version: '9.9.9' }))).toStrictEqual(['The plugin version is 9.9.9 but package.json is 1.2.3; they must be equal.']);
   });
 });
