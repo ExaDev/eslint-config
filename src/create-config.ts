@@ -30,7 +30,7 @@ export interface ExadevConfigOptions {
   readonly turboEnv?: boolean;
   // true: enforce package.json key order (see src/rules/package-json-key-order.ts) regardless of syncpack. false: never enforce it. undefined (the default): auto-detect -- enabled unless the consumer's own project already has syncpack configured, since syncpack already produces this exact order for free.
   readonly packageJsonKeyOrder?: boolean;
-  /** true or an options object: lint agent SKILL.md files and Claude Code plugin manifests (see src/agent-skills.ts), throwing if `@eslint/markdown` or `@eslint/json` isn't resolvable; an options object also overrides the globs the rules apply to. false: never. undefined (the default): auto-detect, on if the working directory holds a marketplace, a skills/<name>/SKILL.md or a plugins/<plugin>/skills/<name>/SKILL.md, using whichever of the two optional peers resolves. */
+  /** true or an options object: lint agent SKILL.md files and Claude Code plugin manifests, throwing if `@eslint/markdown` or `@eslint/json` isn't resolvable; an options object also overrides the globs the rules apply to. false: never. undefined (the default): auto-detect, on if the working directory holds a marketplace, a skills/<name>/SKILL.md or a plugins/<plugin>/skills/<name>/SKILL.md, using whichever of the two optional peers resolves. */
   readonly agentSkills?: boolean | AgentSkillsOptions;
   // true: derive ESLint's ignores from .gitignore, throwing if no .gitignore exists. false: never derive it. undefined (the default): auto-detect -- on if the consumer's project has a .gitignore, silently off if it doesn't (a project with no .gitignore at all -- no version control set up yet -- has nothing for this to read).
   readonly gitignore?: boolean;

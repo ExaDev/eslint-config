@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { includeIgnoreFile } from '@eslint/config-helpers';
@@ -48,6 +48,23 @@ describe('default globs', () => {
     expect(DEFAULT_SKILL_FILES).toStrictEqual(['**/skills/*/SKILL.md']);
     expect(DEFAULT_MARKETPLACE_FILES).toStrictEqual(['.claude-plugin/marketplace.json']);
     expect(DEFAULT_PLUGIN_FILES).toStrictEqual(['**/.claude-plugin/plugin.json']);
+  });
+});
+
+describe('declaration comments', () => {
+  // The comments are published in the declaration files, where an identifier or a source path means nothing, so they carry the default globs themselves.
+  it('state each default in words and name no unexported identifier or source file', () => {
+    const source = readFileSync(join(import.meta.dirname, 'agent-skills.ts'), 'utf8');
+    const config = readFileSync(join(import.meta.dirname, 'create-config.ts'), 'utf8');
+    // A glob with a star before a slash cannot be written inside a doc comment, so each default is described in words that the constants below fix.
+    expect(DEFAULT_SKILL_FILES).toStrictEqual(['**/skills/*/SKILL.md']);
+    expect(DEFAULT_MARKETPLACE_FILES).toStrictEqual(['.claude-plugin/marketplace.json']);
+    expect(DEFAULT_PLUGIN_FILES).toStrictEqual(['**/.claude-plugin/plugin.json']);
+    expect(source).toContain('Defaults to every `skills/<name>/SKILL.md`, at any depth.');
+    expect(source).toContain('Defaults to the `.claude-plugin/marketplace.json` at the working directory.');
+    expect(source).toContain('Defaults to every `.claude-plugin/plugin.json`, at any depth.');
+    expect(source).not.toMatch(/Defaults to DEFAULT_/u);
+    expect(config).not.toContain('(see src/agent-skills.ts)');
   });
 });
 
