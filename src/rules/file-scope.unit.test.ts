@@ -127,6 +127,20 @@ describe('glob shapes minimatch reads differently', () => {
   });
 });
 
+describe('a brace group after a dollar sign', () => {
+  it.each(['${a,b}.md', 'a${b,c}', '{a,b}${c,d}', 'x/${a,b}/y'])('rejects %s, which minimatch leaves literal', (glob) => {
+    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`@exadev/eslint-config: "opt" must not put a brace group right after a "$", since minimatch leaves it literal and this package's glob dialect expands it: "${glob}". Put the "$" in a character class, "[$]", or drop it.`);
+  });
+
+  it.each(['a[$]{b,c}', '{a,b}$', 'a$b', '$a'])('accepts %s', (glob) => {
+    expect(() => { assertSupportedGlob(glob, 'opt'); }).not.toThrow();
+  });
+
+  it('leaves a specifier pattern alone, since only the package matcher reads it', () => {
+    expect(() => { assertSupportedGlob('${a,b}/x', 'opt', 'specifier'); }).not.toThrow();
+  });
+});
+
 describe('brace forms', () => {
   it.each(['{}', '{a}', '{a..c}', '{1..3}', 'x/{b}/y', '{a,{b}}', 'x{1..3}y'])('rejects the group with no comma in %s, naming the option and the whole glob', (glob) => {
     expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(new RegExp(`^@exadev/eslint-config: "opt" has a brace group with no comma, ".*", in "${glob.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}", which minimatch`, 'u'));

@@ -110,11 +110,14 @@ function hasUnreadableSegment(glob: string): boolean {
 }
 
 // Rejects the brace forms the two matchers read differently: a backslash before a backslash, a brace or a comma in a glob that uses braces (minimatch expands the braces before it reads escapes, so the escape does not protect the character), and a group whose alternative leaves an empty or dot path segment (`{a,}/x` expands to `/x`, which the package reads as `x`, and `{a,.}` leaves a dot segment the package drops), a group with no comma (`{a}` is literal to one and an alternative of one to the other, `{1..3}` a range to minimatch). Also names the option and the whole glob for an unbalanced brace.
-function assertBracesSupported(glob: string, optionName: string): void {
+function assertBracesSupported(glob: string, optionName: string, kind: GlobKind): void {
   const pattern = isExcludePattern(glob) ? glob.slice(1) : glob;
   if (!pattern.includes('{')) return;
   if (/\\[\\{},]/u.test(pattern)) {
     throw new Error(`@exadev/eslint-config: "${optionName}" must not escape a backslash, brace or comma in a glob that uses braces, since minimatch and this package's glob dialect read the escape differently: "${glob}". Put the character in a character class, "[,]", instead.`);
+  }
+  if (kind === 'file' && pattern.includes('${')) {
+    throw new Error(`@exadev/eslint-config: "${optionName}" must not put a brace group right after a "$", since minimatch leaves it literal and this package's glob dialect expands it: "${glob}". Put the "$" in a character class, "[$]", or drop it.`);
   }
   assertBraceGroups(pattern, glob, optionName);
   // A segment the glob already has without its braces is not the braces' doing, and is read the same whatever they hold.
@@ -182,7 +185,7 @@ export function assertSupportedGlob(glob: string, optionName: string, kind: Glob
   if (hasEscapedCaretClass(glob)) {
     throw new Error(`@exadev/eslint-config: "${optionName}" must not open a character class with an escaped caret, which this package's glob dialect cannot read the way ESLint does: "${glob}". Use "[^...]" to negate, or put the caret after the first member.`);
   }
-  assertBracesSupported(glob, optionName);
+  assertBracesSupported(glob, optionName, kind);
   const body = isExcludePattern(glob) ? glob.slice(1) : glob;
   for (const expanded of expandBraces(body)) {
     // minimatch expands braces before it reads anything else, so an extglob opener that the braces assemble (`{*,a}(b)` is `*(b)`) is an extglob to it.
