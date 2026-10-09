@@ -83,6 +83,43 @@ describe('assertSupportedGlob', () => {
   });
 });
 
+describe('a backslash in a segment that starts with a wildcard', () => {
+  it.each(['*\\x', '*\\.js', '*\\}', '*.\\x', '?\\x', 'a/*\\x', '{*\\x,b}', '!**/*\\.md', 'a/??\\x'])('rejects %s, naming the option and the whole glob', (glob) => {
+    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`@exadev/eslint-config: "opt" must not use a backslash in a segment that starts with "*" or "?", since minimatch reads such a segment literally and this package's glob dialect reads the backslash as an escape: "${glob}". Put the character in a character class, "[.]", instead.`);
+  });
+
+  it.each(['\\*x', 'x\\*', '*[\\x]', '*[.]js', 'a\\.b', '*.js', '?[\\.]x'])('accepts %s, and it selects what minimatch selects', (glob) => {
+    expect(() => { assertSupportedGlob(glob, 'opt'); }).not.toThrow();
+    const matches = createPathMatcher([glob], 'any');
+    const oracle = new Minimatch(glob, { dot: true });
+    for (const candidate of ['ax', 'a\\x', 'a.js', 'a}', '*x', 'x*', '\\x', 'a.b', 'a\\.b', 'xjs', '.js', 'a\\']) expect([glob, candidate, matches(candidate)]).toStrictEqual([glob, candidate, oracle.match(candidate)]);
+  });
+});
+
+describe('glob shapes minimatch reads differently', () => {
+  it.each(['/a', 'a/', '/', 'a//b', '!/a', 'src/**/'])('rejects the rooted, directory-only or empty-segment glob %s', (glob) => {
+    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`"opt" must not start or end with a slash or hold an empty segment`);
+  });
+
+  it.each(['!!a', '#a', '!#a', '!!!a'])('rejects the negation or comment shape %s', (glob) => {
+    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`"opt" must not start with a second "!" or a "#" after any exclusion marker`);
+  });
+
+  it.each(['./a', 'a/./b', 'a/.', 'a/..', '../a', '\\.\\./a', 'a/\\.', '{a,b}/.'])('rejects the dot segment in the file glob %s', (glob) => {
+    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`"opt" must not have a "." or ".." path segment`);
+  });
+
+  it('allows a relative specifier pattern its dot segments, since it is written as imported', () => {
+    expect(() => { assertSupportedGlob('./a', 'opt', 'specifier'); }).not.toThrow();
+    expect(() => { assertSupportedGlob('../a/**', 'opt', 'specifier'); }).not.toThrow();
+    expect(() => { assertSupportedGlob('/a', 'opt', 'specifier'); }).toThrow(/must not start or end with a slash/u);
+  });
+
+  it.each(['{*,a}(b)', 'x/{@,a}(b|c)', '{+,a}(b)', '{?,a}(b)'])('rejects the extglob that the braces of %s assemble', (glob) => {
+    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`"opt" must not use extglob syntax`);
+  });
+});
+
 describe('brace forms', () => {
   it.each(['{}', '{a}', '{a..c}', '{1..3}', 'x/{b}/y', '{a,{b}}', 'x{1..3}y'])('rejects the group with no comma in %s, naming the option and the whole glob', (glob) => {
     expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(new RegExp(`^@exadev/eslint-config: "opt" has a brace group with no comma, ".*", in "${glob.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}", which minimatch`, 'u'));
@@ -100,7 +137,7 @@ describe('brace forms', () => {
     expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`@exadev/eslint-config: "opt" has an unmatched "{" in "${glob}" (brace expansion). Rewrite it with balanced braces.`);
   });
 
-  it.each(['{a,b}x', '*.fake{,.js}', 'x/{a,b/c}/y', './x/{a,b}', '{a,{b,c}}x', 'x{a,b}{c,d}', '{ab,cd,ef}', 'a\\.b', '{a,b}[cd]'])('accepts %s, and it selects what minimatch selects', (glob) => {
+  it.each(['{a,b}x', '*.fake{,.js}', 'x/{a,b/c}/y', 'x/{a,b}', '{a,{b,c}}x', 'x{a,b}{c,d}', '{ab,cd,ef}', 'a\\.b', '{a,b}[cd]'])('accepts %s, and it selects what minimatch selects', (glob) => {
     expect(() => { assertSupportedGlob(glob, 'opt'); }).not.toThrow();
     const matches = createPathMatcher([glob], 'any');
     const oracle = new Minimatch(glob, { dot: true });
