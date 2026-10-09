@@ -34,7 +34,6 @@ export function createIgnoreMatcher(patterns: readonly string[]): IgnoreMatcher 
   const rules = patterns.map(compileRule);
 
   return (path, isDirectory) => {
-    if (path === '..' || path.startsWith('../')) return false;
     const subject = isDirectory ? `${path}/` : path;
 
     return rules.reduce((ignored, rule) => (rule.matcher.match(subject) ? !rule.negated : ignored), false);

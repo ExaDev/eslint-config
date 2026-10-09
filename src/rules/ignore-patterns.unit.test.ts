@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { ESLint } from 'eslint';
+import { Minimatch } from 'minimatch';
 import { describe, expect, it } from 'vitest';
 import { createIgnoreMatcher } from './ignore-patterns';
 
@@ -116,8 +117,14 @@ describe('createIgnoreMatcher', () => {
     expect(createIgnoreMatcher(['!**/keep.log', '**/*.log'])('a/keep.log', false)).toBe(true);
   });
 
-  it('ignores nothing outside the working directory', () => {
-    expect(createIgnoreMatcher(['**'])('../x', false)).toBe(false);
+  it('matches a path exactly as it is given, outside the working directory too, as minimatch does', () => {
+    expect(createIgnoreMatcher(['**'])('../x', false)).toBe(new Minimatch('**', { dot: true }).match('../x'));
+    expect(createIgnoreMatcher(['x'])('../x', true)).toBe(new Minimatch('x', { dot: true }).match('../x/'));
+  });
+
+  it.each([['./x', 'x'], ['!./x', 'x']])('strips the leading ./ of %s as ESLint does', (pattern, path) => {
+    const list = pattern.startsWith('!') ? ['**', pattern] : [pattern];
+    expect(createIgnoreMatcher(list)(path, false)).toBe(!pattern.startsWith('!'));
   });
 
   it.each(['/dist/', '/dist', '/dist/**', '/**/dist', '/*'])('matches nothing for %s, as ESLint does for a pattern with a leading slash', (pattern) => {
