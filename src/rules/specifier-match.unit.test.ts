@@ -7,6 +7,28 @@ function matches(patterns: readonly string[], specifier: string, file = 'src/rou
   return createSpecifierMatcher(patterns)(specifier, `${CWD}/${file}`, CWD);
 }
 
+describe('createSpecifierMatcher and a trailing globstar', () => {
+  it.each([
+    ['lod**', 'lodash', true],
+    ['lod**', 'lodash/fp', true],
+    ['lod**', 'lodash/fp/get', true],
+    ['lod**', 'underscore', false],
+    ['lod*', 'lodash', true],
+    ['lod*', 'lodash/fp', true],
+    ['lod*', 'underscore/fp', false],
+    ['**', 'lodash/fp', true],
+    ['**', 'fs', true],
+    ['a/**', 'a', true],
+    ['a/**', 'a/b/c', true],
+    ['a/**', 'ab', false],
+    ['a/b**', 'a/bc', true],
+    ['a/b**', 'a/bc/d', true],
+    ['a/b**', 'a', false],
+  ])('pattern %s selects %s: %s', (pattern, specifier, expected) => {
+    expect(matches([pattern], specifier)).toBe(expected);
+  });
+});
+
 describe('createSpecifierMatcher', () => {
   it('matches a bare specifier exactly, and everything beneath it', () => {
     expect(matches(['fs'], 'fs')).toBe(true);

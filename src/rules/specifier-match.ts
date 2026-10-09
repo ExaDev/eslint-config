@@ -30,7 +30,8 @@ function withSubpaths(pattern: string): readonly string[] {
   // A pattern ending in `/**` also selects the directory it names (`src/db/**` selects an import that resolves to `src/db`), which minimatch's `a/**` does not.
   if (body.endsWith('/**')) return [pattern, `${prefix}${body.slice(0, -'/**'.length)}`];
 
-  return body.endsWith('**') ? [pattern] : [pattern, `${prefix}${body}/**`];
+  // A bare `**` segment already selects everything; a `**` inside a segment (`lod**`) is only a wildcard, so the pattern still needs its subpaths.
+  return body === '**' ? [pattern] : [pattern, `${prefix}${body}/**`];
 }
 
 function bodyOf(pattern: string): string {
