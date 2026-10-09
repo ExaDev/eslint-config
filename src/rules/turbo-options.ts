@@ -6,7 +6,7 @@ import { hasOnlyKeys } from './option-keys';
 import type { TurboDelegate } from './turbo-commands';
 
 /**
- * A place `@boundaries-ignore` comments are accepted, with the reason they are. `files` are globs relative to ESLint's working directory, in the dialect of the workspace `packages` globs.
+ * A place `@boundaries-ignore` comments are accepted, with the reason they are. `files` are minimatch globs relative to ESLint's working directory (a leading `!` excludes).
  */
 export interface AllowedBoundariesIgnore {
   readonly files: readonly string[];

@@ -11,7 +11,7 @@ const OPTION_NAME = 'no-multiline-template-literal';
  * The options of `exadev/no-multiline-template-literal`.
  */
 export interface NoMultilineTemplateLiteralOptions {
-  // Globs of files the rule skips entirely, in the `fileGlobsSchema` dialect (a leading `!` excludes). For a file whose multi-line strings are the point (fixtures, prompts, generated text).
+  // Globs of files the rule skips entirely, as minimatch globs (a leading `!` excludes). For a file whose multi-line strings are the point (fixtures, prompts, generated text).
   readonly allowFiles?: readonly string[];
 }
 
