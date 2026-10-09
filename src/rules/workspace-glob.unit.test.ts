@@ -61,11 +61,10 @@ describe('segmentToRegExp', () => {
     expect(pattern.test('c')).toBe(false);
   });
 
-  it('reads a backslash inside a character class as escaping the next character, so the class holds that character and not the backslash', () => {
+  it('preserves a literal backslash inside a character class body, rather than silently deleting it', () => {
     const pattern = segmentToRegExp('[a\\b]');
-    expect(pattern.test('b')).toBe(true);
+    expect(pattern.test('\\')).toBe(true);
     expect(pattern.test('a')).toBe(true);
-    expect(pattern.test('\\')).toBe(false);
     expect(pattern.test('c')).toBe(false);
   });
 

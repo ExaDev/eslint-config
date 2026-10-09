@@ -10,36 +10,6 @@ const REGEXP_SPECIAL_CHARS = /[.+^${}()|\]\\]/gu;
 // The FULL set of regex metacharacters, unlike REGEXP_SPECIAL_CHARS above: an escaped character (the one immediately after a glob "\\") deliberately bypasses '*'/'?'/'['s own dedicated branches, specifically so an escaped wildcard never carries its usual meaning, so it needs '*', '?' and '[' escaped here too, characters the default branch's own escape set can safely omit only because its own callers never let one of them reach it un-escaped.
 const ESCAPE_ANY_REGEXP_CHAR = /[.*+?^${}()|[\]\\]/gu;
 
-// The index of the ']' closing the class whose body starts at `bodyStart`, or -1. A ']' in the leading position is a member, so the search starts one past it; a backslash makes the character after it a member (so `\]` does not close the class), which is how minimatch reads it.
-function classCloseIndex(segment: string, bodyStart: number): number {
-  let index = bodyStart + 1;
-  if (segment[bodyStart] === '\\') index = bodyStart + 2;
-  while (index < segment.length) {
-    if (segment[index] === '\\') index += 2;
-    else if (segment[index] === ']') return index;
-    else index += 1;
-  }
-
-  return -1;
-}
-
-// The characters a 'u'-flag regex class needs a backslash before to take them literally; any other character is written as it is, since 'u' rejects an identity escape for the rest.
-const CLASS_ESCAPES: ReadonlySet<string> = new Set(['\\', ']', '[', '^', '-', '$', '.', '*', '+', '?', '(', ')', '{', '}', '|', '/']);
-
-// The regex class body for a glob class body. A backslash escapes the character after it, as in minimatch, so that character is a plain member (`\]`, `\-`, `\^`, `\\`) and the backslash itself is not one; a trailing backslash with nothing to escape is a literal member.
-function escapeClassBody(body: string): string {
-  let result = '';
-  for (let index = 0; index < body.length; index += 1) {
-    const char = requireChar(body, index);
-    const literal = char === '\\' && index + 1 < body.length ? requireChar(body, (index += 1)) : char;
-    // An escaped character, a trailing backslash and a leading-position ']' are members and not syntax; every other unescaped character keeps its class meaning ("-" for a range, "[" and "^" as themselves).
-    const isMember = literal !== char || char === '\\' || char === ']';
-    result += isMember && CLASS_ESCAPES.has(literal) ? `\\${literal}` : literal;
-  }
-
-  return result;
-}
-
 /**
  * Builds the one-segment matcher behind every non-'**' pattern segment: '*' becomes zero-or-more characters, '?' becomes exactly one, a balanced '[...]' becomes a regex character class (a leading '!' or '^' negated the glob way, translated to the single '^' regex negation understands), a backslash escapes the very next character (turning off whatever special meaning it would otherwise carry), and every other character is escaped so a literal segment (no wildcard or class at all) matches only its own exact name, same as before this function existed. Exported so its own 'u' flag (needed for the same reason deriveRank's nameRanks patterns carry one, see workspace-graph.unit.test.ts) can be asserted directly, independent of any particular directory name this module is ever exercised against.
  */
@@ -75,7 +45,7 @@ export function segmentToRegExp(segment: string): RegExp {
       const marker = segment[bodyStart];
       const negated = marker === '!' || marker === '^';
       if (negated) bodyStart += 1;
-      const closeIndex = classCloseIndex(segment, bodyStart);
+      const closeIndex = segment.indexOf(']', bodyStart + 1);
       if (closeIndex === -1) {
         // An unmatched '[' is not a character class at all, just a literal character: escaped the same way every other non-wildcard character is, rather than left to open a regex class that never closes.
         source += '\\[';
@@ -83,8 +53,8 @@ export function segmentToRegExp(segment: string): RegExp {
         continue;
       }
       const body = segment.slice(bodyStart, closeIndex);
-      // A backslash makes the character after it a literal member, as in minimatch (escapeClassBody): an escaped ']' does not close the class (classCloseIndex). The member list is regex-escaped there, since a 'u'-flag class treats an unescaped ']' as its close and a backslash would start an escape; an unescaped '-' keeps its range meaning and an unescaped '^' past the first position is itself.
-      const classBody = escapeClassBody(body);
+      // A backslash inside the class body is escaped so it can never itself start an unintended regex escape sequence, and a literal ']' (only ever reachable here as the leading-position member the check above just admitted) is escaped too, since a 'u'-flag regex class never treats an unescaped ']' as anything other than its own close, unlike a POSIX bracket expression's leading-position exception; every other character (including a "-" range or a "^" past the first position) is passed through verbatim, since glob character classes and regex character classes otherwise share that same core syntax.
+      const classBody = body.replace(/\\/gu, '\\\\').replace(/\]/gu, '\\]');
       source += `[${negated ? '^' : ''}${classBody}]`;
       index = closeIndex + 1;
       continue;
