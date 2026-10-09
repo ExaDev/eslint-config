@@ -45,7 +45,7 @@ export function parseFrontmatter(yamlText: string): ParsedFrontmatter {
 }
 
 /**
- * The `name` a SKILL.md's frontmatter declares, or `undefined` when the document has no frontmatter, the frontmatter is not a valid mapping, or `name` is not a non-empty string. A file that cannot name itself is reported by `skill-frontmatter`, so cross-file checks simply do not count it.
+ * The `name` a SKILL.md's frontmatter declares, or `undefined` when the document has no frontmatter, the frontmatter is not a valid mapping, or `name` is not a string with text in it. The name is returned trimmed of surrounding whitespace and otherwise exactly as written, the way the skills CLI compares names. A file that cannot name itself is reported by `skill-frontmatter`, so cross-file checks simply do not count it.
  */
 export function readSkillName(text: string): string | undefined {
   const yamlText = extractFrontmatter(text);
@@ -54,5 +54,7 @@ export function readSkillName(text: string): string | undefined {
   if (parsed.kind !== 'mapping') return undefined;
   const { name } = parsed.value;
 
-  return typeof name === 'string' && name.length > 0 ? name : undefined;
+  const trimmed = typeof name === 'string' ? name.trim() : '';
+
+  return trimmed.length > 0 ? trimmed : undefined;
 }

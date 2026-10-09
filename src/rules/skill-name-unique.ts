@@ -114,12 +114,14 @@ export function createSkillNameUniqueRule(fs: WorkspaceFs = realWorkspaceFs): Sk
           const parsed = parseFrontmatter(node.value);
           if (parsed.kind !== 'mapping') return;
           const { name } = parsed.value;
-          if (typeof name !== 'string' || name.length === 0) return;
+          // Trimmed and otherwise exact, as the skills CLI de-duplicates (it trims a name and then compares strings), so a quoted " a" and "a" are one name, while a fullwidth or decomposed spelling is another.
+          const trimmed = typeof name === 'string' ? name.trim() : '';
+          if (trimmed.length === 0) return;
           const others = skillsUnder(context.cwd, options)
-            .filter((entry) => entry.name === name && isOtherExistingFile(entry))
+            .filter((entry) => entry.name === trimmed && isOtherExistingFile(entry))
             .map((entry) => entry.path)
             .sort();
-          if (others.length > 0) context.report({ node, messageId: 'duplicateName', data: { name, paths: others.join(', ') } });
+          if (others.length > 0) context.report({ node, messageId: 'duplicateName', data: { name: trimmed, paths: others.join(', ') } });
         },
       };
     },
