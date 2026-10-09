@@ -37,7 +37,7 @@ const ORACLE_GLOBS = [
   // Wildcards, dotfiles, globstars and unicode.
   '*.js', '.*', '**/*.md', '**/.hidden/**', '**', '**/a', 'a/**', 'a/**/x', '*/x', '?x', '??', 'é*', '[à-ü]x', '日本/*', '*', 'skills/*/SKILL.md', '**/skills/*/SKILL.md', './a', './a/**',
   // Shapes that were once rejected: rooted, directory-only, doubled slash, dot segments, comment, negation.
-  '/a', 'a//b', 'a/./b', '../a', '#a', '!!a', 'a$',
+  'a//b', 'a/./b', '../a', '#a', '!!a', 'a$',
 ];
 
 describe('createPathMatcher against ESLint', () => {
@@ -70,6 +70,14 @@ describe('assertSupportedGlob', () => {
     expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`@exadev/eslint-config: "opt" has a glob that minimatch cannot compile: "${glob}"`);
   });
 
+  it.each(['/src/**', '/src/**/*.ts', 'src/**/', 'src/', '!/src/**', '/'])('rejects the file glob %s, which starts or ends with a slash and so selects nothing', (glob) => {
+    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`@exadev/eslint-config: "opt" has a file glob that starts or ends with a slash: "${glob}". A file path is neither absolute nor a directory, so this selects nothing.`);
+  });
+
+  it.each(['/abs/x', '/src/**', 'src/'])('accepts %s as a specifier pattern', (glob) => {
+    expect(() => { assertSupportedGlob(glob, 'opt', 'specifier'); }).not.toThrow();
+  });
+
   it.each(['#a', '!#a'])('rejects the comment %s, which matches nothing', (glob) => {
     expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`@exadev/eslint-config: "opt" has a glob that starts with "#", which minimatch reads as a comment that matches nothing: "${glob}"`);
   });
@@ -78,7 +86,7 @@ describe('assertSupportedGlob', () => {
     expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(/has a glob with a second "!"/u);
   });
 
-  it.each(['@(a|b)/x', '[[:alpha:]]', 'x/[c-a]'.replace('c-a', 'a-c'), '{a,b', '${a,b}', '*\\x', '/a', './a', '../a', 'a//b', '{a}'])('accepts %s, which minimatch compiles', (glob) => {
+  it.each(['@(a|b)/x', '[[:alpha:]]', 'x/[c-a]'.replace('c-a', 'a-c'), '{a,b', '${a,b}', '*\\x', './a', '../a', 'a//b', '{a}'])('accepts %s, which minimatch compiles', (glob) => {
     expect(() => { assertSupportedGlob(glob, 'opt'); }).not.toThrow();
   });
 
