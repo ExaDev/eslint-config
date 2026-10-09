@@ -1,6 +1,6 @@
 import type { JSONSchema4 } from '@typescript-eslint/utils/json-schema';
 import { isRecord } from '../is-record';
-import { assertNoExtglob, createFileScope, readFileGlobs, type FileScope } from './file-scope';
+import { assertSupportedGlob, createFileScope, readFileGlobs, type FileScope } from './file-scope';
 import { isExcludePattern } from './workspace-glob';
 
 /**
@@ -57,7 +57,7 @@ export function readRequiredStrings(entry: Readonly<Record<string, unknown>>, fi
  */
 export function readSpecifierPatterns(entry: Readonly<Record<string, unknown>>, field: string, optionName: string): readonly string[] {
   const patterns = readRequiredStrings(entry, field, optionName);
-  for (const pattern of patterns) assertNoExtglob(pattern, `${optionName}.${field}`);
+  for (const pattern of patterns) assertSupportedGlob(pattern, `${optionName}.${field}`);
 
   return patterns;
 }

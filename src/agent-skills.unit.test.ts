@@ -121,6 +121,8 @@ describe('option validation', () => {
     ['a non-array skillFiles', { skillFiles: 'a' }, /"agentSkills.skillFiles" must be an array of glob strings/u],
     ['an exclude-only marketplaceFiles', { marketplaceFiles: ['!a'] }, /"agentSkills.marketplaceFiles" must contain at least one glob that does not start with "!"/u],
     ['an extglob skillFiles entry', { skillFiles: ['skills/@(a|b)/SKILL.md'] }, /"agentSkills.skillFiles" must not use extglob syntax.*"skills\/@\(a\|b\)\/SKILL\.md"/u],
+    ['a POSIX class in skillFiles', { skillFiles: ['skills/[[:alpha:]]/SKILL.md'] }, /"agentSkills.skillFiles" must not use a POSIX character class.*"skills\/\[\[:alpha:\]\]\/SKILL\.md"/u],
+    ['a reversed range in pluginFiles', { pluginFiles: ['plugins/[c-a]/.claude-plugin/plugin.json'] }, /"agentSkills.pluginFiles" has a character class in .* that is not valid: .*out of order/u],
     ['an extglob marketplaceFiles entry', { marketplaceFiles: ['+(a)/.claude-plugin/marketplace.json'] }, /"agentSkills.marketplaceFiles" must not use extglob syntax/u],
     ['an extglob pluginFiles entry', { pluginFiles: ['a/!(b)/.claude-plugin/plugin.json', '**/.claude-plugin/plugin.json'] }, /"agentSkills.pluginFiles" must not use extglob syntax/u],
     ['an empty-string pluginFiles entry', { pluginFiles: [''] }, /"agentSkills.pluginFiles" must contain only non-empty strings/u],

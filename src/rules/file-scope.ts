@@ -63,6 +63,49 @@ export function assertNoExtglob(glob: string, optionName: string): void {
   }
 }
 
+// Whether the glob holds a POSIX character class (`[[:alpha:]]`). minimatch reads the inner `[:name:]` as one class, while this dialect closes the outer class at the first `]`, so the two select different files.
+function hasPosixClass(glob: string): boolean {
+  const pattern = isExcludePattern(glob) ? glob.slice(1) : glob;
+  let index = 0;
+  while (index < pattern.length) {
+    if (pattern[index] === '\\') {
+      index += 2;
+      continue;
+    }
+    const end = pattern[index] === '[' ? classEnd(pattern, index) : -1;
+    if (end === -1) {
+      index += 1;
+      continue;
+    }
+    const body = pattern.slice(index + 1, end);
+    if (body.includes('[:') && body.endsWith(':')) return true;
+    index = end + 1;
+  }
+
+  return false;
+}
+
+/**
+ * Throws when `glob` uses syntax this package's glob dialect reads differently from the minimatch ESLint applies to the same glob, so that the two would select different files: extglob (`assertNoExtglob`), a POSIX character class (`[[:alpha:]]`), or a character class that is not valid, a reversed range such as `[c-a]`. The error names `optionName` and the glob. The one check every reader of a glob or specifier list calls.
+ */
+export function assertSupportedGlob(glob: string, optionName: string): void {
+  assertNoExtglob(glob, optionName);
+  if (hasPosixClass(glob)) {
+    throw new Error(`@exadev/eslint-config: "${optionName}" must not use a POSIX character class, which this package's glob dialect does not support: "${glob}". List the characters or a range instead.`);
+  }
+  const body = isExcludePattern(glob) ? glob.slice(1) : glob;
+  for (const expanded of expandBraces(body)) {
+    for (const segment of normalizeGlobSegments(splitPathSegments(expanded))) {
+      try {
+        segmentToRegExp(segment);
+      } catch (error) {
+        if (!(error instanceof SyntaxError)) throw error;
+        throw new Error(`@exadev/eslint-config: "${optionName}" has a character class in "${glob}" that is not valid: ${error.message}`, { cause: error });
+      }
+    }
+  }
+}
+
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
 }
@@ -77,8 +120,7 @@ export function readFileGlobs(value: unknown, optionName: string): readonly stri
   if (new Set(value).size !== value.length) throw new Error(`${prefix} not contain duplicate globs.`);
   if (!value.some((item) => !isExcludePattern(item))) throw new Error(`${prefix} contain at least one glob that does not start with "!".`);
   for (const pattern of value) {
-    assertNoExtglob(pattern, optionName);
-    void expandBraces(pattern);
+    assertSupportedGlob(pattern, optionName);
   }
 
   return value;
