@@ -227,7 +227,7 @@ describe('README agent skills example, in a repository that has a skills layout'
   });
 
   async function messagesOf(blocks: readonly Linter.Config[], file: string): Promise<readonly string[]> {
-    const [result] = await new ESLint({ cwd, overrideConfigFile: true, overrideConfig: blocks }).lintFiles([file]);
+    const [result] = await new ESLint({ cwd, overrideConfigFile: true, overrideConfig: [...blocks] }).lintFiles([file]);
 
     return (result?.messages ?? []).map((message) => message.message);
   }
