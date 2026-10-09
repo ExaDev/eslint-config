@@ -148,6 +148,31 @@ describe('createPathMatcher', () => {
   });
 });
 
+describe('createPathMatcher with dot matching on any segment', () => {
+  it('lets a wildcard and ** match a dot-prefixed segment, as ESLint does for a config\'s files', () => {
+    const matches = createPathMatcher(['**/skills/*/SKILL.md', 'docs/*'], 'any');
+    expect(matches('.agents/skills/x/SKILL.md')).toBe(true);
+    expect(matches('a/.hidden/skills/x/SKILL.md')).toBe(true);
+    expect(matches('skills/.x/SKILL.md')).toBe(true);
+    expect(matches('docs/.hidden')).toBe(true);
+  });
+
+  it('still honours a ! exclude, a literal segment and the length of the path', () => {
+    const matches = createPathMatcher(['**/skills/*/SKILL.md', '!.agents/**'], 'any');
+    expect(matches('skills/x/SKILL.md')).toBe(true);
+    expect(matches('.agents/skills/x/SKILL.md')).toBe(false);
+    expect(matches('.agents/skills/x/y/SKILL.md')).toBe(false);
+    expect(createPathMatcher(['**'], 'any')('../x')).toBe(false);
+  });
+
+  it('is not what the default dialect does, where neither a wildcard nor ** crosses a dot-prefixed segment', () => {
+    for (const matches of [createPathMatcher(['**/skills/*/SKILL.md']), createPathMatcher(['**/skills/*/SKILL.md'], 'explicit')]) {
+      expect(matches('.agents/skills/x/SKILL.md')).toBe(false);
+      expect(matches('skills/x/SKILL.md')).toBe(true);
+    }
+  });
+});
+
 describe('relativeToCwd', () => {
   it('spells the path relative to cwd with forward slashes, and starts with .. outside it', () => {
     expect(relativeToCwd('/repo/src/a.ts', '/repo')).toBe('src/a.ts');

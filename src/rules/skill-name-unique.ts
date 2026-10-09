@@ -5,7 +5,7 @@ import { parseFrontmatter, readSkillName, SKILL_FILE_NAME } from './skill-docume
 import { realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
 
 /**
- * The options of `skill-name-unique`. `files` limits which SKILL.md files are compared (the dialect of every file glob in this package, a leading `!` excluding); omitted, every SKILL.md under the working directory counts.
+ * The options of `skill-name-unique`. `files` limits which SKILL.md files are compared (the glob dialect of this package, a leading `!` excluding, but with a wildcard and `**` matching a dot-prefixed directory as they do in an ESLint config's `files`, so the comparison covers the files ESLint lints); omitted, every SKILL.md under the working directory counts.
  */
 export interface SkillNameUniqueOptions {
   readonly files?: readonly string[];
@@ -63,7 +63,7 @@ export function createSkillNameUniqueRule(fs: WorkspaceFs = realWorkspaceFs): Sk
     const key = JSON.stringify([cwd, files]);
     const cached = scans.get(key);
     if (cached !== undefined) return cached;
-    const scanned = scanSkillFiles(fs, cwd, files === undefined ? () => true : createPathMatcher(files));
+    const scanned = scanSkillFiles(fs, cwd, files === undefined ? () => true : createPathMatcher(files, 'any'));
     scans.set(key, scanned);
 
     return scanned;
