@@ -57,7 +57,8 @@ function nameProblems(name: unknown, directory: string): readonly SkillFrontmatt
 }
 
 function descriptionProblems(description: unknown): readonly SkillFrontmatterProblem[] {
-  if (typeof description !== 'string' || description.length === 0) return [{ messageId: 'invalidDescription', data: {} }];
+  // A description of only whitespace tells the model that reads it nothing, so it counts as empty. The length limit counts the value as written, untrimmed: the limit is on what the loader puts in front of the model, and a block scalar's trailing newline is part of that.
+  if (typeof description !== 'string' || description.trim().length === 0) return [{ messageId: 'invalidDescription', data: {} }];
   if (lengthOf(description) > MAX_SKILL_DESCRIPTION_LENGTH) return [{ messageId: 'descriptionTooLong', data: { max: String(MAX_SKILL_DESCRIPTION_LENGTH) } }];
 
   return [];
@@ -70,7 +71,7 @@ function internalProblems(metadata: unknown): readonly SkillFrontmatterProblem[]
 }
 
 /**
- * Checks a parsed SKILL.md frontmatter mapping against the parts of the Agent Skills specification that decide whether a skill loads: `name` (non-empty, hyphenated lower case, within its length limit, equal to `directory`), `description` (non-empty, within its length limit) and `metadata.internal` (a boolean when present). Any other key is accepted, since the specification keeps growing (`argument-hint`, `disable-model-invocation`, `allowed-tools`, `model` and `metadata` among them). `directory` is the name of the directory holding the SKILL.md.
+ * Checks a parsed SKILL.md frontmatter mapping against the parts of the Agent Skills specification that decide whether a skill loads: `name` (non-empty, hyphenated lower case, within its length limit, equal to `directory`), `description` (not empty or only whitespace, within its length limit) and `metadata.internal` (a boolean when present). Any other key is accepted, since the specification keeps growing (`argument-hint`, `disable-model-invocation`, `allowed-tools`, `model` and `metadata` among them). `directory` is the name of the directory holding the SKILL.md.
  */
 export function checkSkillFrontmatter(frontmatter: Readonly<Record<string, unknown>>, directory: string): readonly SkillFrontmatterProblem[] {
   return [...nameProblems(frontmatter['name'], directory), ...descriptionProblems(frontmatter['description']), ...internalProblems(frontmatter['metadata'])];
@@ -97,7 +98,7 @@ export const skillFrontmatter: SkillFrontmatterRuleDefinition = {
       nameFormat: 'The skill name "{{name}}" must be lower-case letters and digits in hyphen-separated runs.',
       nameTooLong: 'The skill name must be at most {{max}} characters.',
       nameMismatch: 'The skill name "{{name}}" must equal its directory name "{{directory}}".',
-      invalidDescription: 'The frontmatter must set "description" to a non-empty string; agents match it against the task.',
+      invalidDescription: 'The frontmatter must set "description" to a string with text in it; agents match it against the task.',
       descriptionTooLong: 'The skill description must be at most {{max}} characters.',
       invalidInternal: '"metadata.internal" must be a boolean.',
     },
