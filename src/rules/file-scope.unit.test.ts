@@ -16,7 +16,7 @@ describe('fileGlobsSchema', () => {
 
 // ESLint selects files with minimatch, so for every class form below the package matcher must select exactly the candidates minimatch does: a glob handed to both would otherwise lint files the duplicate check cannot match.
 describe('character classes against minimatch', () => {
-  const candidates = [']x', '\\]x', 'ax', 'bx', 'x', 'a/a/x', 'a/]/x', 'a/b/x', 'a/\\b]/x', 'a]', 'b]', ']', 'a', 'b', '-', '^', '!', 'c', '[', '\\'];
+  const candidates = ['\\x', '\\\\x', ']x', '\\]x', 'ax', 'bx', 'x', 'a/a/x', 'a/]/x', 'a/b/x', 'a/\\b]/x', 'a]', 'b]', ']', 'a', 'b', '-', '^', '!', 'c', '[', '\\'];
   it.each([
     '[\\]]x',
     'a/[a\\]b]/x',
@@ -33,6 +33,9 @@ describe('character classes against minimatch', () => {
     '[!a]x',
     '[ab]',
     'a/[\\]]/x',
+    '[\\\\]x',
+    '[\\\\\\]]x',
+    '[\\\\]]x',
   ])('selects what minimatch selects for %s', (glob) => {
     const matches = createPathMatcher([glob], 'any');
     const oracle = new Minimatch(glob, { dot: true });
