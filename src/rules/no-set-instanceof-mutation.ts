@@ -1,5 +1,6 @@
 import { AST_NODE_TYPES, ESLintUtils, TSESLint, type TSESTree } from '@typescript-eslint/utils';
 import { asIdentifierName } from './scope-guards';
+import { isEstreeSource } from './estree-source';
 
 /* `instanceof Set` narrows any constituent of a union down to the global `Set<T>` interface itself, with no way to preserve a `ReadonlySet` modifier through the narrowing — narrowing a parameter or local variable whose real type includes a `ReadonlySet` through `instanceof Set` silently produces a fully mutable `Set<T>` inside the guarded branch. Confirmed directly: `function mutate(input: ReadonlySet<number> | number): void { if (input instanceof Set) { input.add(1); } }` compiles cleanly under `tsc --strict` with zero errors, even though `ReadonlySet<number>` has no `.add` method at all — a caller's genuinely read-only set (`const frozen: ReadonlySet<number> = new Set([1, 2, 3]); mutate(frozen);`) gets mutated despite its own declaration. The identical hole reproduces for a plain local: `const frozen: ReadonlySet<number> = getShared(); if (frozen instanceof Set) { frozen.add(1); }` also compiles clean under `tsc --strict`, since `instanceof Set`'s own narrowing behaviour is a property of the guard, not of whether the narrowed binding happens to be a parameter or a `const`/`let` declared in the function body.
    
@@ -61,6 +62,7 @@ const noSetInstanceofMutation = createRule({
   },
   defaultOptions: [],
   create(context) {
+    if (!isEstreeSource(context.sourceCode)) return {};
     const services = ESLintUtils.getParserServices(context);
     const checker = services.program.getTypeChecker();
 

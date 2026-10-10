@@ -2,6 +2,7 @@ import { AST_NODE_TYPES, ASTUtils, ESLintUtils, TSESLint, type TSESTree } from '
 import type { JSONSchema4 } from '@typescript-eslint/utils/json-schema';
 import { isRecord } from '../is-record';
 import { assertOnlyKeys, readRequiredStrings, readSpecifierPatterns } from './file-entry';
+import { isEstreeSource } from './estree-source';
 import { createSpecifierMatcher, isRelativeSpecifier, type SpecifierMatcher } from './specifier-match';
 import { hasUseClientDirective } from './use-client-directive';
 
@@ -90,7 +91,7 @@ const noExternalMemberJsxTag = createRule<[unknown], MessageIds>({
   create(context, [options]) {
     const { allowSource, allowTags } = readNoExternalMemberJsxTagOptions(options);
     const { sourceCode } = context;
-    if (hasUseClientDirective(sourceCode.ast)) return {};
+    if (!isEstreeSource(sourceCode) || hasUseClientDirective(sourceCode.ast)) return {};
 
     return {
       JSXOpeningElement(node) {

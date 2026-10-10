@@ -2,6 +2,7 @@ import { AST_NODE_TYPES, ESLintUtils } from '@typescript-eslint/utils';
 import type { TSESTree } from '@typescript-eslint/utils';
 import * as ts from 'typescript';
 import { asExpression } from './ts-node-guards';
+import { isEstreeSource } from './estree-source';
 
 /* A numeric enum accepts any bare `number`, not just its own members — confirmed directly: `enum Direction { Up, Down } declare const n: number; const d: Direction = n;` type-checks cleanly under `tsc --strict`, with no cast needed. TypeScript DOES reject an invalid numeric LITERAL assigned the same way (`const d: Direction = 999;` is a real error) — the hole is specifically for a non-literal `number` value, where the compiler has no literal to range-check against.
    
@@ -29,6 +30,7 @@ const noEnumNumberWidening = createRule({
     defaultOptions: [],
   },
   create(context) {
+    if (!isEstreeSource(context.sourceCode)) return {};
     const services = ESLintUtils.getParserServices(context);
     const checker = services.program.getTypeChecker();
 

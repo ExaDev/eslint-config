@@ -1,5 +1,6 @@
 import { AST_NODE_TYPES, ESLintUtils, TSESLint, type TSESTree } from '@typescript-eslint/utils';
 import { asIdentifierName } from './scope-guards';
+import { isEstreeSource } from './estree-source';
 
 /* TypeScript's lib.es2015.collection.d.ts declares `Map<K, V> extends ReadonlyMap<K, V>` and `instanceof` narrowing has no way to express "this branch is still ReadonlyMap, just confirmed to actually be backed by a Map at runtime" — narrowing a parameter or local variable whose real type includes a ReadonlyMap through `instanceof Map` silently produces the full mutable `Map<K, V>` inside the guarded branch. Confirmed directly: `function mutate(input: ReadonlyMap<string, number> | number): void { if (input instanceof Map) { input.set('x', 1); } }` compiles cleanly under `tsc --strict` with zero errors, even though `input`'s ReadonlyMap constituent has no `.set` method at all — a caller's genuinely read-only view onto a shared Map gets mutated despite the declared type saying it cannot be. The identical hole reproduces for a plain local: `const frozen: ReadonlyMap<string, number> = getShared(); if (frozen instanceof Map) { frozen.set('x', 1); }` also compiles clean under `tsc --strict`, since `instanceof Map`'s own narrowing behaviour is a property of the guard, not of whether the narrowed binding happens to be a parameter or a `const`/`let` declared in the function body.
    
@@ -62,6 +63,7 @@ const noMapInstanceofMutation = createRule({
   },
   defaultOptions: [],
   create(context) {
+    if (!isEstreeSource(context.sourceCode)) return {};
     const services = ESLintUtils.getParserServices(context);
     const checker = services.program.getTypeChecker();
 

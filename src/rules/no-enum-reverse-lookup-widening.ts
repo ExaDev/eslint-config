@@ -2,6 +2,7 @@ import { AST_NODE_TYPES, ESLintUtils } from '@typescript-eslint/utils';
 import type { TSESTree } from '@typescript-eslint/utils';
 import * as ts from 'typescript';
 import { asExpression } from './ts-node-guards';
+import { isEstreeSource } from './estree-source';
 
 /* A numeric enum's reverse mapping — indexing the enum object itself with a number, e.g. `Direction[n]` — is typed as plain `string` for ANY number, including one outside the enum's actual member range, where it genuinely returns `undefined` at runtime. Confirmed directly via the TypeScript compiler API: `enum Direction { Up, Down } declare const n: number; const label: string = Direction[n]; label.toUpperCase();` type-checks cleanly under `tsc --strict` with zero errors, then throws at runtime for any `n` outside `0`/`1` because `Direction[999]` is `undefined`, not a `string`.
    
@@ -34,6 +35,7 @@ const noEnumReverseLookupWidening = createRule({
     defaultOptions: [],
   },
   create(context) {
+    if (!isEstreeSource(context.sourceCode)) return {};
     const services = ESLintUtils.getParserServices(context);
     const checker = services.program.getTypeChecker();
 
