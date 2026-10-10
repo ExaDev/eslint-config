@@ -150,7 +150,7 @@ describe('plugin.configs.react/.nextjs options forwarding', () => {
     const buildReactConfig = vi.fn(() => []);
     vi.doMock('./react', () => ({ buildReactConfig, JSX_FILE_PATTERNS: ['**/*.jsx', '**/*.tsx'] }));
     const freshPlugin = (await import('./plugin')).default;
-    void freshPlugin.configs?.['react'];
+    expect(freshPlugin.configs?.['react']).toEqual([]);
     expect(buildReactConfig).toHaveBeenCalledWith({ enabled: true });
     vi.doUnmock('./react');
     vi.resetModules();
@@ -161,7 +161,7 @@ describe('plugin.configs.react/.nextjs options forwarding', () => {
     const buildNextjsConfig = vi.fn(() => []);
     vi.doMock('./nextjs', () => ({ buildNextjsConfig }));
     const freshPlugin = (await import('./plugin')).default;
-    void freshPlugin.configs?.['nextjs'];
+    expect(freshPlugin.configs?.['nextjs']).toEqual([]);
     expect(buildNextjsConfig).toHaveBeenCalledWith({ enabled: true, plugin: freshPlugin });
     vi.doUnmock('./nextjs');
     vi.resetModules();
