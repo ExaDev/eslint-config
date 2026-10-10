@@ -1,4 +1,3 @@
-import type { TSESLint } from '@typescript-eslint/utils';
 import { buildAgentSkillsConfig, type AgentSkillsOptions } from './agent-skills';
 import type { ConfigArrayValue, PublicConfigArray } from './config-types';
 import { buildGitignoreConfig } from './gitignore';
@@ -68,7 +67,7 @@ function withWorkspaceGroups(turbo: TurboOptions, workspaceArchitecture: Workspa
  *
  * The tri-state per feature threads straight into each builder's own `enabled` option: true forces on (throwing if the underlying peer isn't resolvable), false forces off (skipping resolution entirely), undefined auto-detects (silently empty if unresolvable, or if an equivalent tool, syncpack for packageJsonKeyOrder, or a project's own .gitignore for gitignore, already does the job). One resolution pass per feature; no separate pre-check gate that would resolve twice.
  */
-export function exadevConfig(options: ExadevConfigOptions = {}, ...userConfigs: readonly TSESLint.FlatConfig.Config[]): PublicConfigArray {
+export function exadevConfig(options: ExadevConfigOptions = {}): PublicConfigArray {
   const gitignore = buildGitignoreConfig({ enabled: options.gitignore });
   const built: ConfigArrayValue = [
     ...gitignore,
@@ -89,7 +88,6 @@ export function exadevConfig(options: ExadevConfigOptions = {}, ...userConfigs: 
     // After markdownHeadings: both blocks set the frontmatter format of the Markdown they select, and a SKILL.md is always YAML, so the later block must be this one.
     ...buildAgentSkillsConfig(options.agentSkills, { ignores: gitignore.flatMap(({ ignores = [] }) => ignores) }),
     ...(options.toolingWiring !== undefined ? buildToolingWiringConfig(options.toolingWiring) : []),
-    ...userConfigs,
   ];
 
   return toPublicConfigArray(built);

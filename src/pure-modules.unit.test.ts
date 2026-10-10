@@ -105,12 +105,8 @@ describe('exadevConfig pureModules', () => {
   const base = { react: false, nextjs: false, turboEnv: false, packageJsonKeyOrder: false, gitignore: false } as const;
   const hasPureRule = (blocks: ReturnType<typeof exadevConfig>) => blocks.some((block) => block.rules !== undefined && 'exadev/pure-module' in block.rules);
 
-  it('adds the pure-module block only when the option is given, before any trailing user config', () => {
+  it('adds the pure-module block only when the option is given', () => {
     expect(hasPureRule(exadevConfig(base))).toBe(false);
-    const extra = { name: 'user' };
-    const withPure = exadevConfig({ ...base, pureModules: { files: FILES } }, extra);
-    expect(hasPureRule(withPure)).toBe(true);
-    expect(withPure.at(-1)).toBe(extra);
-    expect(hasPureRule(withPure.slice(0, -1))).toBe(true);
+    expect(hasPureRule(exadevConfig({ ...base, pureModules: { files: FILES } }))).toBe(true);
   });
 });

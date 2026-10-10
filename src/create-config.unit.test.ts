@@ -1,4 +1,3 @@
-import type { TSESLint } from '@typescript-eslint/utils';
 import { describe, expect, it } from 'vitest';
 import { exadevConfig } from './create-config';
 import jsdocAndTsdoc from './jsdoc';
@@ -59,14 +58,12 @@ describe('exadevConfig', () => {
     expect(hasEnvRule(exadevConfig({ ...base, turboEnv: false }))).toBe(false);
   });
 
-  it('turbo, when given, wires in turboConfig\'s blocks, before any trailing user configs', () => {
+  it('turbo, when given, wires in turboConfig\'s blocks', () => {
     const TURBO_BLOCK_COUNT = 2;
-    const extra: TSESLint.FlatConfig.Config = { rules: { 'no-console': 'warn' } };
     const base = { react: false, nextjs: false, packageJsonKeyOrder: false, gitignore: false } as const;
-    const withoutTurbo = exadevConfig(base, extra);
-    const withTurbo = exadevConfig({ ...base, turbo: {} }, extra);
+    const withoutTurbo = exadevConfig(base);
+    const withTurbo = exadevConfig({ ...base, turbo: {} });
     expect(withTurbo).toHaveLength(withoutTurbo.length + TURBO_BLOCK_COUNT);
-    expect(withTurbo.at(-1)).toBe(extra);
     const hasTurboRule = (blocks: typeof withTurbo) => blocks.some((block) => block.rules !== undefined && 'exadev/turbo-task-outputs' in block.rules);
     expect(hasTurboRule(withTurbo)).toBe(true);
     expect(hasTurboRule(withoutTurbo)).toBe(false);
@@ -102,13 +99,8 @@ describe('exadevConfig', () => {
     });
   });
 
-  it('appends trailing user configs, in order, after everything else', () => {
-    const extraA: TSESLint.FlatConfig.Config = { rules: { 'no-console': 'warn' } };
-    const extraB: TSESLint.FlatConfig.Config = { files: ['**/*.spec.ts'] };
-    const result = exadevConfig({}, extraA, extraB);
-    const SECOND_TO_LAST = -2;
-    const LAST = -1;
-    expect(result.at(SECOND_TO_LAST)).toBe(extraA);
-    expect(result.at(LAST)).toBe(extraB);
+  it('rejects a config block passed after the options', () => {
+    // @ts-expect-error a second argument is no longer accepted: callers spread the result and append their own blocks
+    exadevConfig({}, { rules: {} });
   });
 });

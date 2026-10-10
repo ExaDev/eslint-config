@@ -38,12 +38,8 @@ describe('exadevConfig importPolicies', () => {
   const base = { react: false, nextjs: false, turboEnv: false, packageJsonKeyOrder: false, gitignore: false } as const;
   const hasPolicyRule = (blocks: ReturnType<typeof exadevConfig>) => blocks.some((block) => block.rules !== undefined && 'exadev/import-policy' in block.rules);
 
-  it('adds the policy block only when policies are given, before any trailing user config', () => {
+  it('adds the policy block only when policies are given', () => {
     expect(hasPolicyRule(exadevConfig(base))).toBe(false);
-    const extra = { name: 'user' };
-    const withPolicies = exadevConfig({ ...base, importPolicies: POLICIES }, extra);
-    expect(hasPolicyRule(withPolicies)).toBe(true);
-    expect(withPolicies.at(-1)).toBe(extra);
-    expect(hasPolicyRule(withPolicies.slice(0, -1))).toBe(true);
+    expect(hasPolicyRule(exadevConfig({ ...base, importPolicies: POLICIES }))).toBe(true);
   });
 });
