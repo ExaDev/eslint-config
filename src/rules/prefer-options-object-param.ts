@@ -5,6 +5,8 @@ import { firstTokenOrThrow } from './ts-node-guards';
    
    `hasSuggestions: true`, not `fixable: 'code'` — this is the key call. `fixable` is applied silently by `--fix` with no review gate. no-pointless-reassignment.ts's own history (a far simpler identifier-swap fixer) already shipped real bugs this way (code that didn't parse, a deleted load-bearing type annotation), and this rule's own fixer is riskier still: it rewrites a parameter list AND inserts a new statement into the function body. prefer-numeric-sort-compare.ts already uses `hasSuggestions` in this exact package for the identical reason — a suggestion the developer explicitly reviews and accepts is appropriate; silently rewriting behaviour on every save is not. Call sites are deliberately never rewritten: the signature edit alone turns every stale positional call site into a real TypeScript compile error, which is the correct, sufficient signal for a human/agent to fix each one — ESLint's own fixer can only ever edit the single file it is linting, so it could never safely coordinate an edit to the declaration with edits to call sites scattered across other files in the same pass anyway.
    
+   A rest parameter changes the arithmetic of that argument: a caller who wants only the rest values must pass a placeholder for a single optional parameter that precedes it, even though a run of length one never meets `minTrailingOptional` (whose schema minimum stays 2). That shape is reported under its own message id, `placeholderBeforeRest`, with no suggestion, since the right shape (the rest values alone, or one object holding the optional value and the rest values) is a design decision and not a mechanical rewrite. A run that does reach `minTrailingOptional` keeps the existing report, whether or not a rest parameter follows it.
+
    Every param-list/type-text extraction below uses a verbatim `sourceCode.getText()` slice of the parameter's own type-annotation node, never a checker-based reconstruction (a printer, not a source-text echo, that can silently diverge from what was actually written) — this is why the rule needs no type-checker access at all: every check it performs (is this parameter optional, does it already carry an explicit type annotation, is it a parameter property, is it decorated) is answerable from the parameter's own TSESTree shape, and the fixer only ever echoes source text it already has. Because of that, it is registered in BOTH `plugin.configs.recommended` (src/plugin.ts) and the type-checked bundle (src/recommended-type-checked.ts), matching `no-mutable-union-array-param`/`prefer-readonly-array-param`/`test-file-kind`/`max-params` — unlike its own `prefer-*` siblings `prefer-readonly-object-param` and `prefer-numeric-sort-compare`, which genuinely need the checker (to resolve a parameter's own property types, and to confirm an array's element type, respectively) and so cannot be offered in the lighter, non-type-checked bundle at all.
    
    Every bail-out below still reports the diagnostic (a caller still deserves to be told about the anti-pattern) but withholds the suggestion (`suggest` omitted from the report) whenever collapsing the run mechanically would be unsafe or lossy:
@@ -190,7 +192,7 @@ export function hasOptionsNameCollision(scope: TSESLint.Scope.Scope, exemptIdent
 
 // Named explicitly and passed as createRule's own generic arguments rather than left for TS to infer from the `defaultOptions` object literal below — an array literal infers as the wider `{ minTrailingOptional: number }[]` in that position, not the 1-element tuple RuleCreator's own `Options extends readonly unknown[]` constraint expects, which otherwise surfaces as a spurious `noUncheckedIndexedAccess` "possibly undefined" on `create`'s own destructured second parameter.
 type Options = readonly [{ readonly minTrailingOptional: number }];
-type MessageIds = 'tooManyTrailingOptional' | 'wrapInOptionsObject';
+type MessageIds = 'tooManyTrailingOptional' | 'wrapInOptionsObject' | 'placeholderBeforeRest';
 
 const preferOptionsObjectParam = createRule<Options, MessageIds>({
   name: 'prefer-options-object-param',
@@ -199,7 +201,7 @@ const preferOptionsObjectParam = createRule<Options, MessageIds>({
     hasSuggestions: true,
     docs: {
       description:
-        "Suggest bundling a run of 2+ trailing optional parameters into a single destructured 'options' parameter — without this, a caller needing only the last optional parameter must still pass 'undefined' for every optional parameter before it.",
+        "Suggest bundling a run of 2+ trailing optional parameters into a single destructured 'options' parameter — without this, a caller needing only the last optional parameter must still pass 'undefined' for every optional parameter before it. Also report an optional parameter directly before a rest parameter, which a caller wanting only the rest values must fill with a placeholder.",
     },
     schema: [
       {
@@ -214,15 +216,29 @@ const preferOptionsObjectParam = createRule<Options, MessageIds>({
       tooManyTrailingOptional:
         "This {{ kind }} has {{ count }} trailing optional parameters ({{ names }}) — a caller needing only the last one must still pass 'undefined' for every parameter before it. Bundle the trailing optional run into a single destructured 'options' parameter instead.",
       wrapInOptionsObject: "Bundle the trailing optional parameters into a single 'options' parameter.",
+      placeholderBeforeRest:
+        'This {{ kind }} takes an optional parameter ({{ name }}) immediately before a rest parameter, so a caller passing only the rest values must supply a placeholder for it. Take the rest values alone, or put the optional value and the rest values in one object.',
     },
     defaultOptions: [{ minTrailingOptional: 2 }],
   },
   create(context, [{ minTrailingOptional }]) {
     const { sourceCode } = context;
 
+    // A run below `minTrailingOptional` is ordinarily fine, but an optional parameter directly before a rest parameter forces a caller who wants only the rest values to pass a placeholder, whatever the run's length. No suggestion is offered: the right shape (rest values alone, or one object holding the optional value and the rest values) is a design decision, not a mechanical rewrite.
+    function reportPlaceholderBeforeRest(node: FunctionLikeWithParams, run: readonly TSESTree.Parameter[]) {
+      const optionalBeforeRest = run.at(-1);
+      if (optionalBeforeRest === undefined || node.params.at(-1)?.type !== AST_NODE_TYPES.RestElement) return;
+      const name = resolveFixableParam(optionalBeforeRest)?.identifierNode.name ?? sourceCode.getText(optionalBeforeRest);
+      context.report({ node, messageId: 'placeholderBeforeRest', data: { kind: describeFunctionKind(node), name } });
+    }
+
     function checkParams(node: FunctionLikeWithParams) {
       const run = getTrailingOptionalRun(node.params);
-      if (run.length < minTrailingOptional) return;
+      if (run.length < minTrailingOptional) {
+        reportPlaceholderBeforeRest(node, run);
+
+        return;
+      }
 
       const resolved = run.map(resolveFixableParam);
       const names = run.map((param, index) => resolved[index]?.identifierNode.name ?? sourceCode.getText(param)).join(', ');

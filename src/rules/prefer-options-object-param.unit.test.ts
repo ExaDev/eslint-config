@@ -23,10 +23,13 @@ describe('rule metadata', () => {
     expect(rule.name).toBe('prefer-options-object-param');
     expect(rule.meta.docs?.url).toBe('https://github.com/ExaDev/eslint-config/blob/main/src/rules/prefer-options-object-param.ts');
     expect(rule.meta.docs?.description).toBe(
-      "Suggest bundling a run of 2+ trailing optional parameters into a single destructured 'options' parameter — without this, a caller needing only the last optional parameter must still pass 'undefined' for every optional parameter before it.",
+      "Suggest bundling a run of 2+ trailing optional parameters into a single destructured 'options' parameter — without this, a caller needing only the last optional parameter must still pass 'undefined' for every optional parameter before it. Also report an optional parameter directly before a rest parameter, which a caller wanting only the rest values must fill with a placeholder.",
     );
     expect(rule.meta.messages.tooManyTrailingOptional).toBe(
       "This {{ kind }} has {{ count }} trailing optional parameters ({{ names }}) — a caller needing only the last one must still pass 'undefined' for every parameter before it. Bundle the trailing optional run into a single destructured 'options' parameter instead.",
+    );
+    expect(rule.meta.messages.placeholderBeforeRest).toBe(
+      'This {{ kind }} takes an optional parameter ({{ name }}) immediately before a rest parameter, so a caller passing only the rest values must supply a placeholder for it. Take the rest values alone, or put the optional value and the rest values in one object.',
     );
     expect(rule.meta.messages.wrapInOptionsObject).toBe("Bundle the trailing optional parameters into a single 'options' parameter.");
     expect(rule.meta.schema).toEqual([
@@ -51,8 +54,15 @@ ruleTester.run('prefer-options-object-param', rule, {
     'function f(): void {}',
     // A bare rest parameter is never itself optional, and there is nothing before it.
     'function f(...rest: number[]): void {}',
-    // Only 1 parameter precedes a trailing rest parameter — still below the default threshold even though the rest parameter's mere presence does not by itself disqualify the run.
-    'function f(a: number, b?: number, ...rest: number[]): void {}',
+    // A required parameter before a rest parameter needs no placeholder: the caller must supply it anyway.
+    'function f(a: number, b: number, ...rest: number[]): void {}',
+    // A rest parameter after required parameters only.
+    'class C {\n  constructor(a: number, ...rest: number[]) {}\n}',
+    // A raised threshold still leaves a rest parameter after required parameters alone valid.
+    {
+      code: 'function f(a: number, ...rest: number[]): void {}',
+      options: [{ minTrailingOptional: 3 }],
+    },
     // A custom, higher threshold (3) is honoured — 2 trailing optional parameters is not enough to trip it.
     {
       code: 'function f(a: number, b?: number, c?: number): void {}',
@@ -60,6 +70,73 @@ ruleTester.run('prefer-options-object-param', rule, {
     },
   ],
   invalid: [
+    // An optional parameter directly before a rest parameter: a caller wanting only the rest values must pass a placeholder. Reported with its own message and no suggestion.
+    {
+      code: 'function f(a: number, b?: number, ...rest: number[]): void {}',
+      errors: [{ messageId: 'placeholderBeforeRest', data: { kind: 'function', name: 'b' }, suggestions: [] }],
+    },
+    // A default-valued optional parameter before a rest parameter.
+    {
+      code: 'function f(b: number = 1, ...rest: number[]): void {}',
+      errors: [{ messageId: 'placeholderBeforeRest', data: { kind: 'function', name: 'b' }, suggestions: [] }],
+    },
+    // A destructured optional options object before a rest parameter: named by its source text, since it has no single bindable name.
+    {
+      code: 'function f({ a }: { a?: number } = {}, ...rest: number[]): void {}',
+      errors: [{ messageId: 'placeholderBeforeRest', data: { kind: 'function', name: '{ a }: { a?: number } = {}' }, suggestions: [] }],
+    },
+    // An arrow function.
+    {
+      code: 'const f = (a?: number, ...rest: number[]): void => {};',
+      errors: [{ messageId: 'placeholderBeforeRest', data: { kind: 'function', name: 'a' }, suggestions: [] }],
+    },
+    // A class method.
+    {
+      code: 'class C {\n  m(a?: number, ...rest: number[]): void {}\n}',
+      errors: [{ messageId: 'placeholderBeforeRest', data: { kind: 'method', name: 'a' }, suggestions: [] }],
+    },
+    // A constructor.
+    {
+      code: 'class C {\n  constructor(a?: number, ...rest: number[]) {}\n}',
+      errors: [{ messageId: 'placeholderBeforeRest', data: { kind: 'constructor', name: 'a' }, suggestions: [] }],
+    },
+    // An overload set: each declaration-only signature and the implementation are reported on their own.
+    {
+      code: 'function f(a?: number, ...rest: number[]): void;\nfunction f(a?: number, ...rest: number[]): void {}',
+      errors: [
+        { messageId: 'placeholderBeforeRest', data: { kind: 'function', name: 'a' }, suggestions: [] },
+        { messageId: 'placeholderBeforeRest', data: { kind: 'function', name: 'a' }, suggestions: [] },
+      ],
+    },
+    // A declaration-only ambient function.
+    {
+      code: 'declare function f(a?: number, ...rest: number[]): void;',
+      errors: [{ messageId: 'placeholderBeforeRest', data: { kind: 'function', name: 'a' }, suggestions: [] }],
+    },
+    // A standalone function type.
+    {
+      code: 'type F = (a?: number, ...rest: number[]) => void;',
+      errors: [{ messageId: 'placeholderBeforeRest', data: { kind: 'function', name: 'a' }, suggestions: [] }],
+    },
+    // An interface method signature and a construct signature.
+    {
+      code: 'interface I {\n  m(a?: number, ...rest: number[]): void;\n  new (a?: number, ...rest: number[]): I;\n}',
+      errors: [
+        { messageId: 'placeholderBeforeRest', data: { kind: 'method', name: 'a' }, suggestions: [] },
+        { messageId: 'placeholderBeforeRest', data: { kind: 'constructor', name: 'a' }, suggestions: [] },
+      ],
+    },
+    // A parameter property before a rest parameter.
+    {
+      code: 'class C {\n  constructor(private a?: number, ...rest: number[]) {}\n}',
+      errors: [{ messageId: 'placeholderBeforeRest', data: { kind: 'constructor', name: 'private a?: number' }, suggestions: [] }],
+    },
+    // With a raised threshold, a run shorter than it but followed by a rest parameter is reported by the placeholder message, naming the last optional parameter.
+    {
+      code: 'function f(a: number, b?: number, c?: number, ...rest: number[]): void {}',
+      options: [{ minTrailingOptional: 3 }],
+      errors: [{ messageId: 'placeholderBeforeRest', data: { kind: 'function', name: 'c' }, suggestions: [] }],
+    },
     // The trailing optional run reaches all the way back to the FIRST parameter, index 0, with no leading required parameter at all: proves getTrailingOptionalRun's own backward walk actually reaches and includes index 0, rather than stopping one short of it.
     {
       code: 'function f(a?: number, b?: number): void {\n  return;\n}',
