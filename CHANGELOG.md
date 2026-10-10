@@ -1,3 +1,17 @@
+# [3.0.0](https://github.com/ExaDev/eslint-config/compare/v2.36.5...v3.0.0) (2026-10-10)
+
+
+### Features
+
+* make exadevConfig take the options object alone ([a08def3](https://github.com/ExaDev/eslint-config/commit/a08def31f682469160c4532d63cfd5a1fc138a56))
+* report an optional parameter directly before a rest parameter ([198b011](https://github.com/ExaDev/eslint-config/commit/198b0111f51e94cc0f5f7b062e74978be6a9ec48))
+
+
+### BREAKING CHANGES
+
+* `exadevConfig` no longer accepts config blocks after the options argument.
+Spread its result inside `defineConfig` and put your own blocks after it.
+
 ## [2.36.5](https://github.com/ExaDev/eslint-config/compare/v2.36.4...v2.36.5) (2026-10-10)
 
 
