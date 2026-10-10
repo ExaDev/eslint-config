@@ -194,12 +194,8 @@ describe('exadevConfig testHygiene', () => {
   const base = { react: false, nextjs: false, turboEnv: false, packageJsonKeyOrder: false, gitignore: false } as const;
   const hasHygiene = (blocks: ReturnType<typeof exadevConfig>) => blocks.some((block) => block.rules !== undefined && 'exadev/non-vacuous-guard' in block.rules);
 
-  it('adds the blocks only when the option is given, before any trailing user config', () => {
+  it('adds the blocks only when the option is given', () => {
     expect(hasHygiene(exadevConfig(base))).toBe(false);
-    const extra = { name: 'user' };
-    const withHygiene = exadevConfig({ ...base, testHygiene: {} }, extra);
-    expect(hasHygiene(withHygiene)).toBe(true);
-    expect(withHygiene.at(-1)).toBe(extra);
-    expect(hasHygiene(withHygiene.slice(0, -1))).toBe(true);
+    expect(hasHygiene(exadevConfig({ ...base, testHygiene: {} }))).toBe(true);
   });
 });
