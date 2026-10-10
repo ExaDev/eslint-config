@@ -2,13 +2,22 @@ import { describe, expect, it } from 'vitest';
 import { exadevConfig } from './create-config';
 import jsdocAndTsdoc from './jsdoc';
 import jsonCanonicalConfig from './json-canonical';
+import plugin from './plugin';
 import recommendedTypeChecked from './recommended-type-checked';
 import stylisticCommentsConfig from './stylistic-comments';
 
+// The block registering the `exadev` namespace for every file, whichever language handles it.
+const PLUGIN_REGISTRATION_BLOCK_COUNT = 1;
+
 describe('exadevConfig', () => {
+  it('registers the exadev plugin in a block with no files, no ignores and no rules, ahead of every block that sets a rule', () => {
+    const [first] = exadevConfig({ react: false, nextjs: false, turboEnv: false, packageJsonKeyOrder: false, gitignore: false });
+    expect(first).toStrictEqual({ plugins: { exadev: plugin } });
+  });
+
   it('with every optional feature forced off, returns exactly the base recommendedTypeChecked plus jsdocAndTsdoc plus jsonCanonicalConfig plus stylisticCommentsConfig length, regardless of what is installed', () => {
     expect(exadevConfig({ react: false, nextjs: false, turboEnv: false, packageJsonKeyOrder: false, gitignore: false })).toHaveLength(
-      recommendedTypeChecked.length + jsdocAndTsdoc.length + jsonCanonicalConfig.length + stylisticCommentsConfig.length,
+      PLUGIN_REGISTRATION_BLOCK_COUNT + recommendedTypeChecked.length + jsdocAndTsdoc.length + jsonCanonicalConfig.length + stylisticCommentsConfig.length,
     );
   });
 
@@ -23,7 +32,8 @@ describe('exadevConfig', () => {
     const TURBO_ENV_BLOCK_COUNT = 1;
     const result = exadevConfig();
     expect(result).toHaveLength(
-      recommendedTypeChecked.length +
+      PLUGIN_REGISTRATION_BLOCK_COUNT +
+        recommendedTypeChecked.length +
         jsdocAndTsdoc.length +
         jsonCanonicalConfig.length +
         stylisticCommentsConfig.length +
@@ -46,7 +56,12 @@ describe('exadevConfig', () => {
       workspaceArchitecture: { groups: [{ name: 'core', rank: 0 }] },
     });
     expect(result).toHaveLength(
-      recommendedTypeChecked.length + jsdocAndTsdoc.length + jsonCanonicalConfig.length + stylisticCommentsConfig.length + WORKSPACE_ARCHITECTURE_BLOCK_COUNT,
+      PLUGIN_REGISTRATION_BLOCK_COUNT +
+        recommendedTypeChecked.length +
+        jsdocAndTsdoc.length +
+        jsonCanonicalConfig.length +
+        stylisticCommentsConfig.length +
+        WORKSPACE_ARCHITECTURE_BLOCK_COUNT,
     );
   });
 

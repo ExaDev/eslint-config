@@ -71,6 +71,8 @@ export function exadevConfig(options: ExadevConfigOptions = {}): PublicConfigArr
   const gitignore = buildGitignoreConfig({ enabled: options.gitignore });
   const built: ConfigArrayValue = [
     ...gitignore,
+    // Registers the `exadev` namespace for every file the shared config lints, whichever language handles it. The blocks below register it only on the files each of them selects (JavaScript and TypeScript, package.json and the other JSON and Markdown files this package wires rules onto), so a consumer's block with no `files` that sets an `exadev/*` rule would otherwise reach a tsconfig.json, a plain JSON or a Markdown file with no `exadev` plugin and fail at config load. A block with `plugins` and no `files` or `rules` makes ESLint lint nothing it would not lint otherwise.
+    { plugins: { exadev: plugin } },
     ...recommendedTypeChecked,
     ...jsdocAndTsdoc,
     ...jsonCanonicalConfig,

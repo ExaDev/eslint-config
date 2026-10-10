@@ -1,4 +1,5 @@
 import type { Rule, Scope } from 'eslint';
+import { isEstreeSource } from './estree-source';
 
 /* Detects and auto-fixes redundant alias declarations — `const foo = bar` where both sides are plain identifiers and the alias adds no transformation. The fixer replaces all reads of the alias with the original name and removes the declaration. Variables prefixed with `_` are exempt (discard convention). Aliases that are written to after declaration are not auto-fixed (scope mutation), nor is an alias read as a shorthand object property (`{ x }` from `const x = y` would need its key rewritten to `{ x: y }`, which a plain text-replacement fixer cannot do safely), nor one carrying an explicit type annotation, nor one whose reads sit where the original name is shadowed (see the individual bail-out comments in `fix` below). An alias that is itself part of the module's exported surface (`export const alias = original;`, a later `export { alias }`/`export { alias as other }`, or `export default alias;`) is neither reported nor fixed at all, since collapsing it would rename or delete a binding every importer of this module depends on; see isExportedAlias below.
    
@@ -134,6 +135,7 @@ const noPointlessReassignment: Rule.RuleModule = {
     },
   },
   create(context) {
+    if (!isEstreeSource(context.sourceCode)) return {};
     // Computed once per file rather than per declarator: every specifier/default export check in isExportedAlias resolves names against this same top-level scope.
     const moduleScope = findTopLevelScope(context.sourceCode.getScope(context.sourceCode.ast));
 

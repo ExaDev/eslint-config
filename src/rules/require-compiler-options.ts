@@ -5,6 +5,7 @@ import { describeCompilerOptionValue, effectiveCompilerOption, isScalarOptionVal
 import { relativeToCwd } from './file-scope';
 import { createRunTracker, type RunTracker } from './run-tracker';
 import { createTsconfigAttribution } from './tsconfig-attribution';
+import { isEstreeSource } from './estree-source';
 
 type MessageIds = 'differs';
 
@@ -73,6 +74,7 @@ const requireCompilerOptions = createRule<[unknown], MessageIds>({
   create(context, [options]) {
     const requirements = readCompilerOptionRequirements(options);
     if (requirements.length === 0) return {};
+    if (!isEstreeSource(context.sourceCode)) return {};
     const { program } = ESLintUtils.getParserServices(context);
     const signature = JSON.stringify(requirements.map((requirement) => [requirement.name, requirement.spelled]));
 

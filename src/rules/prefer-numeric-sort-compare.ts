@@ -2,6 +2,7 @@ import { AST_NODE_TYPES, ESLintUtils } from '@typescript-eslint/utils';
 import type { TSESTree } from '@typescript-eslint/utils';
 import * as ts from 'typescript';
 import { asExpression, asTypeReference, lastTokenOrThrow } from './ts-node-guards';
+import { isEstreeSource } from './estree-source';
 
 /* @typescript-eslint/require-array-sort-compare already flags any '.sort()'/'.toSorted()' call with no compare function, except on a plain string array — and ships with no fix or suggestion at all, correctly, since the right compare function in general depends on intent (ascending/descending/locale-aware/by-key) that can't be derived from the code. This rule is a deliberately narrow addition alongside it, not a replacement: both rules fire on the same call for a number array, and that overlap is intentional.
    
@@ -42,6 +43,7 @@ const preferNumericSortCompare = createRule({
     defaultOptions: [],
   },
   create(context) {
+    if (!isEstreeSource(context.sourceCode)) return {};
     const services = ESLintUtils.getParserServices(context);
     const checker = services.program.getTypeChecker();
 

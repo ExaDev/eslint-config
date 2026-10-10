@@ -3,6 +3,7 @@ import type { JSONSchema4 } from '@typescript-eslint/utils/json-schema';
 import * as ts from 'typescript';
 import { isRecord } from '../is-record';
 import { assertOnlyKeys } from './file-entry';
+import { isEstreeSource } from './estree-source';
 
 const OPTION_NAME = 'scoped-first-parameter';
 
@@ -191,6 +192,7 @@ const scopedFirstParameter = createRule<[unknown], MessageIds>({
   create(context, [options]) {
     const { interfaces, name: requiredName, type: requiredType } = readScopedFirstParameterOptions(options);
     const { sourceCode } = context;
+    if (!isEstreeSource(context.sourceCode)) return {};
     const services = ESLintUtils.getParserServices(context);
     const checker = services.program.getTypeChecker();
 

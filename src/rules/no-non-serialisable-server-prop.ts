@@ -3,6 +3,7 @@ import type { JSONSchema4 } from '@typescript-eslint/utils/json-schema';
 import { isRecord } from '../is-record';
 import { assertOnlyKeys, readRequiredStrings } from './file-entry';
 import { isTypeOnlyWrapper } from './type-only-wrapper';
+import { isEstreeSource } from './estree-source';
 import { hasUseClientDirective } from './use-client-directive';
 
 const OPTION_NAME = 'no-non-serialisable-server-prop';
@@ -101,7 +102,7 @@ const noNonSerialisableServerProp = createRule<[unknown], MessageIds>({
   create(context, [options]) {
     const { names, allowElements } = readNoNonSerialisableServerPropOptions(options);
     const { sourceCode } = context;
-    if (hasUseClientDirective(sourceCode.ast)) return {};
+    if (!isEstreeSource(sourceCode) || hasUseClientDirective(sourceCode.ast)) return {};
 
     return {
       JSXAttribute(node) {
