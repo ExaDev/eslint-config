@@ -1,3 +1,20 @@
+## [3.0.1](https://github.com/ExaDev/eslint-config/compare/v3.0.0...v3.0.1) (2026-10-10)
+
+
+### Bug Fixes
+
+* resolve exadev rules set by a block with no files after the shared config ([16b579c](https://github.com/ExaDev/eslint-config/commit/16b579ce1e3e3f534a63d04833a47ed4d888ae08))
+
+
+### Documentation
+
+* state that rules of other plugins need files in a block of your own ([de15519](https://github.com/ExaDev/eslint-config/commit/de15519565c1d7d5e038abd6d05e438d85d6c84d))
+
+
+### Tests
+
+* pin that another plugin's rule in a block of your own needs files ([a00a922](https://github.com/ExaDev/eslint-config/commit/a00a922dc02e3a53e98db171a37948af407a6e37))
+
 # [3.0.0](https://github.com/ExaDev/eslint-config/compare/v2.36.5...v3.0.0) (2026-10-10)
 
 
