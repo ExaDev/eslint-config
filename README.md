@@ -44,6 +44,8 @@ export default defineConfig(
 
 **Your own blocks need no `plugins: { exadev }` and no `files`.** `exadevConfig()` registers the `exadev` plugin for every file it lints, so a block placed after it that sets an `exadev/*` rule written for JavaScript and TypeScript, such as `{ rules: { 'exadev/barrel-policy': ['error', { mode: 'siblings' }] } }`, loads even though it also applies to `tsconfig.json`, other JSON files and Markdown, and a rule that inspects JavaScript or TypeScript syntax leaves those files alone. The JSON and Markdown rules (`package-json-key-order`, `markdown-required-heading`, the [workspace architecture](#workspace-architecture) and [Turbo](#turbo) rules) are the exception: ESLint refuses to enable a rule for a language it does not declare, so a block that sets one needs the `files` of the kind of file it reads, which its preset already supplies.
 
+**Rules from other plugins are different.** `@typescript-eslint/*`, `@stylistic/*`, `jsdoc/*`, `unicorn/*` and the rest are registered only for JavaScript and TypeScript files, so a block of your own that sets one needs `files: ['**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}']`; without it ESLint fails at config load with `could not find plugin` as soon as the block also applies to a JSON or Markdown file.
+
 ### What the default export includes
 
 **typescript-eslint presets:**
