@@ -41,7 +41,10 @@ afterAll(() => {
   rmSync(cwd, { force: true, recursive: true });
 });
 
-function createEslint(rules: Linter.RulesRecord): ESLint {
+function createEslint(rules: Linter.RulesRecord, files?: readonly string[]): ESLint {
+  // No `plugins`, and no `files` unless the caller scopes the block.
+  const ownBlock: Linter.Config = files === undefined ? { rules } : { files: [...files], rules };
+
   return new ESLint({
     cwd,
     overrideConfigFile: true,
@@ -55,8 +58,7 @@ function createEslint(rules: Linter.RulesRecord): ESLint {
         react: false,
         turboEnv: false,
       }),
-      // No `files` and no `plugins`: the documented shape.
-      { rules },
+      ownBlock,
     ],
   });
 }
@@ -109,6 +111,21 @@ describe('an unscoped block of this package rules after the shared config', () =
   it.each(javascriptRuleIds)('exadev/%s does not throw on a file of another language', async (id) => {
     const setting: Linter.RuleEntry = id in REQUIRED_OPTIONS ? ['error', REQUIRED_OPTIONS[id]] : 'error';
     const results = await lintProject({ [`exadev/${id}`]: setting });
+
+    expect(fatalMessages(results)).toStrictEqual([]);
+  });
+});
+
+// The limit the README states: only the `exadev` namespace is registered for every file. The other plugins are registered by their own blocks for JavaScript and TypeScript files only, so a rule of theirs set by a block of your own needs `files`.
+describe('a block of your own that sets a rule of another plugin', () => {
+  const rules: Linter.RulesRecord = { '@typescript-eslint/consistent-type-imports': 'error' };
+
+  it('fails to load without files, since the plugin is not registered for the JSON files the block also applies to', async () => {
+    await expect(createEslint(rules).lintFiles(LINTED_FILES)).rejects.toThrow(/could not find plugin "@typescript-eslint"/i);
+  });
+
+  it('loads with the JavaScript and TypeScript files glob the README gives', async () => {
+    const results = await createEslint(rules, ['**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}']).lintFiles(LINTED_FILES);
 
     expect(fatalMessages(results)).toStrictEqual([]);
   });
