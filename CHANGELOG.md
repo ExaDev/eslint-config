@@ -1,3 +1,10 @@
+## [3.0.2](https://github.com/ExaDev/eslint-config/compare/v3.0.1...v3.0.2) (2026-10-10)
+
+
+### Build System
+
+* **deps:** bump pnpm/action-setup ([a22ddaa](https://github.com/ExaDev/eslint-config/commit/a22ddaa4c55efd0647eb88b2853b3ec90a107eed))
+
 ## [3.0.1](https://github.com/ExaDev/eslint-config/compare/v3.0.0...v3.0.1) (2026-10-10)
 
 
