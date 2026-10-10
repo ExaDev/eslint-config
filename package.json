@@ -27,6 +27,7 @@
     "@next/eslint-plugin-next": "^16.3.2",
     "@semantic-release/changelog": "^7.0.0",
     "@semantic-release/git": "^11.0.1",
+    "@semantic-release/release-notes-generator": "14.1.1",
     "@stryker-mutator/api": "10.0.0",
     "@stryker-mutator/core": "10.0.0",
     "@stryker-mutator/typescript-checker": "10.0.0",
