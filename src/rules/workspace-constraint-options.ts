@@ -203,7 +203,7 @@ function readNonEmptyStrings(value: unknown, optionName: string, what: string): 
 export function compilePattern(pattern: string, optionName: string): void {
   try {
     // The compiled RegExp is discarded: this call exists for the SyntaxError an invalid pattern throws, so it surfaces here naming the option instead of later, unattributed, at match time.
-    void new RegExp(pattern, 'u');
+    void RegExp(pattern, 'u');
   } catch (error) {
     assertIsError(error, regExpConstructorContext(pattern));
     throw new Error(`@exadev/eslint-config: "${optionName}" pattern "${pattern}" is not a valid regular expression: ${error.message}`, { cause: error });

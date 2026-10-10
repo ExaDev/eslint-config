@@ -262,7 +262,7 @@ function validateRankRulePatterns(rankRules: readonly RankRule[]): void {
   for (const rule of rankRules) {
     try {
       // The compiled RegExp itself is discarded: this call exists purely for the SyntaxError an invalid pattern throws, checked once up front rather than only when deriveRank in workspace-graph.ts later compiles its own copy per check.
-      void new RegExp(rule.pattern, 'u');
+      void RegExp(rule.pattern, 'u');
     } catch (error) {
       assertIsError(error, regExpConstructorContext(rule.pattern));
       throw new Error(`@exadev/eslint-config: "nameRanks" pattern "${rule.pattern}" is not a valid regular expression: ${error.message}`, { cause: error });
