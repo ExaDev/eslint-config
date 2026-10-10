@@ -1,3 +1,20 @@
+## [2.36.5](https://github.com/ExaDev/eslint-config/compare/v2.36.4...v2.36.5) (2026-10-10)
+
+
+### Bug Fixes
+
+* list every commit type in the release notes and CHANGELOG.md ([f3545e0](https://github.com/ExaDev/eslint-config/commit/f3545e0ba2066c09b830f9a0e99d7ea4c0f08b05))
+
+
+### Documentation
+
+* regenerate CHANGELOG.md with every commit of each release ([3ee647f](https://github.com/ExaDev/eslint-config/commit/3ee647f218333edcd9398622e08c850ccc573a04))
+
+
+### Tests
+
+* run the real release-notes generator over every commit type ([9b90e22](https://github.com/ExaDev/eslint-config/commit/9b90e226db8eeadf3a69ade2e77fbb2bb70cdee1))
+
 ## [2.36.4](https://github.com/ExaDev/eslint-config/compare/v2.36.3...v2.36.4) (2026-10-10)
 
 
