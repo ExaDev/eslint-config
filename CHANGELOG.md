@@ -1,3 +1,15 @@
+# [3.1.0](https://github.com/ExaDev/eslint-config/compare/v3.0.2...v3.1.0) (2026-10-11)
+
+
+### Features
+
+* **barrel-policy:** accept a package's declared entry files as barrels ([a68da9c](https://github.com/ExaDev/eslint-config/commit/a68da9cc4815ce16ca622e059f3cc8431a2a5b2b)), closes [#135](https://github.com/ExaDev/eslint-config/issues/135)
+
+
+### Bug Fixes
+
+* **types:** type plugin.configs.react and nextjs as the arrays they are ([9301eb6](https://github.com/ExaDev/eslint-config/commit/9301eb6fe72ba73ccc9f772934528c3a6ed7289e)), closes [#134](https://github.com/ExaDev/eslint-config/issues/134)
+
 ## [3.0.2](https://github.com/ExaDev/eslint-config/compare/v3.0.1...v3.0.2) (2026-10-10)
 
 
