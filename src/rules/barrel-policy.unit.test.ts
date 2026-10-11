@@ -1,7 +1,10 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Linter, RuleTester } from 'eslint';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import tseslint from 'typescript-eslint';
-import rule, { createBarrelPolicyRule, readMode } from './barrel-policy';
+import rule, { createBarrelPolicyRule, readEntries, readMode } from './barrel-policy';
 
 describe('readMode', () => {
   it("returns 'auto' for missing options — an omitted mode is nothing stated, not a misconfiguration", () => {
@@ -26,9 +29,9 @@ describe('readMode', () => {
 });
 
 // A fake package.json shaped like a genuine publish-shaped entry point (real exports) — resolves 'auto' to 'single'.
-const autoResolvesToSingle = createBarrelPolicyRule(() => ({ exports: { '.': './dist/index.js' } }));
+const autoResolvesToSingle = createBarrelPolicyRule({ readPackageJson: () => ({ exports: { '.': './dist/index.js' } }) });
 // No ancestor package.json at all — resolves 'auto' to 'banned', the same conservative default a package with neither exports nor main gets.
-const autoResolvesToBanned = createBarrelPolicyRule(() => undefined);
+const autoResolvesToBanned = createBarrelPolicyRule({ readPackageJson: () => undefined });
 
 const ruleTester = new RuleTester({
   languageOptions: { parser: tseslint.parser, sourceType: 'module' },
@@ -72,6 +75,53 @@ describe('barrel-policy schema', () => {
     expect(() => {
       lintWithOptions('banned');
     }).toThrow(/should be object/);
+  });
+
+  it('accepts an entries list beside a mode that permits barrels', () => {
+    expect(() => {
+      lintWithOptions({ mode: 'single', entries: ['src/*.ts'] });
+    }).not.toThrow();
+  });
+
+  it('rejects an empty entries list at the schema level, since it would declare nothing', () => {
+    expect(() => {
+      lintWithOptions({ mode: 'single', entries: [] });
+    }).toThrow(/should NOT have fewer than 1 items/);
+  });
+
+  it('rejects entries beside mode banned when the rule is created, naming both', () => {
+    expect(() => {
+      lintWithOptions({ mode: 'banned', entries: ['src/*.ts'] });
+    }).toThrow(/"entries" declares barrels, which mode 'banned' forbids/);
+  });
+});
+
+describe('readEntries', () => {
+  it('returns undefined when the options carry no entries key', () => {
+    expect(readEntries(undefined)).toBeUndefined();
+    expect(readEntries({})).toBeUndefined();
+    expect(readEntries({ mode: 'single' })).toBeUndefined();
+  });
+
+  it('returns the list as given', () => {
+    expect(readEntries({ mode: 'siblings', entries: ['src/*.ts', '!src/internal.ts'] })).toEqual(['src/*.ts', '!src/internal.ts']);
+  });
+
+  it("accepts entries with mode 'auto' or with no mode, since auto can resolve to single", () => {
+    expect(readEntries({ mode: 'auto', entries: ['src/*.ts'] })).toEqual(['src/*.ts']);
+    expect(readEntries({ entries: ['src/*.ts'] })).toEqual(['src/*.ts']);
+  });
+
+  it("throws for entries beside mode 'banned'", () => {
+    expect(() => readEntries({ mode: 'banned', entries: ['src/*.ts'] })).toThrow(/mode 'banned' forbids/);
+  });
+
+  it('throws, naming the option, for a list of exclusions alone', () => {
+    expect(() => readEntries({ entries: ['!src/a.ts'] })).toThrow(/"exadev\/barrel-policy entries" must contain at least one glob that does not start with "!"/);
+  });
+
+  it('throws, naming the option, for a glob that starts with a slash', () => {
+    expect(() => readEntries({ entries: ['/src/a.ts'] })).toThrow(/"exadev\/barrel-policy entries" has a file glob that starts or ends with a slash/);
   });
 });
 
@@ -334,4 +384,199 @@ ruleTester.run('barrel-policy (auto -> banned)', autoResolvesToBanned, {
       errors: [{ messageId: 'reexportOutsideBarrel' }],
     },
   ],
+});
+
+// ─── entries: a package's declared entry files are barrels beside src/index.ts. ─── The package root is the test's working directory, so a fixture filename such as './src/layout.ts' is 'src/layout.ts' relative to it. The globs mirror a package that publishes subpath exports: a flat module per subpath, a nested one, and an index file one level down.
+const packageRoot = process.cwd();
+const entries = ['src/layout.ts', 'src/store/wasm/worker.ts', 'src/*/index.ts'];
+const withEntries = createBarrelPolicyRule({ readPackageJson: () => ({ exports: { '.': './dist/index.js', './layout': './dist/layout.js' } }), findPackageRoot: () => packageRoot });
+
+ruleTester.run('barrel-policy (single, entries)', withEntries, {
+  valid: [
+    // An entry file re-exporting a workspace or third-party package, the case that motivated the option.
+    { code: "export * from '@exadev/process-graph-layout';", filename: './src/layout.ts', options: [{ mode: 'single', entries }] },
+    // A nested entry path.
+    { code: "export { createWorker } from '@exadev/process-graph-store-wasm';", filename: './src/store/wasm/worker.ts', options: [{ mode: 'single', entries }] },
+    // An entry that is an index file below src: not reported as a second index file.
+    { code: "export * from './view';", filename: './src/ui/index.ts', options: [{ mode: 'single', entries }] },
+    // 'single' puts no constraint on where a barrel's re-exports come from, for an entry as for src/index.ts.
+    { code: "export * from '../shared/thing';", filename: './src/store/wasm/worker.ts', options: [{ mode: 'single', entries }] },
+    { code: "import { a } from 'pkg';\nexport const b = a;", filename: './src/other.ts', options: [{ mode: 'single', entries }] },
+    { code: "export { foo } from './foo';", filename: './src/index.ts', options: [{ mode: 'single', entries }] },
+    // The 'auto' default resolves to 'single' for a package with exports, so the entries apply there too.
+    { code: "export * from '@exadev/process-graph-layout';", filename: './src/layout.ts', options: [{ entries }] },
+  ],
+  invalid: [
+    // A file the list does not match keeps the existing behaviour: no re-exports outside a barrel.
+    {
+      code: "export * from '@exadev/process-graph-layout';",
+      filename: './src/layout-helpers.ts',
+      options: [{ mode: 'single', entries }],
+      errors: [{ messageId: 'reexportOutsideBarrel' }],
+    },
+    {
+      code: "import { a } from 'pkg';\nexport { a };",
+      filename: './src/other.ts',
+      options: [{ mode: 'single', entries }],
+      errors: [{ messageId: 'reexportOutsideBarrel' }],
+    },
+    // 'src/*/index.ts' matches one level only, so a deeper index file is still not a permitted barrel.
+    {
+      code: "export * from './view';",
+      filename: './src/ui/deep/index.ts',
+      options: [{ mode: 'single', entries }],
+      errors: [{ messageId: 'nonMainIndexFile' }, { messageId: 'reexportOutsideBarrel' }],
+    },
+    // An entry file is a barrel, so logic beside its re-exports is reported, as in src/index.ts.
+    {
+      code: "export * from '@exadev/process-graph-layout';\nexport const extra = 1;",
+      filename: './src/layout.ts',
+      options: [{ mode: 'single', entries }],
+      errors: [{ messageId: 'sideEffectInBarrel', data: { description: 'ExportNamedDeclaration' } }],
+    },
+    {
+      code: "import { a } from 'pkg';\nexport { a };",
+      filename: './src/layout.ts',
+      options: [{ mode: 'single', entries }],
+      errors: [
+        { messageId: 'sideEffectInBarrel', data: { description: 'ImportDeclaration' } },
+        { messageId: 'sideEffectInBarrel', data: { description: 'ExportNamedDeclaration' } },
+      ],
+    },
+  ],
+});
+
+ruleTester.run('barrel-policy (siblings, entries)', withEntries, {
+  valid: [
+    { code: "export * from '@exadev/process-graph-layout';", filename: './src/layout.ts', options: [{ mode: 'siblings', entries }] },
+    { code: "export { a } from 'pkg/sub';\nexport * from 'node:fs';", filename: './src/store/wasm/worker.ts', options: [{ mode: 'siblings', entries }] },
+    { code: "export * from './sibling';", filename: './src/layout.ts', options: [{ mode: 'siblings', entries }] },
+    // A split-statement re-export of a package from an entry file is impure, but names a permitted source, so only the impurity is reported (see the invalid case below); here the plain form passes.
+    { code: "export { default } from 'pkg';", filename: './src/layout.ts', options: [{ mode: 'siblings', entries }] },
+    // A non-entry index file keeps the siblings behaviour.
+    { code: "export * from './a';", filename: './src/sub/deeper/index.ts', options: [{ mode: 'siblings', entries }] },
+  ],
+  invalid: [
+    {
+      code: "export * from '../up';",
+      filename: './src/layout.ts',
+      options: [{ mode: 'siblings', entries }],
+      errors: [
+        {
+          message:
+            "A package entry point may re-export only from a package ('pkg', '@scope/pkg/sub') or a direct sibling file or folder ('./module'); found '../up'. Re-export it through the package that owns it, move the source beside this entry point, or import it directly at the call site.",
+        },
+      ],
+    },
+    {
+      code: "export { a } from './a/b';",
+      filename: './src/store/wasm/worker.ts',
+      options: [{ mode: 'siblings', entries }],
+      errors: [{ messageId: 'notAPackageOrSibling', data: { source: './a/b' } }],
+    },
+    {
+      code: "export * from '#internal';",
+      filename: './src/layout.ts',
+      options: [{ mode: 'siblings', entries }],
+      errors: [{ messageId: 'notAPackageOrSibling', data: { source: '#internal' } }],
+    },
+    // A package re-export from an index file the list does not match stays a siblings violation.
+    {
+      code: "export * from 'pkg';",
+      filename: './src/sub/deeper/index.ts',
+      options: [{ mode: 'siblings', entries }],
+      errors: [{ messageId: 'notADirectSibling', data: { source: 'pkg' } }],
+    },
+    // A matched index file is an entry, so it gets the entry message.
+    {
+      code: "export * from '../up';",
+      filename: './src/ui/index.ts',
+      options: [{ mode: 'siblings', entries }],
+      errors: [{ messageId: 'notAPackageOrSibling', data: { source: '../up' } }],
+    },
+    {
+      code: "export * from 'pkg';",
+      filename: './src/layout-helpers.ts',
+      options: [{ mode: 'siblings', entries }],
+      errors: [{ messageId: 'reexportOutsideBarrel' }],
+    },
+    {
+      code: 'export const x = 1;',
+      filename: './src/layout.ts',
+      options: [{ mode: 'siblings', entries }],
+      errors: [{ messageId: 'sideEffectInBarrel', data: { description: 'ExportNamedDeclaration' } }],
+    },
+    // The split-statement form: both statements are impure, and its import source is checked like a single-statement re-export's.
+    {
+      code: "import { a } from '../up';\nexport { a };",
+      filename: './src/layout.ts',
+      options: [{ mode: 'siblings', entries }],
+      errors: [
+        { messageId: 'sideEffectInBarrel', data: { description: 'ImportDeclaration' } },
+        { messageId: 'sideEffectInBarrel', data: { description: 'ExportNamedDeclaration' } },
+        { messageId: 'notAPackageOrSibling', data: { source: '../up' } },
+      ],
+    },
+    {
+      code: "import a from 'pkg';\nexport default a;",
+      filename: './src/layout.ts',
+      options: [{ mode: 'siblings', entries }],
+      errors: [
+        { messageId: 'sideEffectInBarrel', data: { description: 'ImportDeclaration' } },
+        { messageId: 'sideEffectInBarrel', data: { description: 'ExportDefaultDeclaration' } },
+      ],
+    },
+  ],
+});
+
+// Under 'auto', a package with neither exports nor main resolves to 'banned', which has no barrels; the entries then select nothing, rather than making a file a barrel that the package does not publish.
+ruleTester.run('barrel-policy (auto -> banned, entries)', createBarrelPolicyRule({ readPackageJson: () => ({ name: 'internal' }), findPackageRoot: () => packageRoot }), {
+  valid: [{ code: 'export const x = 1;', filename: './src/layout.ts', options: [{ entries }] }],
+  invalid: [
+    { code: "export * from 'pkg';", filename: './src/layout.ts', options: [{ entries }], errors: [{ messageId: 'reexportOutsideBarrel' }] },
+    { code: "export * from './view';", filename: './src/ui/index.ts', options: [{ entries }], errors: [{ messageId: 'indexFileBanned' }, { messageId: 'reexportOutsideBarrel' }] },
+  ],
+});
+
+// The globs are relative to the package the file belongs to, not to the working directory.
+ruleTester.run('barrel-policy (entries relative to the package)', createBarrelPolicyRule({ findPackageRoot: () => join(packageRoot, 'packages', 'app') }), {
+  valid: [{ code: "export * from 'pkg';", filename: './packages/app/src/layout.ts', options: [{ mode: 'single', entries }] }],
+  invalid: [{ code: "export * from 'pkg';", filename: './src/layout.ts', options: [{ mode: 'single', entries }], errors: [{ messageId: 'reexportOutsideBarrel' }] }],
+});
+
+// A file with no package.json above it belongs to no package, so it is no package's entry point.
+ruleTester.run('barrel-policy (entries outside any package)', createBarrelPolicyRule({ findPackageRoot: () => undefined }), {
+  valid: [],
+  invalid: [{ code: "export * from 'pkg';", filename: './src/layout.ts', options: [{ mode: 'single', entries }], errors: [{ messageId: 'reexportOutsideBarrel' }] }],
+});
+
+describe('barrel-policy entries against the real filesystem', () => {
+  let root: string;
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  function lintFile(filename: string): readonly string[] {
+    const linter = new Linter({ cwd: root });
+
+    return linter
+      .verify(
+        "export * from 'pkg';",
+        [{ files: ['**/*.ts'], languageOptions: { parser: tseslint.parser }, plugins: { exadev: { rules: { 'barrel-policy': rule } } }, rules: { 'exadev/barrel-policy': ['error', { mode: 'single', entries: ['src/*.ts'] }] } }],
+        filename,
+      )
+      .map((message) => message.message);
+  }
+
+  it('matches the globs against the path below the nearest package.json the default rule finds', () => {
+    root = mkdtempSync(join(tmpdir(), 'barrel-policy-entries-'));
+    const packageDir = join(root, 'packages', 'app');
+    mkdirSync(join(packageDir, 'src', 'nested'), { recursive: true });
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'workspace' }));
+    writeFileSync(join(packageDir, 'package.json'), JSON.stringify({ name: 'app', exports: { './layout': './dist/layout.js' } }));
+
+    expect(lintFile(join(packageDir, 'src', 'layout.ts'))).toEqual([]);
+    expect(lintFile(join(packageDir, 'src', 'nested', 'layout.ts'))).toEqual([expect.stringMatching(/^Re-exports belong only in a barrel/)]);
+  });
 });

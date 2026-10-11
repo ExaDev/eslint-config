@@ -9,6 +9,7 @@ import {
   isDirectSibling,
   isIndexFile,
   isInsideAmbientModuleDeclaration,
+  isPackageSpecifier,
   isPermittedBarrel,
   isPureReexport,
   moduleSpecifierValue,
@@ -83,6 +84,21 @@ describe('isDirectSibling', () => {
   it('normalizes the sliced remainder, not the specifier with its leading "./" still attached', () => {
     // Slicing off the leading "./" before normalizing matters specifically when what follows is itself a slash: normalizing the un-sliced specifier collapses the redundant slash away, while normalizing the sliced remainder on its own treats the leading slash as an absolute path and correctly rejects it as containing a "/".
     expect(isDirectSibling('.//a')).toBe(false);
+  });
+});
+
+describe('isPackageSpecifier', () => {
+  it.each(['pkg', 'pkg/sub', '@scope/pkg', '@scope/pkg/sub/path', 'fs', 'node:fs', 'node:fs/promises', 'pkg.js'])('accepts the bare or builtin specifier %s', (specifier) => {
+    expect(isPackageSpecifier(specifier)).toBe(true);
+  });
+
+  it.each(['./sibling', '../up', '.', '..', '/abs/path', '#internal', '#internal/sub', 'file:///x.js', 'https://example.com/x.js', 'C:/x.js', 'data:text/javascript,1'])('rejects %s, which names no package', (specifier) => {
+    expect(isPackageSpecifier(specifier)).toBe(false);
+  });
+
+  it('reads a colon after a path segment as part of a package subpath, not as a URL scheme', () => {
+    // The scheme pattern is anchored to the start and allows only scheme characters before the colon, so a colon further in (after a slash) is not a scheme.
+    expect(isPackageSpecifier('pkg/a:b')).toBe(true);
   });
 });
 
