@@ -193,7 +193,7 @@ export default tseslint.config(
 );
 ```
 
-`plugin.configs.recommended`/`plugin.configs.barrel` carry no `files`/`ignores` and are safe unscoped — `no-side-effects-in-index` and `no-non-barrel-reexport` each check `context.filename` themselves (self-scoping). For a barrel not at `src/index.ts`, or a project-specific exception, layer an override on top (e.g. `{ files: ['lib/other.ts'], rules: { 'exadev/no-non-barrel-reexport': 'off' } }`) rather than wiring all four rules individually.
+`plugin.configs.recommended`/`plugin.configs.barrel` carry no `files`/`ignores` and are safe unscoped — `no-side-effects-in-index` and `no-non-barrel-reexport` each check `context.filename` themselves (self-scoping). For a barrel not at `src/index.ts`, or a project-specific exception, layer an override on top (e.g. `{ files: ['lib/other.ts'], rules: { 'exadev/no-non-barrel-reexport': 'off' } }`) rather than wiring all four rules individually. A package that publishes several entry points declares them through `exadev/barrel-policy`'s `entries` option instead (see [Package entry points](#package-entry-points)), which keeps each entry held to the barrel rules rather than switching them off.
 
 ## Optional features
 
@@ -376,7 +376,7 @@ Bundled into `exadevConfig()`'s default output the same way React/Next.js auto-d
 
 | Rule | Fixable | Description |
 | --- | --- | --- |
-| `barrel-policy` | | **Umbrella rule selecting a whole index-file barrel policy.** One `{ mode }` option covers the four barrel rules below. See [Barrel policy](#barrel-policy). |
+| `barrel-policy` | | **Umbrella rule selecting a whole index-file barrel policy.** One `{ mode }` option covers the four barrel rules below, and an `entries` option declares a package's other entry files as barrels. See [Barrel policy](#barrel-policy). |
 | `no-index-files` | | **Bans any `index.*` file outright** (mode 1). The strictest policy. |
 | `no-non-barrel-index` | | **Only `src/index.ts` may be named `index.*`** — any other `index.ts`/`.js`/etc would be silently selected by a consumer's bare directory import. |
 | `no-non-barrel-reexport` | ✓ | **Re-exports belong only in a barrel.** Catches the split form across two statements (`import { x } from './y'; export { x };` or `export default x;`) which no AST selector alone can match. Autofix deletes the export and the now-pointless import when it was the import's only use. Self-scopes away from any index file. |
@@ -464,6 +464,33 @@ Notes on `'auto'`:
 - `private: true` in `package.json` is not consulted by the detection: a pnpm workspace package is routinely both `private` and a genuine import target for sibling packages via `exports`, so `private` says nothing about whether a barrel is warranted.
 
 In every mode, re-exports are banned outside a permitted barrel, and a permitted barrel may contain only re-export statements. The umbrella composes the identical predicates the standalone rules use (shared in [`src/rules/barrel-helpers.ts`](src/rules/barrel-helpers.ts)). It is non-fixable — the autofix lives on `no-non-barrel-reexport`.
+
+### Package entry points
+
+A package that publishes subpath exports (`"./layout"`, `"./store/node"`) has a module behind each one, and that module is an entry point exactly as `src/index.ts` is: its job is to re-export a surface, usually another package's. `single` treats only `src/index.ts` as a barrel and `siblings` only accepts re-exports from a direct sibling, so neither mode can describe such a package, and turning the rule off for the entry files would also stop checking that they hold nothing but re-exports. The `entries` option lists them instead:
+
+```ts
+export default defineConfig(...exadevConfig(), {
+  rules: {
+    'exadev/barrel-policy': ['error', { mode: 'single', entries: ['src/layout.ts', 'src/store/*.ts', 'src/*/index.ts'] }],
+  },
+});
+```
+
+`entries` is a list of globs in the [file glob form](#file-level-rules), relative to the directory of the `package.json` nearest the linted file rather than to ESLint's working directory, so one shared config serves every package in a workspace. A glob is matched as written, with no widening to any depth: `src/*.ts` selects the files directly in `src`, and `src/*/index.ts` one level of index files below it. A leading `!` excludes. A file with no `package.json` above it is no package's entry point.
+
+A matched file is a permitted barrel in the mode's terms:
+
+| `mode` | What an entry file may contain | Where its re-exports may come from |
+| --- | --- | --- |
+| `'single'` (and `'auto'` resolved to `single`) | only re-exports | anywhere, as for `src/index.ts` |
+| `'siblings'` | only re-exports | a package (`pkg`, `@scope/pkg/sub`, `node:fs`) or a direct sibling (`./module`) |
+
+An entry file that is an index file below `src` is not reported as a second index file in `single` mode. Every file the list does not match keeps the behaviour its mode gives it: a re-export from it is still reported, an index file it does not match is still reported in `single` mode, and a non-entry index file in `siblings` mode still re-exports only from its siblings. In `siblings` mode a relative path that is not a sibling (`../shared`, `./a/b`) and a subpath import (`#internal`, which resolves to a file of this package) are reported from an entry file too.
+
+`entries` beside `mode: 'banned'` is an error when the rule is created, since that mode permits no barrel. Under `'auto'`, a package with neither `exports` nor `main` resolves to `banned` and publishes no entry point, so the list selects nothing there.
+
+Why a list rather than reading `exports`: an `exports` target names the built file (`./dist/layout.js`), and which source file produced it depends on the build tool's configuration (tsdown or tsup entries, `tsc`'s `rootDir` and `outDir`, a bundler's input map), which a lint rule cannot read. Deriving the entries would therefore guess, and a wrong guess either reports a real entry point or lets an ordinary module re-export freely; the list states them exactly.
 
 ## File-level rules
 

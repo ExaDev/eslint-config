@@ -66,6 +66,16 @@ export function isDirectSibling(specifier: string): boolean {
 }
 
 /**
+ * True when a module specifier names a package rather than a file of this one: a bare specifier (`pkg`, `pkg/sub`, `@scope/pkg/sub`) or a Node builtin (`fs`, `node:fs`). Rejects a relative path (`./x`, `../x`, `.`), an absolute path (`/x`), a subpath import (`#x`, which resolves through this package's own `imports` map to one of its own files) and any other URL scheme (`file:`, `https:`, and a Windows drive letter, which has the same shape).
+ */
+export function isPackageSpecifier(specifier: string): boolean {
+  if (specifier.startsWith('.') || specifier.startsWith('/') || specifier.startsWith('#')) return false;
+  const scheme = /^[a-z][a-z\d+.-]*:/i.exec(specifier);
+
+  return scheme === null || scheme[0] === 'node:';
+}
+
+/**
  * Runtime type guard narrowing ESLint's `any`-typed context.options entry to BarrelMode without an assertion. ESLint validates the enum in a rule's meta.schema before the rule runs, so a well-configured caller never reaches the false branch; the guard exists to satisfy the type-aware lint rules (no-unsafe-argument) that a plain comparison against `any` does not, since comparing `any` to a string literal leaves the value typed as `any` rather than narrowing it.
  */
 export function isBarrelMode(value: unknown): value is BarrelMode {

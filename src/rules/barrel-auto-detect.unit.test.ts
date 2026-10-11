@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { decideAutoBarrelMode, findNearestPackageJson, resolveAutoMode } from './barrel-auto-detect';
+import { decideAutoBarrelMode, findNearestPackageJson, findNearestPackageRoot, resolveAutoMode } from './barrel-auto-detect';
 
 describe('decideAutoBarrelMode', () => {
   it('resolves single for a non-empty object exports field', () => {
@@ -148,5 +148,67 @@ describe('findNearestPackageJson', () => {
     // Written only AFTER the first call already walked (finding nothing) and cached that outcome: a genuinely fresh second walk would find this file immediately (it sits directly in deepDir), so only the cached "undefined" outcome being returned, not a real re-walk, explains a second undefined result here.
     writeFileSync(join(deepDir, 'package.json'), JSON.stringify({ name: 'appeared-after-first-call' }));
     expect(findNearestPackageJson(deepDir)).toBeUndefined();
+  });
+});
+
+describe('findNearestPackageRoot', () => {
+  let root: string;
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('returns the nearest ancestor directory holding a package.json, not a more distant one', () => {
+    root = mkdtempSync(join(tmpdir(), 'barrel-package-root-nearest-'));
+    const packageDir = join(root, 'packages', 'app');
+    const startDir = join(packageDir, 'src', 'store');
+    mkdirSync(startDir, { recursive: true });
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'workspace' }));
+    writeFileSync(join(packageDir, 'package.json'), JSON.stringify({ name: 'app' }));
+
+    expect(findNearestPackageRoot(startDir)).toBe(packageDir);
+  });
+
+  it('includes the start directory itself', () => {
+    root = mkdtempSync(join(tmpdir(), 'barrel-package-root-self-'));
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'self' }));
+
+    expect(findNearestPackageRoot(root)).toBe(root);
+  });
+
+  it('returns the directory of a package.json whose content is not a usable manifest, since only its existence marks the package', () => {
+    root = mkdtempSync(join(tmpdir(), 'barrel-package-root-array-'));
+    const startDir = join(root, 'src');
+    mkdirSync(startDir, { recursive: true });
+    writeFileSync(join(root, 'package.json'), JSON.stringify(['not', 'an', 'object']));
+
+    expect(findNearestPackageRoot(startDir)).toBe(root);
+  });
+
+  it('returns undefined once the walk reaches the filesystem root with no ancestor package.json', () => {
+    // tmpdir()'s ancestry owns no package.json up to "/", as the findNearestPackageJson case above relies on too.
+    root = mkdtempSync(join(tmpdir(), 'barrel-package-root-none-'));
+    const deepDir = join(root, 'a', 'b');
+    mkdirSync(deepDir, { recursive: true });
+
+    expect(findNearestPackageRoot(deepDir)).toBeUndefined();
+  });
+
+  it('caches both outcomes by start directory, never walking again for a directory it has already resolved', () => {
+    root = mkdtempSync(join(tmpdir(), 'barrel-package-root-cache-'));
+    const found = join(root, 'found', 'src');
+    const missing = join(root, 'missing');
+    mkdirSync(found, { recursive: true });
+    mkdirSync(missing, { recursive: true });
+    writeFileSync(join(root, 'found', 'package.json'), JSON.stringify({ name: 'found' }));
+
+    expect(findNearestPackageRoot(found)).toBe(join(root, 'found'));
+    expect(findNearestPackageRoot(missing)).toBeUndefined();
+
+    // Each change below would alter a fresh walk's answer, so an unchanged answer can only have come from the cache.
+    writeFileSync(join(found, 'package.json'), JSON.stringify({ name: 'closer' }));
+    writeFileSync(join(missing, 'package.json'), JSON.stringify({ name: 'appeared' }));
+    expect(findNearestPackageRoot(found)).toBe(join(root, 'found'));
+    expect(findNearestPackageRoot(missing)).toBeUndefined();
   });
 });
