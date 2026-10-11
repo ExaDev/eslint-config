@@ -1,5 +1,5 @@
 import type { TSESLint } from '@typescript-eslint/utils';
-import type { ConfigValue, PublicPlugin } from './config-types';
+import type { ConfigArrayValue, ConfigValue, PublicPlugin } from './config-types';
 import { version } from '../package.json';
 import { buildNextjsConfig } from './nextjs';
 import { buildReactConfig } from './react';
@@ -183,11 +183,11 @@ const plugin: TSESLint.FlatConfig.Plugin = {
       };
     },
     // Explicitly selecting this config is itself an explicit request for React support — unlike recommended/barrel above, which only ever reference this package's own always-present rules and can never fail, `enabled: true` here means a missing eslint-plugin-react throws a clear, actionable error rather than silently returning nothing (see src/react.ts). A consumer who wants silent auto-detection instead uses the exadevConfig() factory (src/create-config.ts), which threads the same tri-state through without ever forcing the choice.
-    get react(): ConfigValue {
+    get react(): ConfigArrayValue {
       return buildReactConfig({ enabled: true });
     },
     // Mirrors `react` above — explicit selection, throws if @next/eslint-plugin-next isn't installed (see src/nextjs.ts).
-    get nextjs(): ConfigValue {
+    get nextjs(): ConfigArrayValue {
       return buildNextjsConfig({ enabled: true, plugin });
     },
   },

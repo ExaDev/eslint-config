@@ -3,7 +3,8 @@ import type { Linter } from 'eslint';
 import { Linter as LinterClass } from 'eslint';
 import { describe, expect, it } from 'vitest';
 import { exadevConfig } from './create-config';
-import { viaDefineConfig, viaDefineConfigSpread, viaTseslintConfig } from './consumer-compatibility';
+import { viaDefineConfig, viaDefineConfigSpread, viaSpreadOptionalConfigs, viaTseslintConfig } from './consumer-compatibility';
+import { publicPlugin } from './plugin';
 
 // This file's job is proving the documented consumer patterns keep working at runtime, not just typecheck — consumer-compatibility.ts is deliberately excluded from the published bundle (see its own comment), so nothing else in this package ever imports it.
 describe('consumer compatibility patterns', () => {
@@ -20,6 +21,24 @@ describe('consumer compatibility patterns', () => {
   it('defineConfig(...exadevConfig()) produces a non-empty config array', () => {
     expect(Array.isArray(viaDefineConfigSpread)).toBe(true);
     expect(viaDefineConfigSpread.length).toBeGreaterThan(0);
+  });
+
+  it('defineConfig(...plugin.configs.react, ...plugin.configs.nextjs) spreads the blocks both getters return', () => {
+    // This repository installs the React and Next.js peers as dev dependencies, so both getters resolve and each contributes at least one block.
+    expect(viaSpreadOptionalConfigs().length).toBeGreaterThanOrEqual(publicPlugin.configs.react.length + publicPlugin.configs.nextjs.length);
+    expect(publicPlugin.configs.react.length).toBeGreaterThan(0);
+    expect(publicPlugin.configs.nextjs.length).toBeGreaterThan(0);
+  });
+
+  it('types plugin.configs.recommended and plugin.configs.barrel as single config objects, as their getters return them', () => {
+    expect(Array.isArray(publicPlugin.configs.recommended)).toBe(false);
+    expect(Array.isArray(publicPlugin.configs.barrel)).toBe(false);
+    expect(() => {
+      // @ts-expect-error: a single config object is not iterable, so the type must reject spreading it.
+      const spread: unknown[] = [...publicPlugin.configs.recommended];
+
+      return spread;
+    }).toThrow(TypeError);
   });
 });
 
