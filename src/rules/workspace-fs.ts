@@ -28,7 +28,7 @@ export const realWorkspaceFs: WorkspaceFs = {
 };
 
 /**
- * A directory that does not exist yet (a group whose glob pattern has no matches at this level, or a workspace mid-restructure) lists as empty rather than throwing, the same "missing input is nothing to report, not an error" stance listDirs takes in the monorepo-template original this module supersedes.
+ * A directory that does not exist yet (a group whose glob pattern has no matches at this level, or a workspace mid-restructure) lists as empty rather than throwing, the same "missing input is nothing to report, not an error" stance listDirs takes in the earlier implementation this module supersedes.
  */
 export function listSubdirectories(fs: WorkspaceFs, dir: string): readonly string[] {
   if (!fs.existsSync(dir)) return [];

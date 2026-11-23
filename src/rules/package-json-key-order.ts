@@ -63,7 +63,7 @@ export function compareSyncpackKey(a: string, b: string): number {
 }
 
 /**
- * The pure decision for an adjacent pair of top-level keys, independent of ESLint/momoa: given syncpack's own `sortFirst` list, is `curr` allowed to immediately follow `prev`? A pinned key (present in `sortFirst`) must appear in exactly `sortFirst`'s own order; every other key sorts after every pinned key, and among themselves by `compareSyncpackKey`. Kept separate from `create()` below so it can be unit-tested directly, matching the same pattern `no-uphill-dependency`'s `checkDependencies` in the monorepo-template uses.
+ * The pure decision for an adjacent pair of top-level keys, independent of ESLint/momoa: given syncpack's own `sortFirst` list, is `curr` allowed to immediately follow `prev`? A pinned key (present in `sortFirst`) must appear in exactly `sortFirst`'s own order; every other key sorts after every pinned key, and among themselves by `compareSyncpackKey`. Kept separate from `create()` below so it can be unit-tested directly, matching the same pattern `no-uphill-dependency`'s `checkDependencies` in an earlier implementation uses.
  */
 export function isValidTopLevelOrder(prev: string, curr: string, sortFirst: readonly string[]): boolean {
   const prevIndex = sortFirst.indexOf(prev);
