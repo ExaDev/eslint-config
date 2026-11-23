@@ -356,7 +356,7 @@ describe('readWorkspaceArchitectureOptions', () => {
   });
 
   it('passes through valid "naming" with both fields', () => {
-    const naming = { scope: '@exacap', separator: '_' };
+    const naming = { scope: '@acme', separator: '_' };
     expect(readWorkspaceArchitectureOptions({ ...MINIMAL, naming }).naming).toEqual(naming);
   });
 

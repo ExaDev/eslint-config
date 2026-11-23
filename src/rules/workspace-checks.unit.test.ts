@@ -206,8 +206,8 @@ describe('expectedPackageName', () => {
   const nestedPath: GroupSpec = { name: 'product', path: 'product' };
 
   it("'drop-group' (the default) drops the group's own path segments and joins the rest", () => {
-    expect(expectedPackageName('core/clock/contract', core, { scope: '@exacap' })).toBe('@exacap/clock-contract');
-    expect(expectedPackageName('core/clock/system', core, { scope: '@exacap' })).toBe('@exacap/clock-system');
+    expect(expectedPackageName('core/clock/contract', core, { scope: '@acme' })).toBe('@acme/clock-contract');
+    expect(expectedPackageName('core/clock/system', core, { scope: '@acme' })).toBe('@acme/clock-system');
   });
 
   it("'keep-group' joins every segment including the group's own", () => {
@@ -239,7 +239,7 @@ describe('expectedPackageName', () => {
   });
 
   it('uses a custom separator when given', () => {
-    expect(expectedPackageName('core/clock/contract', core, { scope: '@exacap', separator: '_' })).toBe('@exacap/clock_contract');
+    expect(expectedPackageName('core/clock/contract', core, { scope: '@acme', separator: '_' })).toBe('@acme/clock_contract');
   });
 
   it("a multi-segment group path is dropped in full under 'drop-group'", () => {
@@ -247,12 +247,12 @@ describe('expectedPackageName', () => {
   });
 
   it('drops an empty segment from a leading slash in relativeDir, rather than shifting every later segment', () => {
-    expect(expectedPackageName('/core/clock/contract', core, { scope: '@exacap' })).toBe('@exacap/clock-contract');
+    expect(expectedPackageName('/core/clock/contract', core, { scope: '@acme' })).toBe('@acme/clock-contract');
   });
 
   it("tolerates a trailing slash in a group's own path, rather than shifting the drop-group boundary by one", () => {
     const trailingSlashGroup: GroupSpec = { name: 'core', path: 'core/' };
-    expect(expectedPackageName('core/clock/contract', trailingSlashGroup, { scope: '@exacap' })).toBe('@exacap/clock-contract');
+    expect(expectedPackageName('core/clock/contract', trailingSlashGroup, { scope: '@acme' })).toBe('@acme/clock-contract');
   });
 
   it("'drop-group' falls back to the group's own name when the package sits exactly at the group's own root, leaving no path segments for rest to keep", () => {

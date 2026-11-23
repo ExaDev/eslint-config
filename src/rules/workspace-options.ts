@@ -59,7 +59,7 @@ export interface RankSkipOptions {
 }
 
 export interface NamingOptions {
-  // The package name prefix (such as "@exacap"), joined to the derived path segments with "/". Omitted entirely, package-name-mirrors-path checks an unscoped name.
+  // The package name prefix (such as "@acme"), joined to the derived path segments with "/". Omitted entirely, package-name-mirrors-path checks an unscoped name.
   readonly scope?: string;
   // Joins a group's own derived path segments together. Defaults to "-".
   readonly separator?: string;

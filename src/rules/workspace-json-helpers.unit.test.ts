@@ -22,8 +22,8 @@ describe('getMemberKeyName', () => {
 
 describe('readDeclaredName', () => {
   it('reads a top-level "name" string field', () => {
-    const result = readDeclaredName(rootObjectOf('{"name": "@exacap/clock-contract"}'));
-    expect(result?.name).toBe('@exacap/clock-contract');
+    const result = readDeclaredName(rootObjectOf('{"name": "@acme/clock-contract"}'));
+    expect(result?.name).toBe('@acme/clock-contract');
   });
 
   it('returns undefined when there is no "name" field at all', () => {

@@ -1557,7 +1557,7 @@ export default exadevConfig({
       { name: 'test', rank: 4, naming: 'keep-group' },
     ],
     isolatedGroups: [['features', 'verticals']],
-    naming: { scope: '@exacap' },
+    naming: { scope: '@acme' },
   },
 });
 ```
