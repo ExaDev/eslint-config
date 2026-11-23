@@ -46,7 +46,7 @@ function fakeFs(
 describe('stripScope', () => {
   it('strips a leading npm scope, however many characters it holds', () => {
     // A single-character scope ("@x/") cannot distinguish the anchor from the quantifier: both "^@[^/]+/" and a hypothetical "^@[^/]/" (exactly one character) would strip it identically. A real, multi-character scope name is what actually exercises "+" (one or more characters), not merely "exactly one".
-    expect(stripScope('@exacap/store-cli')).toBe('store-cli');
+    expect(stripScope('@acme/store-cli')).toBe('store-cli');
   });
 
   it('leaves a name with no scope at all unchanged', () => {
