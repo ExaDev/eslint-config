@@ -1,3 +1,10 @@
+## [3.1.2](https://github.com/ExaDev/eslint-config/compare/v3.1.1...v3.1.2) (2026-11-23)
+
+
+### Documentation
+
+* use a neutral package scope in the examples and tests ([58f7ff2](https://github.com/ExaDev/eslint-config/commit/58f7ff2fb7d1e14a79c4c800f1d1d56ec39dfe53))
+
 ## [3.1.1](https://github.com/ExaDev/eslint-config/compare/v3.1.0...v3.1.1) (2026-11-23)
 
 
