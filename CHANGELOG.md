@@ -1,3 +1,15 @@
+## [3.1.1](https://github.com/ExaDev/eslint-config/compare/v3.1.0...v3.1.1) (2026-11-23)
+
+
+### Bug Fixes
+
+* pin the runner-fallback action to the version that sends public repositories to hosted runners ([06765b5](https://github.com/ExaDev/eslint-config/commit/06765b5e9449c073bd054a111ae0cd1c16a311c0))
+
+
+### Documentation
+
+* remove references to private repositories and a client from the public source ([35fd06c](https://github.com/ExaDev/eslint-config/commit/35fd06c4ba737ceb27bfb425efb7464e106e5633))
+
 # [3.1.0](https://github.com/ExaDev/eslint-config/compare/v3.0.2...v3.1.0) (2026-10-11)
 
 
