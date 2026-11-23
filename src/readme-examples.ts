@@ -79,7 +79,7 @@ export function buildViaWorkspaceArchitecture(): DefinedConfig {
         { name: 'targets', rank: 3 },
         { name: 'test', rank: 4, naming: 'keep-group' },
       ],
-      naming: { scope: '@novus' },
+      naming: { scope: '@acme' },
     }),
     ...exadevConfig({ react: false, nextjs: false }),
   );

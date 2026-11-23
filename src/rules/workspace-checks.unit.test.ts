@@ -211,7 +211,7 @@ describe('expectedPackageName', () => {
   });
 
   it("'keep-group' joins every segment including the group's own", () => {
-    expect(expectedPackageName('test/database', test, { scope: '@novus' })).toBe('@novus/test-database');
+    expect(expectedPackageName('test/database', test, { scope: '@acme' })).toBe('@acme/test-database');
   });
 
   it("'keep-group' uses the group's own name regardless of how deep its path nests, when the two happen to agree", () => {

@@ -3,7 +3,7 @@ import type { AllowedEdge, DependencyConstraint, ExemptTargetGroup, PackageSelec
 import type { GroupSpec, NamingOptions, NamingStrategy, RankSkipOptions } from './workspace-options';
 import { splitPathSegments } from './workspace-path';
 
-// The pure decisions every workspace-architecture rule reports, kept independent of ESLint/momoa so each can be unit-tested directly against fabricated graph data, matching the split the monorepo-template and hive originals already used (their own checkDependencies, dependencyPathExists, expectedPackageName).
+// The pure decisions every workspace-architecture rule reports, kept independent of ESLint/momoa so each can be unit-tested directly against fabricated graph data, matching the split earlier local implementations already used (their own checkDependencies, dependencyPathExists, expectedPackageName).
 
 export type WorkspaceViolationMessageId = 'uphillRank' | 'rankSkip' | 'crossSlice' | 'isolatedGroup' | ConstraintViolationMessageId;
 

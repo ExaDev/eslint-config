@@ -62,7 +62,7 @@ describe('workspaceArchitectureConfig', () => {
     expect(result[0]?.plugins?.['json']).toBe(directPlugin);
   });
 
-  // Type-level: this file's own tsconfig sets exactOptionalPropertyTypes (the same setting monorepo-template and hive both build their real config under), so a regression that widens workspaceArchitectureConfig's return type back to the internal, typescript-eslint-typed ConfigArrayValue is caught here at compile time, not merely at runtime (ExaDev/eslint-config#39: TS2345, Config not assignable to InfiniteArray<ConfigWithExtends>, wherever a consumer spread the standalone export straight into defineConfig).
+  // Type-level: this file's own tsconfig sets exactOptionalPropertyTypes (a setting real configurations commonly build under), so a regression that widens workspaceArchitectureConfig's return type back to the internal, typescript-eslint-typed ConfigArrayValue is caught here at compile time, not merely at runtime (ExaDev/eslint-config#39: TS2345, Config not assignable to InfiniteArray<ConfigWithExtends>, wherever a consumer spread the standalone export straight into defineConfig).
   it('spreads directly into defineConfig under exactOptionalPropertyTypes, the README\'s own standalone usage', () => {
     const config = defineConfig(...workspaceArchitectureConfig(MINIMAL));
     expect(config).toHaveLength(1);
