@@ -1,3 +1,20 @@
+# [4.0.0](https://github.com/ExaDev/eslint-config/compare/v3.1.2...v4.0.0) (2026-11-26)
+
+
+### Bug Fixes
+
+* compile option globs with minimatch 11, as ESLint 10.15 does ([a3bc6c2](https://github.com/ExaDev/eslint-config/commit/a3bc6c23c8fbe16d292f82bbf35a30ac9be87ca0))
+
+
+### Code Refactoring
+
+* declare rule default options in meta ([f7c3401](https://github.com/ExaDev/eslint-config/commit/f7c340120385dbcbbb03aff38f19f263b2f1e702))
+
+
+### BREAKING CHANGES
+
+* the eslint peer dependency is now >=10.15.0.
+
 ## [3.1.2](https://github.com/ExaDev/eslint-config/compare/v3.1.1...v3.1.2) (2026-11-23)
 
 
