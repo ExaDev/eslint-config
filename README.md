@@ -18,7 +18,7 @@ Multiple ExaDev repos carried identical copies of a handful of custom ESLint rul
 pnpm add -D @exadev/eslint-config typescript-eslint eslint
 ```
 
-Requires [`eslint`](https://eslint.org) `>=10.0.0` and [`typescript-eslint`](https://typescript-eslint.io/packages/typescript-eslint) `>=8.0.0` as peer dependencies. Importing anything from this package resolves `typescript-eslint`, since the default export and the `plugin` named export share one root module — see [Architecture](#architecture).
+Requires [`eslint`](https://eslint.org) `>=10.15.0` and [`typescript-eslint`](https://typescript-eslint.io/packages/typescript-eslint) `>=8.0.0` as peer dependencies. The `eslint` floor is the first release that compiles globs with [minimatch](https://github.com/isaacs/minimatch) 11, as this package does, so a file glob in an option selects what the same glob selects in a config's `files`. Importing anything from this package resolves `typescript-eslint`, since the default export and the `plugin` named export share one root module — see [Architecture](#architecture).
 
 ```ts
 // eslint.config.ts

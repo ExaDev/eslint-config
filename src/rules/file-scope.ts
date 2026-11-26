@@ -24,7 +24,7 @@ export function assertSupportedGlob(glob: string, optionName: string, kind: Glob
   let matcher: Minimatch;
   try {
     matcher = new Minimatch(body, minimatchOptions('any', kind));
-    if (matcher.makeRe() === false && !matcher.comment && !matcher.negate) throw new Error('the pattern has no valid form');
+    if (matcher.set.length === 0 && !matcher.comment && !matcher.negate) throw new Error('the pattern has no valid form');
   } catch (error) {
     if (!(error instanceof Error)) throw error;
     throw new Error(`@exadev/eslint-config: "${optionName}" has a glob that minimatch cannot compile: "${glob}": ${error.message}`, { cause: error });

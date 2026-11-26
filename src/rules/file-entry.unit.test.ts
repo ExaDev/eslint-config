@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { assertOnlyKeys, createEntryScope, readEntryFiles, readEntryRecords, readRequiredString, readRequiredStrings, readSpecifierPatterns } from './file-entry';
+import { UNCOMPILABLE_GLOB } from './uncompilable-glob';
 
 const CWD = '/repo';
 
@@ -72,7 +73,7 @@ describe('readSpecifierPatterns', () => {
 
   it.each([0, 1, 2])('rejects a pattern minimatch cannot compile at position %i, naming the option, the field and the pattern', (position) => {
     const list = ['fs', 'path', 'os'];
-    list[position] = '{[,]}[:alpha:]],';
-    expect(() => readSpecifierPatterns({ s: list }, 's', 'o')).toThrow('"o.s" has a glob that minimatch cannot compile: "{[,]}[:alpha:]],"');
+    list[position] = UNCOMPILABLE_GLOB;
+    expect(() => readSpecifierPatterns({ s: list }, 's', 'o')).toThrow(`"o.s" has a glob that minimatch cannot compile: "${UNCOMPILABLE_GLOB}"`);
   });
 });

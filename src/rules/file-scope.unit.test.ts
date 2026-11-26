@@ -2,8 +2,11 @@ import { ESLint } from 'eslint';
 import { describe, expect, it } from 'vitest';
 import { isRecord } from '../is-record';
 import { assertSupportedGlob, createFileScope, createPathMatcher, fileGlobsSchema, readFileGlobs, relativeToCwd } from './file-scope';
+import { UNCOMPILABLE_GLOB } from './uncompilable-glob';
 
 const CWD = '/repo';
+// minimatch reads a pattern of at most 64 KiB.
+const MINIMATCH_PATTERN_LENGTH_LIMIT = 65_536;
 const ORACLE_CWD = '/repo-oracle';
 
 function inScope(globs: readonly string[], relativePath: string): boolean {
@@ -26,6 +29,8 @@ const ORACLE_GLOBS = [
   // Character classes, escaped members, negation and POSIX classes.
   '[\\]]x', 'a/[a\\]b]/x', '[a\\]]', '[^\\]]x', '[!\\]]x', '[\\]a]x', '[\\]\\]x', '[]]x', '[]a]x', '[^]]x', '[a-c]x', '[^a]x', '[!a]x', '[ab]', '[\\\\]x', '[\\\\\\]]x', '[\\\\]]x', '[\\a]x', '[\\-]x', '[a\\-c]x', '[\\!a]x', '[\\[]x', '[\\^]x', '[\\^]]x', '[c][\\^]x', '[a\\^]x', '[\\^a]x', '[\\^-x]x',
   '[[:alpha:]]x', '[[:digit:]a]x', '[[:ab]', '[:alpha:]', '[a-]x', '[]-a]x', '[(]x/**', '**/[!(]x.ts', 'a/[unclosed(x', '[$]a',
+  // A POSIX class beside a literal character that is special in a regular expression.
+  '[[:alpha:]]-x', '[[:alpha:]]/,][/b', '{[,]}[:alpha:]],',
   // Braces, including nested, empty alternatives and the ${ form minimatch leaves literal.
   '{a,b}x', '{a,{b,c}}x', 'x{a,b}{c,d}', '*.fake{,.js}', 'x/{a,b/c}/y', '{a,b}[cd]', '{a}', '{a,}', '{,a}', '{a..c}', '{1..3}', '${a,b}.md', 'a${b,c}', '{a,b}${c,d}', 'a\\{b,c}', '{a\\,b,c}', '{a,b',
   // Extglob, written plainly and assembled by braces.
@@ -42,7 +47,6 @@ const ORACLE_GLOBS = [
 
 describe('createPathMatcher against ESLint', () => {
   it.each(ORACLE_GLOBS)('selects what ESLint selects for %s', async (glob) => {
-    
     let compiled = true;
     try {
       assertSupportedGlob(glob, 'opt');
@@ -66,8 +70,11 @@ describe('createPathMatcher against ESLint', () => {
 });
 
 describe('assertSupportedGlob', () => {
-  it.each(['{[,]}[:alpha:]],', '[{][:alpha:]]-,}', ',{,[}][:alpha:]]', '[{],[:alpha:]]}-'])('rejects %s, which minimatch cannot compile, naming the option and the whole glob', (glob) => {
-    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`@exadev/eslint-config: "opt" has a glob that minimatch cannot compile: "${glob}"`);
+  it.each([
+    ['more extglobs in one segment than minimatch compiles', UNCOMPILABLE_GLOB, 'pattern has too many extglobs'],
+    ['longer than minimatch reads', 'a'.repeat(MINIMATCH_PATTERN_LENGTH_LIMIT + 1), 'pattern is too long'],
+  ])('rejects a glob %s, naming the option and the whole glob', (_label, glob, reason) => {
+    expect(() => { assertSupportedGlob(glob, 'opt'); }).toThrow(`@exadev/eslint-config: "opt" has a glob that minimatch cannot compile: "${glob}": ${reason}`);
   });
 
   it.each(['/src/**', '/src/**/*.ts', 'src/**/', 'src/', '!/src/**', '/'])('rejects the file glob %s, which starts or ends with a slash and so selects nothing', (glob) => {
@@ -95,7 +102,7 @@ describe('assertSupportedGlob', () => {
   });
 
   it('rejects, for a specifier pattern too, one minimatch cannot compile', () => {
-    expect(() => { assertSupportedGlob('{[,]}[:alpha:]],', 'opt', 'specifier'); }).toThrow(/has a glob that minimatch cannot compile/u);
+    expect(() => { assertSupportedGlob(UNCOMPILABLE_GLOB, 'opt', 'specifier'); }).toThrow(/has a glob that minimatch cannot compile/u);
   });
 });
 
@@ -104,12 +111,16 @@ describe('readFileGlobs', () => {
     expect(readFileGlobs(['**/*.ts', glob], 'someOption')).toStrictEqual(['**/*.ts', glob]);
   });
 
-  it.each(['[[:alpha:]]/,][/b', '[[:alpha:]]/[-', '-/[[:alpha:]]]', ',/[[[:alpha:]]]'])('rejects %s, which constructs in minimatch but has no valid form and so matches nothing, naming the option and the glob', (glob) => {
+  it.each(['!', '!./'])('rejects %s, which constructs in minimatch but has no valid form and so matches nothing, naming the option and the glob', (glob) => {
     expect(() => readFileGlobs(['**/*.ts', glob], 'someOption')).toThrow(`@exadev/eslint-config: "someOption" has a glob that minimatch cannot compile: "${glob}": the pattern has no valid form`);
   });
 
+  it.each(['[[:alpha:]]-x', 'docs/[[:upper:]]*/my-file.md', '[[:alpha:]]/,][/b', '{[,]}[:alpha:]],'])('accepts %s, a POSIX class beside a literal character', (glob) => {
+    expect(readFileGlobs(['**/*.ts', glob], 'someOption')).toStrictEqual(['**/*.ts', glob]);
+  });
+
   it('rejects a glob minimatch cannot compile, naming the option and the glob', () => {
-    expect(() => readFileGlobs(['**/*.ts', '{[,]}[:alpha:]],'], 'someOption')).toThrow('"someOption" has a glob that minimatch cannot compile: "{[,]}[:alpha:]],"');
+    expect(() => readFileGlobs(['**/*.ts', UNCOMPILABLE_GLOB], 'someOption')).toThrow(`"someOption" has a glob that minimatch cannot compile: "${UNCOMPILABLE_GLOB}"`);
   });
 
   it('returns a valid list unchanged', () => {

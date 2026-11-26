@@ -1,6 +1,7 @@
 import { Linter } from 'eslint';
 import { describe, expect, it } from 'vitest';
 import { importPoliciesSchema, readImportPolicies } from './import-policy-options';
+import { UNCOMPILABLE_GLOB } from './uncompilable-glob';
 
 const DENY = { specifiers: ['fs'], message: 'not in workers' };
 
@@ -46,8 +47,8 @@ describe('readImportPolicies', () => {
 
   it('rejects unknown keys at every level', () => {
     expect(() => readImportPolicies([{ files: ['a'], deny: [DENY], nope: 1 }])).toThrow(/unknown key "nope"/u);
-    expect(() => readImportPolicies([{ files: ['a'], deny: [{ ...DENY, specifiers: ['{[,]}[:alpha:]],'] }] }])).toThrow(/"importPolicies\.deny\.specifiers" has a glob that minimatch cannot compile: "\{\[,\]\}\[:alpha:\]\],"/u);
-    expect(() => readImportPolicies([{ files: ['a'], confine: [{ specifiers: ['pkg/{[,]}[:alpha:]],'], onlyIn: ['a'] }] }])).toThrow(/\.confine\.specifiers" has a glob that minimatch cannot compile/u);
+    expect(() => readImportPolicies([{ files: ['a'], deny: [{ ...DENY, specifiers: [UNCOMPILABLE_GLOB] }] }])).toThrow(`"importPolicies.deny.specifiers" has a glob that minimatch cannot compile: "${UNCOMPILABLE_GLOB}"`);
+    expect(() => readImportPolicies([{ files: ['a'], confine: [{ specifiers: [`pkg/${UNCOMPILABLE_GLOB}`], onlyIn: ['a'] }] }])).toThrow(/\.confine\.specifiers" has a glob that minimatch cannot compile/u);
     expect(() => readImportPolicies([{ files: ['a'], deny: [{ ...DENY, nope: 1 }] }])).toThrow(/unknown key "nope"/u);
     expect(() => readImportPolicies([{ files: ['a'], confine: [{ specifiers: ['x'], onlyIn: ['a'], nope: 1 }] }])).toThrow(/unknown key "nope"/u);
     expect(() => readImportPolicies([{ files: ['a'], deny: [DENY], exceptEdges: [{ file: 'a', specifier: 'fs', reason: 'r', nope: 1 }] }])).toThrow(/unknown key "nope"/u);

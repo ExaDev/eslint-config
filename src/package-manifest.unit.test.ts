@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -27,5 +28,28 @@ describe('package.json optional peers resolved at runtime', () => {
 
   it.each(RUNTIME_RESOLVED_OPTIONAL_PEERS)('%s is also a devDependency, so this repo\'s own tests resolve it for real', (name) => {
     expect(field('devDependencies')).toHaveProperty([name]);
+  });
+});
+
+// The version of `minimatch` that code at `from` resolves.
+function minimatchMajor(from: string): string {
+  const entry = createRequire(from).resolve('minimatch');
+  const root = entry.slice(0, entry.lastIndexOf(join('minimatch', 'dist')));
+  const found: unknown = JSON.parse(readFileSync(join(root, 'minimatch', 'package.json'), 'utf8'));
+  if (!isRecord(found) || typeof found['version'] !== 'string') throw new Error(`no minimatch version for ${from}`);
+
+  return found['version'].slice(0, found['version'].indexOf('.'));
+}
+
+// Every file-glob option promises to select what ESLint selects, which holds only while both compile globs with the same minimatch.
+describe('minimatch shared with ESLint', () => {
+  it('is the same major as the one ESLint\'s config array resolves', () => {
+    const eslint = realpathSync(createRequire(import.meta.url).resolve('eslint'));
+    const configArray = createRequire(eslint).resolve('@eslint/config-array');
+    expect(minimatchMajor(configArray)).toBe(minimatchMajor(import.meta.url));
+  });
+
+  it('is required of a consumer by an eslint peer range that starts at the first release resolving it', () => {
+    expect(field('peerDependencies')['eslint']).toBe('>=10.15.0');
   });
 });

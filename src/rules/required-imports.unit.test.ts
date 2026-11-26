@@ -2,6 +2,7 @@ import { RuleTester } from '@typescript-eslint/rule-tester';
 import tseslint from 'typescript-eslint';
 import { describe, expect, it } from 'vitest';
 import rule, { readRequiredImportsEntries } from './required-imports';
+import { UNCOMPILABLE_GLOB } from './uncompilable-glob';
 
 const ruleTester = new RuleTester({
   languageOptions: { parser: tseslint.parser, sourceType: 'module' },
@@ -37,7 +38,7 @@ describe('required-imports options', () => {
     expect(read({ files: 'a.ts', from: [] })).toThrow(/"from"/u);
     expect(read({ files: 'a.ts', from: 'x', call: 'yes' })).toThrow(/"call" to be a boolean/u);
     expect(read({ from: 'x' })).toThrow(/glob strings/u);
-    expect(read({ files: 'a.ts', from: ['x', '{[,]}[:alpha:]],'] })).toThrow(/"exadev\/required-imports\.from" has a glob that minimatch cannot compile/u);
+    expect(read({ files: 'a.ts', from: ['x', UNCOMPILABLE_GLOB] })).toThrow(/"exadev\/required-imports\.from" has a glob that minimatch cannot compile/u);
   });
 });
 
