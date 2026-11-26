@@ -2,6 +2,7 @@ import { RuleTester } from '@typescript-eslint/rule-tester';
 import tseslint from 'typescript-eslint';
 import { describe, expect, it } from 'vitest';
 import rule, { readNoExternalMemberJsxTagOptions } from './no-external-member-jsx-tag';
+import { UNCOMPILABLE_GLOB } from './uncompilable-glob';
 
 describe('rule metadata', () => {
   it('carries the docs url built from the rule name', () => {
@@ -33,7 +34,7 @@ describe('readNoExternalMemberJsxTagOptions', () => {
     ['an empty allowSources list', { allowSources: [] }, /"allowSources" to be a non-empty array/u],
     ['a duplicated tag', { allowTags: ['A.B', 'A.B'] }, /"allowTags" to be a non-empty array of distinct/u],
     ['a non-string source', { allowSources: [1] }, /"allowSources" to be a non-empty array/u],
-    ['a source minimatch cannot compile', { allowSources: ['{[,]}[:alpha:]],'] }, /"no-external-member-jsx-tag\.allowSources" has a glob that minimatch cannot compile/u],
+    ['a source minimatch cannot compile', { allowSources: [UNCOMPILABLE_GLOB] }, /"no-external-member-jsx-tag\.allowSources" has a glob that minimatch cannot compile/u],
   ])('rejects %s', (_label, value, message) => {
     expect(() => readNoExternalMemberJsxTagOptions(value)).toThrow(message);
   });

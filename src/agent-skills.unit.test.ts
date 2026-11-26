@@ -22,6 +22,7 @@ import { createMemoryFs } from './rules/memory-fs';
 import { realWorkspaceFs } from './rules/workspace-fs';
 import { toPublicConfigArray } from './to-public-config-array';
 import type { RequireFn } from './optional-plugin';
+import { UNCOMPILABLE_GLOB } from './rules/uncompilable-glob';
 
 const CWD = '/repo';
 // One block for the SKILL.md files and one for each of the two manifest kinds.
@@ -137,7 +138,7 @@ describe('option validation', () => {
     ['an unknown key', { skills: [] }, /"agentSkills" has an unknown key "skills". Allowed keys: skillFiles, marketplaceFiles, pluginFiles/u],
     ['a non-array skillFiles', { skillFiles: 'a' }, /"agentSkills.skillFiles" must be an array of glob strings/u],
     ['an exclude-only marketplaceFiles', { marketplaceFiles: ['!a'] }, /"agentSkills.marketplaceFiles" must contain at least one glob that does not start with "!"/u],
-    ['a skillFiles glob minimatch cannot compile', { skillFiles: ['{[,]}[:alpha:]],'] }, /"agentSkills\.skillFiles" has a glob that minimatch cannot compile: "\{\[,\]\}\[:alpha:\]\],"/u],
+    ['a skillFiles glob minimatch cannot compile', { skillFiles: [UNCOMPILABLE_GLOB] }, `"agentSkills.skillFiles" has a glob that minimatch cannot compile: "${UNCOMPILABLE_GLOB}": pattern has too many extglobs`],
     ['a skillFiles glob starting with #', { skillFiles: ['#skills/*/SKILL.md'] }, /"agentSkills\.skillFiles" has a glob that starts with "#"/u],
     ['a pluginFiles glob with a second exclusion marker', { pluginFiles: ['**/.claude-plugin/plugin.json', '!!a/**'] }, /"agentSkills\.pluginFiles" has a glob with a second "!"/u],
     ['an empty-string pluginFiles entry', { pluginFiles: [''] }, /"agentSkills.pluginFiles" must contain only non-empty strings/u],

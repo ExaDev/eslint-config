@@ -9,6 +9,7 @@ import { createIgnoreMatcher } from './ignore-patterns';
 import { createMemoryFs } from './memory-fs';
 import { createSkillNameUniqueRule, scanSkillFiles } from './skill-name-unique';
 import { realWorkspaceFs, type WorkspaceFs } from './workspace-fs';
+import { UNCOMPILABLE_GLOB } from './uncompilable-glob';
 
 // Counts every Minimatch the rule's code constructs, so a test can tell when a glob is compiled.
 const constructions = vi.hoisted(() => ({ count: 0 }));
@@ -332,7 +333,7 @@ describe('skill-name-unique', () => {
     expect(() => lintWith(fs, skill('alpha'), own, { options: [{ file: [] }] })).toThrow(/should NOT have additional properties/u);
     expect(() => lintWith(fs, skill('alpha'), own, { options: [{ files: [] }] })).toThrow(/should NOT have fewer than 1 items/u);
     expect(() => lintWith(fs, skill('alpha'), own, { options: [{ ignores: 'dist' }] })).toThrow(/should be array/u);
-    expect(() => lintWith(fs, skill('alpha'), own, { options: [{ files: ['skills/*/SKILL.md', '{[,]}[:alpha:]],'] }] })).toThrow(/"skill-name-unique\.files" has a glob that minimatch cannot compile: "\{\[,\]\}\[:alpha:\]\],"/u);
+    expect(() => lintWith(fs, skill('alpha'), own, { options: [{ files: ['skills/*/SKILL.md', UNCOMPILABLE_GLOB] }] })).toThrow(`"skill-name-unique.files" has a glob that minimatch cannot compile: "${UNCOMPILABLE_GLOB}"`);
   });
 
   describe('scan caching', () => {

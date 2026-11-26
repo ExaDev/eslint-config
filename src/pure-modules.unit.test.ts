@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { exadevConfig } from './create-config';
 import plugin, { publicPlugin } from './plugin';
 import { buildPureModulesConfig, pureModulesConfig } from './pure-modules';
+import { UNCOMPILABLE_GLOB } from './rules/uncompilable-glob';
 
 const FILES = ['src/core/**'] as const;
 // A block naming the extension, as exadevConfig() supplies: ESLint lints a file only when some non-wildcard-only files pattern matches it.
@@ -46,7 +47,7 @@ describe('pureModulesConfig', () => {
     expect(() => pureModulesConfig({ files: [] })).toThrow('"pureModules.files" must contain at least one glob');
     expect(() => pureModulesConfig({ files: ['!src/core/**'] })).toThrow('"pureModules.files" must contain at least one glob that does not start with "!".');
     expect(() => pureModulesConfig({ files: FILES, allowImports: ['path'] })).toThrow('selects no banned module');
-    expect(() => pureModulesConfig({ files: FILES, allowImports: ['{[,]}[:alpha:]],'] })).toThrow('"pureModules.allowImports" has a glob that minimatch cannot compile: "{[,]}[:alpha:]],"');
+    expect(() => pureModulesConfig({ files: FILES, allowImports: [UNCOMPILABLE_GLOB] })).toThrow(`"pureModules.allowImports" has a glob that minimatch cannot compile: "${UNCOMPILABLE_GLOB}"`);
     expect(() => buildPureModulesConfig({ files: FILES, noControlFlow: 'yes' } as never)).toThrow('"pureModules.noControlFlow" must be a boolean.');
     expect(() => buildPureModulesConfig({ files: FILES, allowImport: ['fs'] } as never)).toThrow('has an unknown key "allowImport"');
     expect(() => buildPureModulesConfig('src/core' as never)).toThrow('"pureModules" must be an object.');
