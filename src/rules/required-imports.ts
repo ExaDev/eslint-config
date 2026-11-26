@@ -79,6 +79,7 @@ const createRule = ESLintUtils.RuleCreator((name) => `https://github.com/ExaDev/
 const requiredImports = createRule<[unknown], 'missingImport' | 'missingCall'>({
   name: 'required-imports',
   meta: {
+    defaultOptions: [[]],
     type: 'problem',
     docs: {
       description: 'Require files matching a glob to import, and optionally call, a module matching the configured specifier pattern.',
@@ -103,7 +104,6 @@ const requiredImports = createRule<[unknown], 'missingImport' | 'missingCall'>({
       missingCall: 'This file imports from a module matching {{ from }} but never calls it.',
     },
   },
-  defaultOptions: [[]],
   create(context, [options]) {
     const entries = readRequiredImportsEntries(options).filter((entry) => entry.inScope(context.filename, context.cwd));
     if (entries.length === 0) return {};

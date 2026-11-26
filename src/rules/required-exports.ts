@@ -98,6 +98,7 @@ const createRule = ESLintUtils.RuleCreator((name) => `https://github.com/ExaDev/
 const requiredExports = createRule<[unknown], 'missingExports'>({
   name: 'required-exports',
   meta: {
+    defaultOptions: [[]],
     type: 'problem',
     docs: {
       description: 'Require files matching a glob to export the configured names.',
@@ -120,7 +121,6 @@ const requiredExports = createRule<[unknown], 'missingExports'>({
       missingExports: 'This file must export: {{ names }}.',
     },
   },
-  defaultOptions: [[]],
   create(context, [options]) {
     const required = readRequiredExportsEntries(options)
       .filter((entry) => entry.inScope(context.filename, context.cwd))

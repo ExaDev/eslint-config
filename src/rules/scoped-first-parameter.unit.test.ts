@@ -1,6 +1,14 @@
+import { Linter } from '@typescript-eslint/utils/ts-eslint';
 import { RuleTester } from '@typescript-eslint/rule-tester';
 import { describe, expect, it } from 'vitest';
 import rule, { readScopedFirstParameterOptions } from './scoped-first-parameter';
+
+describe('scoped-first-parameter enabled without options', () => {
+  it('reports its own message naming what it needs, not a schema error', () => {
+    const lint = () => new Linter().verify('', [{ plugins: { exadev: { rules: { 'scoped-first-parameter': rule } } }, rules: { 'exadev/scoped-first-parameter': 'error' } }]);
+    expect(lint).toThrow('"scoped-first-parameter" needs an "interfaces" regular expression');
+  });
+});
 
 describe('scoped-first-parameter metadata', () => {
   it('names its docs page after the rule file, and says the check is on the signature', () => {

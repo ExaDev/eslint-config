@@ -225,6 +225,7 @@ export function runsUnconditionally(node: TSESTree.Node): boolean {
 const nonVacuousGuard = createRule<[], MessageIds>({
   name: 'non-vacuous-guard',
   meta: {
+    defaultOptions: [],
     type: 'problem',
     docs: {
       description: 'Require a guard test to assert a non-zero lower bound on what it discovered, and to check its pattern against an input it must catch and one it must not.',
@@ -239,7 +240,6 @@ const nonVacuousGuard = createRule<[], MessageIds>({
         'This guard never checks that its pattern leaves alone an input it must not flag, so a pattern that matches everything passes. Assert that a known clean input is not reported (`expect(pattern.test(clean)).toBe(false)`), outside any loop or callback.',
     },
   },
-  defaultOptions: [],
   create(context) {
     const evidence = new Set<GuardEvidence>();
 

@@ -6,8 +6,7 @@ import { hasUseClientDirective } from './use-client-directive';
 // A probe rule reporting what hasUseClientDirective says about each file's program.
 const probe = ESLintUtils.RuleCreator((name) => name)<[], 'marked' | 'unmarked'>({
   name: 'probe',
-  meta: { type: 'problem', docs: { description: 'probe' }, schema: [], messages: { marked: 'marked', unmarked: 'unmarked' } },
-  defaultOptions: [],
+  meta: { defaultOptions: [], type: 'problem', docs: { description: 'probe' }, schema: [], messages: { marked: 'marked', unmarked: 'unmarked' } },
   create(context) {
     return {
       [AST_NODE_TYPES.Program](node) {

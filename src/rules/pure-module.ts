@@ -64,6 +64,7 @@ function readsClock(sourceCode: Readonly<TSESLint.SourceCode>, node: TSESTree.Ca
 const pureModule = createRule<[PureModuleOptions], MessageIds>({
   name: 'pure-module',
   meta: {
+    defaultOptions: [{}],
     type: 'problem',
     docs: {
       description: 'Ban I/O modules, I/O and scheduling globals, clock and random reads, and async functions in a module that is meant to be a pure functional core.',
@@ -79,7 +80,6 @@ const pureModule = createRule<[PureModuleOptions], MessageIds>({
       forAwait: 'A pure module cannot iterate asynchronously. Take the values as a parameter.',
     },
   },
-  defaultOptions: [{}],
   create(context, [options]) {
     const { sourceCode } = context;
     const { allowImports } = readPureModuleOptions(options, OPTION_NAME);

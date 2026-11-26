@@ -20,8 +20,7 @@ let patternName: TSESTree.BindingName | undefined;
 const createRule = ESLintUtils.RuleCreator((name) => name);
 const probe = createRule({
   name: 'probe',
-  meta: { type: 'problem', schema: [], docs: { description: 'probe' }, messages: { hit: 'hit' } },
-  defaultOptions: [],
+  meta: { defaultOptions: [], type: 'problem', schema: [], docs: { description: 'probe' }, messages: { hit: 'hit' } },
   create() {
     return {
       FunctionDeclaration(node) {

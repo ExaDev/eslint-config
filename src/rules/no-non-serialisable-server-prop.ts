@@ -88,6 +88,7 @@ function elementName(sourceCode: Readonly<TSESLint.SourceCode>, attribute: TSEST
 const noNonSerialisableServerProp = createRule<[unknown], MessageIds>({
   name: 'no-non-serialisable-server-prop',
   meta: {
+    defaultOptions: [{}],
     type: 'problem',
     docs: {
       description: 'Require the configured props of JSX elements in a file without "use client" to be serialisable data, since a function or component reference cannot cross the server component boundary.',
@@ -98,7 +99,6 @@ const noNonSerialisableServerProp = createRule<[unknown], MessageIds>({
         'The "{{ name }}" prop of <{{ element }}> is not serialisable data. In a file without "use client" a function or component reference cannot be serialised across the server component boundary. Pass a string key or an element instead, or add "use client" if this file only runs on the client.',
     },
   },
-  defaultOptions: [{}],
   create(context, [options]) {
     const { names, allowElements } = readNoNonSerialisableServerPropOptions(options);
     const { sourceCode } = context;
