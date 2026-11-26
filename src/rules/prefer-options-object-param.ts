@@ -197,6 +197,7 @@ type MessageIds = 'tooManyTrailingOptional' | 'wrapInOptionsObject' | 'placehold
 const preferOptionsObjectParam = createRule<Options, MessageIds>({
   name: 'prefer-options-object-param',
   meta: {
+    defaultOptions: [{ minTrailingOptional: 2 }],
     type: 'suggestion',
     hasSuggestions: true,
     docs: {
@@ -219,7 +220,6 @@ const preferOptionsObjectParam = createRule<Options, MessageIds>({
       placeholderBeforeRest:
         'This {{ kind }} takes an optional parameter ({{ name }}) immediately before a rest parameter, so a caller passing only the rest values must supply a placeholder for it. Take the rest values alone, or put the optional value and the rest values in one object.',
     },
-    defaultOptions: [{ minTrailingOptional: 2 }],
   },
   create(context, [{ minTrailingOptional }]) {
     const { sourceCode } = context;

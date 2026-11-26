@@ -77,6 +77,7 @@ const createRule = ESLintUtils.RuleCreator((name) => `https://github.com/ExaDev/
 const noExternalMemberJsxTag = createRule<[unknown], MessageIds>({
   name: 'no-external-member-jsx-tag',
   meta: {
+    defaultOptions: [{}],
     type: 'problem',
     docs: {
       description: 'Disallow a member JSX tag rooted at an import from a package in a file without "use client", whose statics may not survive the server component boundary.',
@@ -87,7 +88,6 @@ const noExternalMemberJsxTag = createRule<[unknown], MessageIds>({
         '<{{ tag }}> is a property of "{{ root }}", imported from "{{ source }}". In a file without "use client" a component reached this way may depend on statics that do not survive the server component boundary. Import the component by name from a module marked "use client", or add "use client" if this file only runs on the client.',
     },
   },
-  defaultOptions: [{}],
   create(context, [options]) {
     const { allowSource, allowTags } = readNoExternalMemberJsxTagOptions(options);
     const { sourceCode } = context;

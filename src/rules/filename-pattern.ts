@@ -99,6 +99,7 @@ export function createFilenamePatternRule(fs: WorkspaceFs = realWorkspaceFs): TS
   return createRule<[unknown], FilenamePatternMessageId>({
     name: 'filename-pattern',
     meta: {
+      defaultOptions: [[]],
       type: 'problem',
       docs: {
         description: 'Require the names of files matching a glob to match a pattern, to sit beside a sibling file, or, once over a line count, to follow a split naming scheme.',
@@ -125,7 +126,6 @@ export function createFilenamePatternRule(fs: WorkspaceFs = realWorkspaceFs): TS
         missingSibling: 'The file "{{ name }}" needs a sibling file beside it: {{ siblings }}.',
       },
     },
-    defaultOptions: [[]],
     create(context, [options]) {
       const entries = readFilenamePatternEntries(options).filter((entry) => entry.inScope(context.filename, context.cwd));
       if (entries.length === 0) return {};

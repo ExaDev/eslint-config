@@ -49,9 +49,10 @@ function definitelyExits(statement: TSESTree.Statement): boolean {
   return false;
 }
 
-const noArrayIsArrayMutation = createRule({
+const noArrayIsArrayMutation = createRule<[], 'unsound'>({
   name: 'no-array-isarray-mutation',
   meta: {
+    defaultOptions: [],
     type: 'problem',
     schema: [],
     docs: {
@@ -63,7 +64,6 @@ const noArrayIsArrayMutation = createRule({
         "'{{ method }}' mutates a parameter or local variable narrowed by Array.isArray — Array.isArray's own type declaration cannot preserve a readonly modifier through the guard, so a value whose real type includes a readonly array (a caller's array, for a parameter; the value's own declared type, for a local variable) can be mutated here despite that readonly guarantee. Copy the array before inserting (e.g. a spread into a new array), or narrow with a check that preserves readonly instead of Array.isArray.",
     },
   },
-  defaultOptions: [],
   create(context) {
     if (!isEstreeSource(context.sourceCode)) return {};
     const services = ESLintUtils.getParserServices(context);

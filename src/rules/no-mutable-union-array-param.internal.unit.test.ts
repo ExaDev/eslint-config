@@ -20,8 +20,7 @@ let capturedFixer: TSESLint.RuleFixer | undefined;
 const createRule = ESLintUtils.RuleCreator((name) => name);
 const probe = createRule({
   name: 'probe',
-  meta: { type: 'problem', schema: [], docs: { description: 'probe' }, fixable: 'code', messages: { hit: 'hit' } },
-  defaultOptions: [],
+  meta: { defaultOptions: [], type: 'problem', schema: [], docs: { description: 'probe' }, fixable: 'code', messages: { hit: 'hit' } },
   create(context) {
     return {
       Identifier(node) {

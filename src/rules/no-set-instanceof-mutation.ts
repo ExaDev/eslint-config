@@ -46,9 +46,10 @@ function definitelyExits(statement: TSESTree.Statement): boolean {
   return false;
 }
 
-const noSetInstanceofMutation = createRule({
+const noSetInstanceofMutation = createRule<[], 'unsound'>({
   name: 'no-set-instanceof-mutation',
   meta: {
+    defaultOptions: [],
     type: 'problem',
     schema: [],
     docs: {
@@ -60,7 +61,6 @@ const noSetInstanceofMutation = createRule({
         "'{{ method }}' mutates a parameter or local variable narrowed by instanceof Set — instanceof Set's own narrowing widens straight to the mutable Set interface, so a value whose real type includes a ReadonlySet (a caller's set, for a parameter; the value's own declared type, for a local variable) can be mutated here despite that readonly guarantee. Copy the set before mutating (e.g. new Set(input)), or narrow with a check that preserves read-only instead of instanceof Set.",
     },
   },
-  defaultOptions: [],
   create(context) {
     if (!isEstreeSource(context.sourceCode)) return {};
     const services = ESLintUtils.getParserServices(context);

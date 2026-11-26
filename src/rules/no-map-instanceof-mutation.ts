@@ -47,9 +47,10 @@ function definitelyExits(statement: TSESTree.Statement): boolean {
   return false;
 }
 
-const noMapInstanceofMutation = createRule({
+const noMapInstanceofMutation = createRule<[], 'unsound'>({
   name: 'no-map-instanceof-mutation',
   meta: {
+    defaultOptions: [],
     type: 'problem',
     schema: [],
     docs: {
@@ -61,7 +62,6 @@ const noMapInstanceofMutation = createRule({
         "'{{ method }}' mutates a parameter or local variable narrowed by 'instanceof Map' — Map is declared as extending ReadonlyMap, so 'instanceof Map' narrows straight past the readonly guarantee to the full mutable interface, and a value whose real type includes ReadonlyMap (a caller's map, for a parameter; the value's own declared type, for a local variable) can be mutated here despite that readonly guarantee. Copy the map before mutating (e.g. `new Map(input)`), or narrow with a check that preserves readonly instead of 'instanceof Map'.",
     },
   },
-  defaultOptions: [],
   create(context) {
     if (!isEstreeSource(context.sourceCode)) return {};
     const services = ESLintUtils.getParserServices(context);

@@ -154,6 +154,7 @@ const createRule = ESLintUtils.RuleCreator((name) => `https://github.com/ExaDev/
 const importPolicy = createRule<[unknown], 'restricted' | 'computed'>({
   name: 'import-policy',
   meta: {
+    defaultOptions: [[]],
     type: 'problem',
     docs: {
       description: 'Restrict which modules the files matching a glob may import: deny lists, confinement to named files, and exact exception edges.',
@@ -164,7 +165,6 @@ const importPolicy = createRule<[unknown], 'restricted' | 'computed'>({
       computed: 'This module specifier is computed at runtime, so the import policy for this file cannot check it. Write it as a string literal.',
     },
   },
-  defaultOptions: [[]],
   create(context, [options]) {
     const { filename, cwd, sourceCode } = context;
     const policies = readImportPolicies(options)

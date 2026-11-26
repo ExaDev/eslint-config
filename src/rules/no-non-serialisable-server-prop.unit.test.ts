@@ -46,8 +46,7 @@ describe('readNoNonSerialisableServerPropOptions', () => {
 // A probe rule reporting what isSerialisableData says about the single argument of each `x(...)` call.
 const dataProbe = ESLintUtils.RuleCreator((name) => name)<[], 'data' | 'notData'>({
   name: 'data-probe',
-  meta: { type: 'problem', docs: { description: 'probe' }, schema: [], messages: { data: 'data', notData: 'notData' } },
-  defaultOptions: [],
+  meta: { defaultOptions: [], type: 'problem', docs: { description: 'probe' }, schema: [], messages: { data: 'data', notData: 'notData' } },
   create(context) {
     return {
       [AST_NODE_TYPES.CallExpression](node) {

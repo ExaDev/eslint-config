@@ -188,9 +188,9 @@ const scopedFirstParameter = createRule<[unknown], MessageIds>({
       notRequired: 'The first parameter of "{{ owner }}.{{ method }}" must be a required, non-rest parameter, so a call cannot leave the {{ type }} out.',
     },
   },
-  defaultOptions: [{}],
-  create(context, [options]) {
-    const { interfaces, name: requiredName, type: requiredType } = readScopedFirstParameterOptions(options);
+  // No default options: the rule requires its options, and ESLint would validate a default `{}` against the schema before `create` could say what is missing. `createRule` merges the user's options only into declared defaults, so they are read from the context.
+  create(context) {
+    const { interfaces, name: requiredName, type: requiredType } = readScopedFirstParameterOptions(context.options[0]);
     const { sourceCode } = context;
     if (!isEstreeSource(context.sourceCode)) return {};
     const services = ESLintUtils.getParserServices(context);

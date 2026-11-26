@@ -29,8 +29,7 @@ const probeCreateRule = ESLintUtils.RuleCreator((name) => name);
 let capturedCommentsSourceCode: TSESLint.SourceCode | undefined;
 const commentsProbe = probeCreateRule({
   name: 'comments-probe',
-  meta: { type: 'problem', schema: [], docs: { description: 'probe' }, messages: { hit: 'hit' } },
-  defaultOptions: [],
+  meta: { defaultOptions: [], type: 'problem', schema: [], docs: { description: 'probe' }, messages: { hit: 'hit' } },
   create(context) {
     return {
       Program(node) {

@@ -164,6 +164,7 @@ function isCalleeOfCall(node: TSESTree.CallExpression): boolean {
 const injectedTestHygiene = createRule<[InjectedTestHygieneOptions], MessageIds>({
   name: OPTION_NAME,
   meta: {
+    defaultOptions: [{}],
     type: 'problem',
     docs: {
       description: 'Require the test functions a kit receives as parameters to be free of .only and .skip and to assert, since @vitest/eslint-plugin cannot see them.',
@@ -175,7 +176,6 @@ const injectedTestHygiene = createRule<[InjectedTestHygieneOptions], MessageIds>
       noAssertion: 'This test has no assertion. Call one of {{ names }} in its body, or list the helper that asserts in "assertFunctionNames".',
     },
   },
-  defaultOptions: [{}],
   create(context, [options]) {
     const { names, assertions, reportDisabled } = readInjectedTestHygieneOptions(options);
     const { sourceCode } = context;

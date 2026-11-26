@@ -207,6 +207,7 @@ const createRule = ESLintUtils.RuleCreator((name) => `https://github.com/ExaDev/
 const noMultilineTemplateLiteral = createRule<[unknown], MessageIds>({
   name: 'no-multiline-template-literal',
   meta: {
+    defaultOptions: [{}],
     type: 'suggestion',
     fixable: 'code',
     docs: {
@@ -217,7 +218,6 @@ const noMultilineTemplateLiteral = createRule<[unknown], MessageIds>({
       multiline: 'This template literal spans several lines. Write it as an array of lines and join them with "\\n", so each line stands alone and the indentation of the source is not part of the string.',
     },
   },
-  defaultOptions: [{}],
   create(context, [options]) {
     const allowed = readNoMultilineTemplateLiteralOptions(options);
     if (allowed?.(context.filename, context.cwd) === true) return {};
